@@ -1,0 +1,17 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/TerminalCommander.App/TerminalCommander.App.csproj" />
+    <Project Path="src/TerminalCommander.Core/TerminalCommander.Core.csproj" />
+    <Project Path="src/TerminalCommander.Shell/TerminalCommander.Shell.csproj" />
+    <Project Path="src/TerminalCommander.Themes/TerminalCommander.Themes.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/TerminalCommander.Core.Benchmarks/TerminalCommander.Core.Benchmarks.csproj" />
+    <Project Path="tests/TerminalCommander.Core.Tests/TerminalCommander.Core.Tests.csproj" />
+    <Project Path="tests/TerminalCommander.Shell.Tests/TerminalCommander.Shell.Tests.csproj" />
+    <Project Path="tests/TerminalCommander.Themes.Tests/TerminalCommander.Themes.Tests.csproj" />
+  </Folder>
+  <Folder Name="/tools/">
+    <Project Path="tools/IconBuilder/IconBuilder.csproj" />
+  </Folder>
+</Solution>
