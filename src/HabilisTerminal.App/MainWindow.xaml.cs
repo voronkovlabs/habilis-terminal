@@ -1,3 +1,4 @@
+using System.IO;
 using System.Globalization;
 using System.Runtime.InteropServices;
 using System.Windows;
@@ -9,23 +10,29 @@ using HabilisTerminal.App.Input;
 using HabilisTerminal.App.Layout;
 using HabilisTerminal.App.Panels;
 using HabilisTerminal.App.Theming;
+using HabilisTerminal.Core.Panels;
 using HabilisTerminal.Shell;
-using HabilisTerminal.Shell.ConPty;
 using HabilisTerminal.Shell.Integration;
 
 namespace HabilisTerminal.App;
 
+/// <summary>
+/// The window: two file panels and the terminal (SPEC §3), focus and visibility (SPEC §4), shell synchronisation
+/// (SPEC §7). Panel commands live in MainWindow.Commands.cs.
+/// </summary>
 [System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1001", Justification = "Disposed when the window closes.")]
 public partial class MainWindow : Window
 {
     private const string TerminalFontFamily = "Cascadia Mono";
     private const int TerminalFontSize = 11;
 
-    private readonly PlaceholderPanel _left = new("Left");
-    private readonly PlaceholderPanel _right = new("Right");
-    private PlaceholderPanel _active;
-    private (bool Left, bool Right) _restoreVisibility = (true, true);
+    private readonly FolderHistory _history = new();
+    private readonly Dictionary<string, string> _lastPathPerDrive = new(StringComparer.OrdinalIgnoreCase);
     private readonly ShellConnection? _shell;
+    private FilePanel _left = new("Left");
+    private FilePanel _right = new("Right");
+    private FilePanel _active;
+    private (bool Left, bool Right) _restoreVisibility = (true, true);
     private GlobalKeyHook? _keyHook;
 
     public MainWindow()
@@ -38,11 +45,15 @@ public partial class MainWindow : Window
         WorkspaceLayout.SetRole(_right, WorkspaceRole.RightPanel);
         Workspace.Children.Add(_left);
         Workspace.Children.Add(_right);
+        foreach (var panel in new[] { _left, _right })
+        {
+            panel.Navigated += OnPanelNavigated;
+            panel.ExecuteRequested += OnPanelExecuteRequested;
+            panel.Changed += OnPanelChanged;
+            panel.GotKeyboardFocus += (_, _) => OnPanelFocused(panel);
+        }
 
         var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
-        _left.DirectoryPath = home;
-        _right.DirectoryPath = home;
-
         var pwsh = PwshLocator.Find();
         if (pwsh is null)
         {
@@ -62,7 +73,12 @@ public partial class MainWindow : Window
         host.RequestCompleted += (_, op, status) => Dispatcher.BeginInvoke(() => OnShellRequestCompleted(op, status));
         _shell = new ShellConnection(host);
 
-        Loaded += OnLoaded;
+        Loaded += async (_, _) =>
+        {
+            OnLoaded();
+            await _left.NavigateAsync(home);
+            await _right.NavigateAsync(home);
+        };
         DpiChanged += (_, _) => UpdateCellSize();
         PreviewTextInput += OnPreviewTextInput;
         Closed += (_, _) =>
@@ -71,6 +87,12 @@ public partial class MainWindow : Window
             _shell?.Dispose();
         };
     }
+
+    private bool AnyPanelVisible => Workspace.LeftVisible || Workspace.RightVisible;
+
+    private bool PanelHasFocus => FocusedPanel() is not null;
+
+    private FilePanel Other(FilePanel panel) => panel == _left ? _right : _left;
 
     protected override void OnSourceInitialized(EventArgs e)
     {
@@ -81,11 +103,7 @@ public partial class MainWindow : Window
         _ = DwmSetWindowAttribute(new WindowInteropHelper(this).Handle, DWMWA_USE_IMMERSIVE_DARK_MODE, ref useDarkMode, sizeof(int));
     }
 
-    private bool AnyPanelVisible => Workspace.LeftVisible || Workspace.RightVisible;
-
-    private bool PanelHasFocus => _left.IsKeyboardFocused || _right.IsKeyboardFocused;
-
-    private void OnLoaded(object sender, RoutedEventArgs e)
+    private void OnLoaded()
     {
         _keyHook = new GlobalKeyHook(OnGlobalKey);
         UpdateCellSize();
@@ -95,129 +113,26 @@ public partial class MainWindow : Window
         FocusActivePanel();
     }
 
-    /// <summary>Keys intercepted before they reach either panels or terminal (SPEC §4, §5).</summary>
-    private bool OnGlobalKey(Key key, KeyModifiers modifiers)
-    {
-        switch (key)
-        {
-            case Key.O when modifiers == KeyModifiers.Control:
-                TogglePanels();
-                return true;
-
-            case Key.Tab when modifiers == KeyModifiers.Control && AnyPanelVisible:
-                if (PanelHasFocus)
-                {
-                    FocusTerminal();
-                }
-                else
-                {
-                    FocusActivePanel();
-                }
-
-                return true;
-
-            case Key.F4 when modifiers == KeyModifiers.Alt:
-                Close();
-                return true;
-        }
-
-        if (!PanelHasFocus)
-        {
-            return false;
-        }
-
-        switch (key)
-        {
-            case Key.F1 when modifiers == KeyModifiers.Control:
-                SetPanelVisibility(!Workspace.LeftVisible, Workspace.RightVisible);
-                return true;
-
-            case Key.F2 when modifiers == KeyModifiers.Control:
-                SetPanelVisibility(Workspace.LeftVisible, !Workspace.RightVisible);
-                return true;
-
-            case Key.Tab when modifiers == KeyModifiers.None:
-                var other = _active == _left ? _right : _left;
-                if (IsShown(other))
-                {
-                    Activate(other);
-                    SyncShellDirectory();
-                }
-
-                return true;
-
-            case Key.PageUp when modifiers == KeyModifiers.Control:
-                Navigate(_active, System.IO.Path.GetDirectoryName(_active.DirectoryPath.TrimEnd('\\')) ?? _active.DirectoryPath);
-                return true;
-
-            case Key.Oem5 when modifiers == KeyModifiers.Control: // Ctrl+\
-                Navigate(_active, System.IO.Path.GetPathRoot(_active.DirectoryPath) ?? _active.DirectoryPath);
-                return true;
-
-            // Command line keys that work from panel focus, as in Far.
-            case Key.E when modifiers == KeyModifiers.Control:
-                _shell?.Host.SendKey(Win32InputSequence.VkUp, controlKeyState: Win32InputSequence.EnhancedKey);
-                return true;
-
-            case Key.X when modifiers == KeyModifiers.Control:
-                _shell?.Host.SendKey(Win32InputSequence.VkDown, controlKeyState: Win32InputSequence.EnhancedKey);
-                return true;
-
-            case Key.Space when modifiers == KeyModifiers.Control:
-                _shell?.Host.SendKey(Win32InputSequence.VkSpace, ' ', Win32InputSequence.LeftCtrl);
-                return true;
-        }
-
-        return false;
-    }
-
-    /// <summary>Navigation in a panel; the active panel takes the shell with it (SPEC §7).</summary>
-    private void Navigate(PlaceholderPanel panel, string path)
-    {
-        panel.DirectoryPath = path;
-        panel.Message = null;
-        if (panel == _active)
-        {
-            SyncShellDirectory();
-        }
-    }
-
-    private void SyncShellDirectory()
-    {
-        if (_shell is { } shell &&
-            !string.Equals(shell.Host.CurrentDirectory, _active.DirectoryPath, StringComparison.OrdinalIgnoreCase))
-        {
-            shell.Host.ChangeDirectory(_active.DirectoryPath);
-        }
-    }
-
-    /// <summary><c>cd</c> in the shell moves the active panel; the inactive one never follows.</summary>
-    private void OnShellDirectoryChanged(string path)
-    {
-        _active.DirectoryPath = path;
-        _active.Message = null;
-    }
-
-    private void OnShellRequestCompleted(string op, string status)
-    {
-        if (op == "cd" && status != "ok")
-        {
-            _active.Message = status.StartsWith("error;", StringComparison.Ordinal) ? status[6..] : status;
-        }
-    }
-
-    /// <summary>Printable characters typed in a panel go to the command line (SPEC §4).</summary>
+    /// <summary>Printable characters typed in a panel go to the command line, or to quick search while it is open (SPEC §4).</summary>
     private void OnPreviewTextInput(object sender, TextCompositionEventArgs e)
     {
-        if (!PanelHasFocus || string.IsNullOrEmpty(e.Text) || e.Text.Any(char.IsControl))
+        if (FocusedPanel() is not { } panel || string.IsNullOrEmpty(e.Text) || e.Text.Any(char.IsControl))
         {
             return;
         }
 
         e.Handled = true;
+        if (panel.IsQuickSearchActive)
+        {
+            panel.AppendQuickSearch(e.Text);
+            return;
+        }
+
         FocusTerminal();
         _shell?.WriteInput(e.Text);
     }
+
+    // ----- Visibility and focus -----
 
     private void TogglePanels()
     {
@@ -251,27 +166,36 @@ public partial class MainWindow : Window
 
         if (!IsShown(_active))
         {
-            _active = left ? _left : _right;
+            Activate(left ? _left : _right);
+            SyncShellDirectory();
         }
 
         if (!wasVisible || PanelHasFocus || !IsShown(FocusedPanel()))
         {
-            Activate(_active);
+            FocusActivePanel();
         }
     }
 
-    private PlaceholderPanel? FocusedPanel() =>
+    private FilePanel? FocusedPanel() =>
         _left.IsKeyboardFocused ? _left : _right.IsKeyboardFocused ? _right : null;
 
-    private bool IsShown(PlaceholderPanel? panel) =>
+    private bool IsShown(FilePanel? panel) =>
         panel == _left ? Workspace.LeftVisible : panel == _right && Workspace.RightVisible;
 
-    private void Activate(PlaceholderPanel panel)
+    private void Activate(FilePanel panel)
     {
         _active = panel;
         _left.IsActive = panel == _left;
         _right.IsActive = panel == _right;
-        FocusActivePanel();
+    }
+
+    private void OnPanelFocused(FilePanel panel)
+    {
+        if (panel != _active)
+        {
+            Activate(panel);
+            SyncShellDirectory();
+        }
     }
 
     private void FocusActivePanel()
@@ -306,6 +230,73 @@ public partial class MainWindow : Window
         }
 
         return null;
+    }
+
+    // ----- Shell synchronisation (SPEC §7) -----
+
+    private void SyncShellDirectory()
+    {
+        if (_shell is { } shell && _active.CurrentPath.Length > 0 &&
+            !string.Equals(shell.Host.CurrentDirectory, _active.CurrentPath, StringComparison.OrdinalIgnoreCase))
+        {
+            shell.Host.ChangeDirectory(_active.CurrentPath);
+        }
+    }
+
+    /// <summary><c>cd</c> in the shell moves the active panel; the inactive one never follows.</summary>
+    private void OnShellDirectoryChanged(string path)
+    {
+        if (!string.Equals(path, _active.CurrentPath, StringComparison.OrdinalIgnoreCase))
+        {
+            _ = _active.NavigateAsync(path);
+        }
+    }
+
+    private void OnShellRequestCompleted(string op, string status)
+    {
+        if (op == "cd" && status != "ok")
+        {
+            _active.Message = status.StartsWith("error;", StringComparison.Ordinal) ? status[6..] : status;
+        }
+    }
+
+    private void OnPanelNavigated(FilePanel panel, string path)
+    {
+        _history.Add(path);
+        if (Path.GetPathRoot(path) is { Length: > 0 } root)
+        {
+            _lastPathPerDrive[root] = path;
+        }
+
+        if (panel == _active)
+        {
+            SyncShellDirectory();
+        }
+    }
+
+    private void OnPanelChanged(FilePanel panel)
+    {
+        if (Other(panel).InfoSource == panel)
+        {
+            Other(panel).RefreshInfo();
+        }
+    }
+
+    /// <summary>Enter on a file: run it through PSReadLine, so it lands in history like in Far.</summary>
+    private void OnPanelExecuteRequested(FilePanel panel, PanelItem item)
+    {
+        if (_shell is null)
+        {
+            return;
+        }
+
+        if (panel != _active)
+        {
+            Activate(panel);
+        }
+
+        SyncShellDirectory();
+        _shell.Host.Run("& " + ShellQuote.Quote(".\\" + item.Name));
     }
 
     /// <summary>Estimates the terminal cell size so the layout can snap to whole rows and columns.</summary>

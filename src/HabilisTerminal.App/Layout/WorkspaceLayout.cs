@@ -1,5 +1,6 @@
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Input;
 
 namespace HabilisTerminal.App.Layout;
 
@@ -40,6 +41,10 @@ public sealed class WorkspaceLayout : Panel
         nameof(SinglePanelRatio), typeof(double), typeof(WorkspaceLayout),
         new FrameworkPropertyMetadata(0.5, FrameworkPropertyMetadataOptions.AffectsArrange));
 
+    public static readonly DependencyProperty SplitRatioProperty = DependencyProperty.Register(
+        nameof(SplitRatio), typeof(double), typeof(WorkspaceLayout),
+        new FrameworkPropertyMetadata(0.5, FrameworkPropertyMetadataOptions.AffectsArrange));
+
     public static readonly DependencyProperty CellSizeProperty = DependencyProperty.Register(
         nameof(CellSize), typeof(Size), typeof(WorkspaceLayout),
         new FrameworkPropertyMetadata(new Size(8, 16), FrameworkPropertyMetadataOptions.AffectsArrange));
@@ -70,6 +75,13 @@ public sealed class WorkspaceLayout : Panel
     {
         get => (double)GetValue(SinglePanelRatioProperty);
         set => SetValue(SinglePanelRatioProperty, value);
+    }
+
+    /// <summary>Width share of the left panel when both panels are visible (Ctrl+Left / Ctrl+Right, splitter).</summary>
+    public double SplitRatio
+    {
+        get => (double)GetValue(SplitRatioProperty);
+        set => SetValue(SplitRatioProperty, value);
     }
 
     /// <summary>Terminal character cell size in device-independent pixels.</summary>
@@ -111,6 +123,105 @@ public sealed class WorkspaceLayout : Panel
         return finalSize;
     }
 
+    private const double Grip = 4;
+    private Splitter _dragging = Splitter.None;
+
+    private enum Splitter
+    {
+        None,
+
+        /// <summary>Between the two panels.</summary>
+        Panels,
+
+        /// <summary>Between panels (top) and terminal (bottom).</summary>
+        TerminalTop,
+
+        /// <summary>Between a single panel and the terminal beside it.</summary>
+        TerminalSide,
+    }
+
+    protected override void OnPreviewMouseMove(MouseEventArgs e)
+    {
+        base.OnPreviewMouseMove(e);
+        var point = e.GetPosition(this);
+        if (_dragging != Splitter.None)
+        {
+            Drag(point);
+            e.Handled = true;
+            return;
+        }
+
+        Cursor = SplitterAt(point) switch
+        {
+            Splitter.TerminalTop => Cursors.SizeNS,
+            Splitter.Panels or Splitter.TerminalSide => Cursors.SizeWE,
+            _ => null,
+        };
+    }
+
+    protected override void OnPreviewMouseLeftButtonDown(MouseButtonEventArgs e)
+    {
+        base.OnPreviewMouseLeftButtonDown(e);
+        var splitter = SplitterAt(e.GetPosition(this));
+        if (splitter != Splitter.None)
+        {
+            _dragging = splitter;
+            CaptureMouse();
+            e.Handled = true;
+        }
+    }
+
+    protected override void OnPreviewMouseLeftButtonUp(MouseButtonEventArgs e)
+    {
+        base.OnPreviewMouseLeftButtonUp(e);
+        if (_dragging != Splitter.None)
+        {
+            _dragging = Splitter.None;
+            ReleaseMouseCapture();
+            e.Handled = true;
+        }
+    }
+
+    private Splitter SplitterAt(Point point)
+    {
+        var (left, right, terminal) = ComputeRects(RenderSize);
+        if (LeftVisible && RightVisible)
+        {
+            if (Math.Abs(point.Y - terminal.Top) <= Grip)
+            {
+                return Splitter.TerminalTop;
+            }
+
+            return point.Y < terminal.Top && Math.Abs(point.X - right.Left) <= Grip ? Splitter.Panels : Splitter.None;
+        }
+
+        if (LeftVisible ^ RightVisible)
+        {
+            var edge = LeftVisible ? left.Right : right.Left;
+            return Math.Abs(point.X - edge) <= Grip ? Splitter.TerminalSide : Splitter.None;
+        }
+
+        return Splitter.None;
+    }
+
+    private void Drag(Point point)
+    {
+        var size = RenderSize;
+        switch (_dragging)
+        {
+            case Splitter.Panels:
+                SplitRatio = Math.Clamp(point.X / size.Width, 0.1, 0.9);
+                break;
+            case Splitter.TerminalTop:
+                TerminalRows = Math.Max(MinTerminalRows, (int)Math.Round((size.Height - point.Y) / CellSize.Height));
+                break;
+            case Splitter.TerminalSide:
+                var ratio = LeftVisible ? point.X / size.Width : 1 - (point.X / size.Width);
+                SinglePanelRatio = Math.Clamp(ratio, 0.1, 0.9);
+                break;
+        }
+    }
+
     private (Rect Left, Rect Right, Rect Terminal) ComputeRects(Size size)
     {
         var cell = CellSize;
@@ -127,7 +238,7 @@ public sealed class WorkspaceLayout : Panel
             var rows = Math.Clamp(TerminalRows, MinTerminalRows, maxRows);
             var terminalHeight = Math.Min(size.Height, rows * cell.Height);
             var panelsHeight = size.Height - terminalHeight;
-            var half = Math.Floor(size.Width / 2);
+            var half = Math.Floor(size.Width * Math.Clamp(SplitRatio, 0.1, 0.9));
             return (
                 new Rect(0, 0, half, panelsHeight),
                 new Rect(half, 0, size.Width - half, panelsHeight),

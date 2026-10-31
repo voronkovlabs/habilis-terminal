@@ -1,0 +1,101 @@
+using System.IO;
+using System.Globalization;
+using HabilisTerminal.Core.FileSystem;
+using HabilisTerminal.Core.Panels;
+
+namespace HabilisTerminal.App.Panels;
+
+public enum ColumnKind
+{
+    Name,
+    Size,
+    Date,
+    Time,
+    Created,
+    Modified,
+    Accessed,
+    Attributes,
+    CompactSize,
+    ModifiedShort,
+}
+
+public sealed record ColumnSpec(ColumnKind Kind, string Title, double DefaultWidth, bool AlignRight, SortMode? SortMode);
+
+/// <summary>Columns per view mode and how cells are formatted (SPEC §6).</summary>
+public static class PanelColumns
+{
+    public static readonly ColumnSpec Name = new(ColumnKind.Name, "Name", 0, false, SortMode.Name);
+    private static readonly ColumnSpec Size = new(ColumnKind.Size, "Size", 96, true, SortMode.Size);
+    private static readonly ColumnSpec Date = new(ColumnKind.Date, "Date", 84, true, SortMode.Modified);
+    private static readonly ColumnSpec Time = new(ColumnKind.Time, "Time", 52, true, SortMode.Modified);
+    private static readonly ColumnSpec Created = new(ColumnKind.Created, "Created", 128, true, SortMode.Created);
+    private static readonly ColumnSpec Modified = new(ColumnKind.Modified, "Modified", 128, true, SortMode.Modified);
+    private static readonly ColumnSpec Accessed = new(ColumnKind.Accessed, "Accessed", 128, true, SortMode.Accessed);
+    private static readonly ColumnSpec Attributes = new(ColumnKind.Attributes, "Attr", 56, false, null);
+    private static readonly ColumnSpec CompactSize = new(ColumnKind.CompactSize, "Size", 72, true, SortMode.Size);
+    private static readonly ColumnSpec ModifiedShort = new(ColumnKind.ModifiedShort, "Modified", 128, true, SortMode.Modified);
+
+    /// <summary>Number of name columns for the multi-column modes; 1 for table modes.</summary>
+    public static int NameColumnCount(PanelViewMode mode) => mode switch
+    {
+        PanelViewMode.Brief => 3,
+        PanelViewMode.Medium => 2,
+        _ => 1,
+    };
+
+    /// <summary>Columns after the name, for table modes.</summary>
+    public static IReadOnlyList<ColumnSpec> DetailColumns(PanelViewMode mode) => mode switch
+    {
+        PanelViewMode.Full => [Size, Date, Time],
+        PanelViewMode.Wide => [Size],
+        PanelViewMode.Detailed => [Size, Created, Modified, Accessed, Attributes],
+        PanelViewMode.AlternativeFull => [CompactSize, ModifiedShort],
+        _ => [],
+    };
+
+    public static string FormatCell(ColumnKind kind, PanelItem item, CultureInfo culture)
+    {
+        var entry = item.Entry;
+        return kind switch
+        {
+            ColumnKind.Size or ColumnKind.CompactSize when item.IsParent => "Up",
+            ColumnKind.Size or ColumnKind.CompactSize when entry.IsDirectory => entry.IsReparsePoint ? "Link" : "Folder",
+            ColumnKind.Size => entry.Length.ToString("N0", culture),
+            ColumnKind.CompactSize => FormatCompactSize(entry.Length, culture),
+            _ when item.IsParent => string.Empty,
+            ColumnKind.Date => entry.LastWriteTimeUtc.ToLocalTime().ToString("d", culture),
+            ColumnKind.Time => entry.LastWriteTimeUtc.ToLocalTime().ToString("t", culture),
+            ColumnKind.Created => entry.CreationTimeUtc.ToLocalTime().ToString("g", culture),
+            ColumnKind.Modified or ColumnKind.ModifiedShort => entry.LastWriteTimeUtc.ToLocalTime().ToString("g", culture),
+            ColumnKind.Accessed => entry.LastAccessTimeUtc.ToLocalTime().ToString("g", culture),
+            ColumnKind.Attributes => FormatAttributes(entry.Attributes),
+            _ => item.Name,
+        };
+    }
+
+    public static string FormatCompactSize(long bytes, CultureInfo culture)
+    {
+        string[] units = ["B", "KB", "MB", "GB", "TB"];
+        double value = bytes;
+        var unit = 0;
+        while (value >= 1024 && unit < units.Length - 1)
+        {
+            value /= 1024;
+            unit++;
+        }
+
+        return unit == 0 ? $"{bytes.ToString(culture)} B" : $"{value.ToString(value < 10 ? "0.0" : "0", culture)} {units[unit]}";
+    }
+
+    /// <summary>Far-style attribute letters: R A H S C E (read-only, archive, hidden, system, compressed, encrypted) plus L for links.</summary>
+    public static string FormatAttributes(FileAttributes attributes)
+    {
+        (FileAttributes Flag, char Letter)[] map =
+        [
+            (FileAttributes.ReadOnly, 'R'), (FileAttributes.Archive, 'A'), (FileAttributes.Hidden, 'H'),
+            (FileAttributes.System, 'S'), (FileAttributes.Compressed, 'C'), (FileAttributes.Encrypted, 'E'),
+            (FileAttributes.ReparsePoint, 'L'),
+        ];
+        return new string(map.Where(m => (attributes & m.Flag) != 0).Select(m => m.Letter).ToArray());
+    }
+}
