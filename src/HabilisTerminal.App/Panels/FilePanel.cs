@@ -31,6 +31,7 @@ public sealed class FilePanel : Border
     private readonly Grid _body = new();
     private CancellationTokenSource? _loading;
     private DirectoryWatcher? _watcher;
+    private Border? _statusBorder;
     private bool _isActive;
 
     public FilePanel(string side)
@@ -78,6 +79,7 @@ public sealed class FilePanel : Border
         status.Children.Add(_statusRight);
         status.Children.Add(_status);
         var statusBorder = new Border { BorderBrush = PanelPalette.Border, BorderThickness = new Thickness(0, 1, 0, 0), Child = status };
+        _statusBorder = statusBorder;
 
         _quickSearchText.FontFamily = new FontFamily("Segoe UI");
         _quickSearchText.FontSize = 13;
@@ -171,6 +173,28 @@ public sealed class FilePanel : Border
     }
 
     public void RefreshInfo() => _info.InvalidateVisual();
+
+    /// <summary>Re-reads brushes after a theme change.</summary>
+    public void ApplyTheme()
+    {
+        Background = PanelPalette.Background;
+        _title.Foreground = PanelPalette.Foreground;
+        _path.Foreground = PanelPalette.DescriptionForeground;
+        _message.Foreground = PanelPalette.ErrorForeground;
+        _statusRight.Foreground = PanelPalette.DescriptionForeground;
+        _quickSearchText.Foreground = PanelPalette.Foreground;
+        _quickSearch.Background = PanelPalette.InputBackground;
+        _quickSearch.BorderBrush = PanelPalette.FocusOutline;
+        if (_statusBorder is not null)
+        {
+            _statusBorder.BorderBrush = PanelPalette.Border;
+        }
+
+        _list.ApplyTheme();
+        _info.InvalidateVisual();
+        UpdateStatus();
+        UpdateFocusVisuals();
+    }
 
     /// <summary>Opens a directory. On failure the panel stays where it was and shows the error.</summary>
     public async Task<bool> NavigateAsync(string path, string? focusName = null)

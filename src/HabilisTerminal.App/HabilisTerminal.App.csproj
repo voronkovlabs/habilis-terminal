@@ -20,6 +20,11 @@
     <PackageReference Include="Microsoft.Windows.Console.ConPTY" />
   </ItemGroup>
   <ItemGroup>
+    <!-- Codicons (CC BY 4.0) for UI glyphs. -->
+    <Resource Include="Assets\codicon.ttf" />
+    <None Include="..\..\ThirdPartyNotices.txt" Link="ThirdPartyNotices.txt" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+  <ItemGroup>
     <ProjectReference Include="..\HabilisTerminal.Core\HabilisTerminal.Core.csproj" />
     <ProjectReference Include="..\HabilisTerminal.Shell\HabilisTerminal.Shell.csproj" />
     <ProjectReference Include="..\HabilisTerminal.Themes\HabilisTerminal.Themes.csproj" />

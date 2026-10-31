@@ -6,6 +6,7 @@ using HabilisTerminal.App.Hosting;
 using HabilisTerminal.App.Input;
 using HabilisTerminal.App.Layout;
 using HabilisTerminal.App.Panels;
+using HabilisTerminal.App.Theming;
 using HabilisTerminal.App.Widgets;
 using HabilisTerminal.Core.Drives;
 using HabilisTerminal.Core.FileSystem;
@@ -287,13 +288,13 @@ public partial class MainWindow
         var items = modes.Select(m => new QuickPickItem
         {
             Label = m.Label,
-            Icon = m.Mode == sort.Mode ? (sort.Descending ? "" : "") : string.Empty,
+            Icon = m.Mode == sort.Mode ? (sort.Descending ? Codicon.ArrowDown : Codicon.ArrowUp) : string.Empty,
             Detail = m.Keys,
             Tag = m.Mode,
             IsCurrent = m.Mode == sort.Mode,
         }).ToList();
-        items.Add(new QuickPickItem { Label = "Directories first", Group = "Options", Icon = sort.DirectoriesFirst ? "" : string.Empty, Tag = "dirs" });
-        items.Add(new QuickPickItem { Label = "Selected first", Icon = panel.State.SelectedFirst ? "" : string.Empty, Detail = "Shift+F12", Tag = "selected" });
+        items.Add(new QuickPickItem { Label = "Directories first", Group = "Options", Icon = sort.DirectoriesFirst ? Codicon.Check : string.Empty, Tag = "dirs" });
+        items.Add(new QuickPickItem { Label = "Selected first", Icon = panel.State.SelectedFirst ? Codicon.Check : string.Empty, Detail = "Shift+F12", Tag = "selected" });
 
         var result = await QuickPick.ShowAsync(panel, items, new QuickPickOptions { Title = "Sort by", Placeholder = "Sort mode" });
         panel.Focus();
@@ -322,7 +323,7 @@ public partial class MainWindow
         {
             Label = Path.GetFileName(path.TrimEnd('\\')) is { Length: > 0 } name ? name : path,
             Description = path,
-            Icon = "",
+            Icon = Codicon.History,
             Tag = path,
             IsCurrent = string.Equals(path, panel.CurrentPath, StringComparison.OrdinalIgnoreCase),
         }).ToList();
@@ -351,10 +352,10 @@ public partial class MainWindow
                 Description = drive.Type.ToString(),
                 Icon = drive.Type switch
                 {
-                    DriveType.Network => "",
-                    DriveType.Removable => "",
-                    DriveType.CDRom => "",
-                    _ => "",
+                    DriveType.Network => Codicon.NetworkDrive,
+                    DriveType.Removable => Codicon.RemovableDrive,
+                    DriveType.CDRom => Codicon.Disc,
+                    _ => Codicon.Drive,
                 },
                 Hotkey = drive.Root[0],
                 Tag = drive,
@@ -373,7 +374,7 @@ public partial class MainWindow
                 Label = name,
                 Description = path,
                 Group = first ? "Places" : null,
-                Icon = name switch { "Home" => "", "Downloads" => "", "Documents" => "", "Desktop" => "", _ => "" },
+                Icon = name switch { "Home" => Codicon.Home, "Downloads" => Codicon.Download, "Documents" => Codicon.Document, "Desktop" => Codicon.Desktop, _ => Codicon.Folder },
                 Tag = path,
             });
             first = false;

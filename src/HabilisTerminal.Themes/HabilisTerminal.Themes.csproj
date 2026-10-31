@@ -1,2 +1,11 @@
 <Project Sdk="Microsoft.NET.Sdk">
+  <ItemGroup>
+    <!-- VS Code default themes (MIT, microsoft/vscode extensions/theme-defaults). -->
+    <EmbeddedResource Include="Assets\themes\*.json" />
+    <!-- Icon themes converted by tools/IconBuilder: Seti (MIT, via microsoft/vscode), Material Icon Theme (MIT). -->
+    <EmbeddedResource Include="Assets\icons\*.json" />
+  </ItemGroup>
+  <ItemGroup>
+    <InternalsVisibleTo Include="HabilisTerminal.Themes.Tests" />
+  </ItemGroup>
 </Project>

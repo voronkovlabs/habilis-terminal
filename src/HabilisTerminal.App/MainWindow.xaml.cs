@@ -26,6 +26,7 @@ public partial class MainWindow : Window
     private const string TerminalFontFamily = "Cascadia Mono";
     private const int TerminalFontSize = 11;
 
+    private readonly ThemeService _themes = new();
     private readonly FolderHistory _history = new();
     private readonly Dictionary<string, string> _lastPathPerDrive = new(StringComparer.OrdinalIgnoreCase);
     private readonly ShellConnection? _shell;
@@ -34,10 +35,14 @@ public partial class MainWindow : Window
     private FilePanel _active;
     private (bool Left, bool Right) _restoreVisibility = (true, true);
     private GlobalKeyHook? _keyHook;
+    private System.Windows.Threading.DispatcherTimer? _themeReloadTimer;
 
     public MainWindow()
     {
         InitializeComponent();
+
+        _themes.Changed += OnThemeChanged;
+        _themes.Reload();
 
         _active = _left;
         _left.IsActive = true;
@@ -85,6 +90,7 @@ public partial class MainWindow : Window
         {
             _keyHook?.Dispose();
             _shell?.Dispose();
+            _themes.Dispose();
         };
     }
 
@@ -97,9 +103,54 @@ public partial class MainWindow : Window
     protected override void OnSourceInitialized(EventArgs e)
     {
         base.OnSourceInitialized(e);
+        UpdateTitleBar();
 
-        // Dark title bar to match the placeholder dark theme; follows the real theme in stage 5.
-        var useDarkMode = 1;
+        // Windows mode, high contrast and accent changes repaint everything live (SPEC §10).
+        HwndSource.FromHwnd(new WindowInteropHelper(this).Handle)?.AddHook(OnWindowMessage);
+    }
+
+    private IntPtr OnWindowMessage(IntPtr hwnd, int message, IntPtr wParam, IntPtr lParam, ref bool handled)
+    {
+        const int WM_SETTINGCHANGE = 0x001A;
+        const int WM_DWMCOLORIZATIONCOLORCHANGED = 0x0320;
+        var themeRelated = message == WM_DWMCOLORIZATIONCOLORCHANGED ||
+            (message == WM_SETTINGCHANGE && (lParam == IntPtr.Zero || Marshal.PtrToStringUni(lParam) is "ImmersiveColorSet" or "WindowsThemeElement"));
+        if (themeRelated)
+        {
+            _themeReloadTimer ??= new System.Windows.Threading.DispatcherTimer(TimeSpan.FromMilliseconds(300), System.Windows.Threading.DispatcherPriority.Background, (_, _) =>
+            {
+                _themeReloadTimer!.Stop();
+                _themes.Reload();
+            }, Dispatcher);
+            _themeReloadTimer.Stop();
+            _themeReloadTimer.Start();
+        }
+
+        return IntPtr.Zero;
+    }
+
+    private void OnThemeChanged(Themes.ColorTheme theme)
+    {
+        Background = PanelPalette.Background;
+        IconProvider.OnColorThemeChanged();
+        _left.ApplyTheme();
+        _right.ApplyTheme();
+        if (IsLoaded)
+        {
+            ApplyTerminalTheme(theme);
+            UpdateTitleBar();
+        }
+    }
+
+    private void ApplyTerminalTheme(Themes.ColorTheme theme)
+    {
+        var background = theme.GetOpaque("terminal.background");
+        Terminal.SetTheme(ThemeService.ToTerminalTheme(theme), TerminalFontFamily, TerminalFontSize, Color.FromRgb(background.R, background.G, background.B));
+    }
+
+    private void UpdateTitleBar()
+    {
+        var useDarkMode = _themes.Current.IsLight ? 0 : 1;
         _ = DwmSetWindowAttribute(new WindowInteropHelper(this).Handle, DWMWA_USE_IMMERSIVE_DARK_MODE, ref useDarkMode, sizeof(int));
     }
 
@@ -108,7 +159,7 @@ public partial class MainWindow : Window
         _keyHook = new GlobalKeyHook(OnGlobalKey);
         UpdateCellSize();
 
-        Terminal.SetTheme(PlaceholderTheme.Terminal, TerminalFontFamily, TerminalFontSize, PlaceholderTheme.Background);
+        ApplyTerminalTheme(_themes.Current);
         Terminal.Connection = _shell;
         FocusActivePanel();
     }

@@ -25,9 +25,6 @@ public sealed class FileListView : FrameworkElement
 
     private static readonly Typeface UiTypeface = new(new FontFamily("Segoe UI"), FontStyles.Normal, FontWeights.Normal, FontStretches.Normal);
     private static readonly Typeface UiTypefaceBold = new(new FontFamily("Segoe UI"), FontStyles.Normal, FontWeights.SemiBold, FontStretches.Normal);
-    private static readonly Geometry FolderGeometry = Geometry.Parse("M1,3 L6,3 L7.5,4.5 L15,4.5 L15,13 L1,13 Z");
-    private static readonly Geometry FileGeometry = Geometry.Parse("M3,1.5 L9.5,1.5 L13,5 L13,14.5 L3,14.5 Z M9.5,1.5 L9.5,5 L13,5");
-    private static readonly Geometry ParentGeometry = Geometry.Parse("M8,3 L3,8 M8,3 L13,8 M8,3 L8,13");
     private static readonly Geometry LinkGeometry = Geometry.Parse("M9,15 L15,9 M11,9 L15,9 L15,13");
 
     private readonly Dictionary<(string Text, Brush Brush, bool Bold), FormattedText> _textCache = [];
@@ -39,6 +36,7 @@ public sealed class FileListView : FrameworkElement
 
     public FileListView()
     {
+        IconProvider.SystemIconLoaded += InvalidateVisual;
         Focusable = false;
         ClipToBounds = true;
         SnapsToDevicePixels = true;
@@ -76,6 +74,13 @@ public sealed class FileListView : FrameworkElement
     private double ListTop => HasHeader ? HeaderHeight : 0;
 
     private bool HasHeader => _state is not null && ColumnCount == 1;
+
+    /// <summary>Drops cached text (it holds brushes of the previous theme) and repaints.</summary>
+    public void ApplyTheme()
+    {
+        _textCache.Clear();
+        InvalidateVisual();
+    }
 
     /// <summary>Redraws after the state changed and keeps the cursor visible.</summary>
     public void Refresh()
@@ -399,22 +404,16 @@ public sealed class FileListView : FrameworkElement
         }
     }
 
-    private static void DrawIcon(DrawingContext dc, PanelItem item, double x, double y)
+    private void DrawIcon(DrawingContext dc, PanelItem item, double x, double y)
     {
-        // Placeholder glyphs until the icon themes arrive in stage 5.
-        var (geometry, brush) = item.IsParent ? (ParentGeometry, PanelPalette.FolderIcon)
-            : item.Entry.IsDirectory ? (FolderGeometry, PanelPalette.FolderIcon)
-            : (FileGeometry, PanelPalette.FileIcon);
-        dc.PushTransform(new TranslateTransform(x, y));
-        dc.DrawGeometry(null, new Pen(brush, 1.2), geometry);
-        if (item.Entry.IsReparsePoint)
+        IconProvider.Draw(dc, item, _state!.Path, x, y);
+        if (!item.IsParent && item.Entry.IsReparsePoint)
         {
-            dc.DrawGeometry(null, new Pen(PanelPalette.FocusOutline, 1.4), LinkGeometry);
+            dc.PushTransform(new TranslateTransform(x, y));
+            dc.DrawGeometry(PanelPalette.Background, new Pen(PanelPalette.FocusOutline, 1.4), LinkGeometry);
+            dc.Pop();
         }
-
-        dc.Pop();
     }
-
     private void DrawText(DrawingContext dc, string text, Brush brush, double x, double y, double width, double height, bool alignRight, bool bold, double pixelsPerDip)
     {
         if (width <= 4 || text.Length == 0)
