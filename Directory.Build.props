@@ -7,7 +7,7 @@
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
     <AnalysisLevel>latest-recommended</AnalysisLevel>
     <Authors>Sergey Voronkov</Authors>
-    <Product>Terminal Commander</Product>
+    <Product>Habilis Terminal</Product>
     <Copyright>Copyright (c) 2026 Sergey Voronkov</Copyright>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
   </PropertyGroup>

@@ -5,21 +5,21 @@ Date: 2026-10-31.
 ## What was built
 
 - `Shell/Integration/OscScanner` + `OscDecoder`: streaming OSC detection (BEL and ST terminators, chunk splits) and
-  decoding of OSC 133 A/B/C/D, OSC 9;9, OSC 7 and Terminal Commander messages (`OSC 7731;tcmd;…`).
+  decoding of OSC 133 A/B/C/D, OSC 9;9, OSC 7 and Habilis Terminal messages (`OSC 7731;habi;…`).
 - `Shell/Integration/ShellHost`: pwsh in a pseudo console with the integration script, shell state
   (Starting / Idle / Busy / Exited), current directory, and a request queue (`cd`, `run`, `insert`, `restore`)
-  delivered through `%TEMP%\TerminalCommander\<pid>-<guid>\request.json` + the F24 key in win32-input-mode.
+  delivered through `%TEMP%\HabilisTerminal\<pid>-<guid>\request.json` + the F24 key in win32-input-mode.
   Requests wait for the prompt; `cd` requests are coalesced (last one wins); 3 s timeout per request.
-- `Shell/Scripts/TerminalCommander.ps1` (deployed as `shell\TerminalCommander.ps1`): wraps the existing `prompt`
+- `Shell/Scripts/HabilisTerminal.ps1` (deployed as `shell\HabilisTerminal.ps1`): wraps the existing `prompt`
   (after the user's profile / oh-my-posh), wraps `PSConsoleHostReadLine` for 133;C, registers the F24 handler.
   pwsh is started with `-NoExit -EncodedCommand` so paths with quotes are safe.
-- `ConPtySession`: callbacks fixed before the read thread starts, per-process environment block (`TCMD_CHANNEL`),
+- `ConPtySession`: callbacks fixed before the read thread starts, per-process environment block (`HABI_CHANNEL`),
   empty std handles (`STARTF_USESTDHANDLES`) so a parent with a console cannot leak its handles to the child.
 - App: active panel follows `cd` in the shell; Ctrl+PgUp, Ctrl+\ and Tab in the panels change the shell directory
   without touching the typed command; Ctrl+E / Ctrl+X / Ctrl+Space from panel focus reach PSReadLine;
   cd errors are shown in the panel. WPF keyboard navigation is disabled (it moved focus on Tab / Ctrl+Tab
   behind our back).
-- Dev hook renamed: `TCMD_SHELL_INIT` = PowerShell code run before the integration script.
+- Dev hook renamed: `HABI_SHELL_INIT` = PowerShell code run before the integration script.
 
 ## Verified
 

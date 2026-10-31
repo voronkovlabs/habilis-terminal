@@ -1,7 +1,7 @@
-# Terminal Commander — Specification (v1)
+# Habilis Terminal — Specification (v1)
 
 Status: agreed during the design interview on 2026-10-31.
-Product name: **Terminal Commander**. Executable: **`tcmd.exe`**. License: **MIT**.
+Product name: **Habilis Terminal**. Executable: **`habi.exe`**. License: **MIT**.
 UI language: English. Code, identifiers and comments: English.
 
 ## 1. Concept
@@ -27,7 +27,7 @@ recursive / content-based folder compare, mapping network drives.
 |---|---|
 | Runtime | .NET 10 (LTS, supported until 2028-11-14), C# |
 | UI | WPF |
-| Terminal control | `CI.Microsoft.Terminal.Wpf` 1.25.260303002 (community repack of the Windows Terminal WPF control) + `Microsoft.Windows.Console.ConPTY` 1.25.260930003 (current conpty/OpenConsole) + own ConPTY session layer in `TerminalCommander.Shell` (flags `RESIZE_QUIRK | WIN32_INPUT_MODE`, as Windows Terminal). `EasyWindowsTerminalControl` was dropped in stage 1, see `docs/stage1-findings.md` |
+| Terminal control | `CI.Microsoft.Terminal.Wpf` 1.25.260303002 (community repack of the Windows Terminal WPF control) + `Microsoft.Windows.Console.ConPTY` 1.25.260930003 (current conpty/OpenConsole) + own ConPTY session layer in `HabilisTerminal.Shell` (flags `RESIZE_QUIRK | WIN32_INPUT_MODE`, as Windows Terminal). `EasyWindowsTerminalControl` was dropped in stage 1, see `docs/stage1-findings.md` |
 | Editor component | `AvalonEdit` 6.3.1.120 (MIT) |
 | Installer / updates | `Velopack` 1.2.x (MIT) |
 | Tests | xUnit; BenchmarkDotNet for performance |
@@ -176,17 +176,17 @@ Drive letter, label, file system, total and free space; summary of the current s
 
 - Only PowerShell 7+ is supported. pwsh is located via `PATH` and standard install locations
   (MSI, Store, winget). If missing, a screen explains how to install it (`winget install Microsoft.PowerShell`).
-- Launch: `pwsh -NoLogo -NoExit -EncodedCommand <". '<app>\shell\TerminalCommander.ps1'">` (encoded, so any path is safe).
+- Launch: `pwsh -NoLogo -NoExit -EncodedCommand <". '<app>\shell\HabilisTerminal.ps1'">` (encoded, so any path is safe).
   The user's profile runs first as usual; user files are never modified. Integration can be disabled by a setting.
 - The script **wraps the existing `prompt` function** (after the profile and oh-my-posh have defined it) and emits:
   - OSC 133;A/B (prompt ready), 133;C/D (command started / finished);
   - OSC 9;9 (Windows Terminal cwd format) and OSC 7, only when the location is on the FileSystem provider
     (`$PWD.ProviderPath`, so UNC works). Non-filesystem locations (e.g. `HKLM:`) leave the panel unchanged;
-  - private messages as `OSC 7731;tcmd;<name>;<args>` (`ack;<id>;ok|error;<text>`, `restore-pending`).
+  - private messages as `OSC 7731;habi;<name>;<args>` (`ack;<id>;ok|error;<text>`, `restore-pending`).
     ConPTY 1.25 passes all of these through (verified in stage 2).
 - The script registers **PSReadLine key handlers on F13–F24**, which we send through ConPTY via win32-input-mode.
 - **Panel → shell cd:** the target path is written to the session channel directory
-  (`%TEMP%\TerminalCommander\<pid>\`), then F24 is sent. The handler runs `Set-Location -LiteralPath`
+  (`%TEMP%\HabilisTerminal\<pid>\`), then F24 is sent. The handler runs `Set-Location -LiteralPath`
   and `[PSConsoleReadLine]::InvokePrompt()`. The typed text and cursor position are preserved; nothing is added to history.
 - **Enter on a file → run through the shell:** the handler saves the typed text, replaces the buffer with
   `& '.\file.ext'`, accepts the line (it goes to history, as in Far), and restores the saved text after the next prompt.
@@ -376,14 +376,14 @@ Approach:
 
 ## 14. Settings and state
 
-- **Settings:** `%APPDATA%\TerminalCommander\settings.json` — JSONC with a JSON Schema; contains only values changed by
+- **Settings:** `%APPDATA%\HabilisTerminal\settings.json` — JSONC with a JSON Schema; contains only values changed by
   the user; defaults live in code. Reloaded live via a file watcher. On a syntax / validation error the last valid values
   stay in effect and a notification shows the line number.
-- **State:** `%LOCALAPPDATA%\TerminalCommander\state.json` — panel paths, modes, sorting, column widths, splitter positions,
+- **State:** `%LOCALAPPDATA%\HabilisTerminal\state.json` — panel paths, modes, sorting, column widths, splitter positions,
   panel visibility, window placement, folder history, view / edit history. Written atomically on exit and periodically.
   Command history is PSReadLine's own.
-- **Themes:** `%APPDATA%\TerminalCommander\themes\*.json`.
-- **Portable mode:** if `settings.json` or a `portable` marker lies next to `tcmd.exe`, everything is stored next to the executable.
+- **Themes:** `%APPDATA%\HabilisTerminal\themes\*.json`.
+- **Portable mode:** if `settings.json` or a `portable` marker lies next to `habi.exe`, everything is stored next to the executable.
 - **Settings UI** (F9 → Options → Settings): a full-window page modelled on the VS Code Settings editor — search box,
   category tree (Appearance, Panels, Terminal, File operations, Confirmations, Viewer, Editor), settings list with title,
   description and a control by type, "modified" marker, "Reset to default", and an "Open settings.json" button that
@@ -406,13 +406,13 @@ Approach:
 ## 16. Solution structure and testing
 
 ```
-src/TerminalCommander.Core      file system model, enumeration, sorting, masks, operations, conflicts,
+src/HabilisTerminal.Core      file system model, enumeration, sorting, masks, operations, conflicts,
                                 errors, progress, cancellation, Win32 P/Invoke. No UI.
-src/TerminalCommander.Shell     pwsh launch through a ConPTY abstraction, OSC parser, shell command channel,
+src/HabilisTerminal.Shell     pwsh launch through a ConPTY abstraction, OSC parser, shell command channel,
                                 integration script (.ps1). No UI.
-src/TerminalCommander.Themes    VS Code color theme loader (JSONC, include, defaults by type), file icon themes,
+src/HabilisTerminal.Themes    VS Code color theme loader (JSONC, include, defaults by type), file icon themes,
                                 Windows light/dark and accent colour. No UI.
-src/TerminalCommander.App       WPF: window, layout, terminal, panels, dialogs, viewer, editor, settings. Builds tcmd.exe.
+src/HabilisTerminal.App       WPF: window, layout, terminal, panels, dialogs, viewer, editor, settings. Builds habi.exe.
 tests/*.Tests                   xUnit for Core, Shell, Themes.
 tests/Core.Benchmarks           BenchmarkDotNet (100k-file directory).
 tools/IconBuilder               build-time SVG / glyph → XAML Geometry converter.
@@ -421,7 +421,7 @@ tools/IconBuilder               build-time SVG / glyph → XAML Geometry convert
 - Repository: `git init`, `main`, .NET `.gitignore`, `.editorconfig`, `Directory.Build.props` (`net10.0`, nullable,
   warnings as errors), central package management (`Directory.Packages.props`), MIT `LICENSE`.
 - **Tests and experiments run only in temporary directories.** Each test gets a sandbox
-  `%TEMP%\tcmd-tests\<guid>` and removes it afterwards. In test builds Core has a guard that throws on any destructive
+  `%TEMP%\habi-tests\<guid>` and removes it afterwards. In test builds Core has a guard that throws on any destructive
   operation outside the sandbox. The user's real files are never touched.
 - Core tests cover long paths, symlinks and junctions (skipped without symlink privilege), read-only files, locked files,
   access denied (ACL on a temp directory), Recycle Bin on a temp directory of a fixed drive.

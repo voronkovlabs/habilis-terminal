@@ -1,0 +1,17 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/HabilisTerminal.App/HabilisTerminal.App.csproj" />
+    <Project Path="src/HabilisTerminal.Core/HabilisTerminal.Core.csproj" />
+    <Project Path="src/HabilisTerminal.Shell/HabilisTerminal.Shell.csproj" />
+    <Project Path="src/HabilisTerminal.Themes/HabilisTerminal.Themes.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/HabilisTerminal.Core.Benchmarks/HabilisTerminal.Core.Benchmarks.csproj" />
+    <Project Path="tests/HabilisTerminal.Core.Tests/HabilisTerminal.Core.Tests.csproj" />
+    <Project Path="tests/HabilisTerminal.Shell.Tests/HabilisTerminal.Shell.Tests.csproj" />
+    <Project Path="tests/HabilisTerminal.Themes.Tests/HabilisTerminal.Themes.Tests.csproj" />
+  </Folder>
+  <Folder Name="/tools/">
+    <Project Path="tools/IconBuilder/IconBuilder.csproj" />
+  </Folder>
+</Solution>

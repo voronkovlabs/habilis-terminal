@@ -6,11 +6,11 @@ Date: 2026-10-31. Machine: Windows 11 Pro 10.0.26200, one monitor 1920×1080 at 
 ## What was built
 
 - Solution per SPEC §16, central package management, MIT license, MTP test runner (`global.json`).
-- `tcmd.exe`: WPF window, `WorkspaceLayout` (both / left / right / none, terminal snapped to cells),
+- `habi.exe`: WPF window, `WorkspaceLayout` (both / left / right / none, terminal snapped to cells),
   placeholder panels, focus model (Ctrl+Tab, click, printable keys from panels go to the shell),
   global intercepts (Ctrl+O always, Ctrl+Tab while panels are visible, Alt+F4), dark title bar,
   Per-Monitor V2 manifest.
-- Own ConPTY layer: `TerminalCommander.Shell.ConPty.ConPtySession` + `App.Hosting.ShellConnection`
+- Own ConPTY layer: `HabilisTerminal.Shell.ConPty.ConPtySession` + `App.Hosting.ShellConnection`
   (an `ITerminalConnection` for `Microsoft.Terminal.Wpf.TerminalControl`).
 
 ## Decision taken during the stage: EasyWindowsTerminalControl dropped
@@ -47,8 +47,8 @@ RID is applied; the app csproj sets `ConptyRequiresx64Host` / `ConptyRequiresARM
 ## oh-my-posh check
 
 Installed with winget (user scope, MSIX alias in `%LOCALAPPDATA%\Microsoft\WindowsApps`) and loaded only in
-test sessions through a development variable (`TCMD_SHELL_ARGS`, renamed `TCMD_SHELL_INIT` in stage 2); the user profile was not modified.
-The same command line was run in tcmd and in Windows Terminal:
+test sessions through a development variable (`HABI_SHELL_ARGS`, renamed `HABI_SHELL_INIT` in stage 2); the user profile was not modified.
+The same command line was run in habi.exe and in Windows Terminal:
 
 - Segments, colours, right-aligned block, transient prompt, PSReadLine colouring and predictions: identical.
 - Powerline / Nerd Font glyphs render as the same fallback symbols in both, because Cascadia Mono has no Nerd Font

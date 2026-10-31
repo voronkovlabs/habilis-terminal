@@ -1,0 +1,27 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <UseWPF>true</UseWPF>
+    <AssemblyName>habi</AssemblyName>
+    <RootNamespace>HabilisTerminal.App</RootNamespace>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <!-- A concrete RID puts conpty.dll next to habi.exe (Microsoft.Windows.Console.ConPTY). -->
+    <RuntimeIdentifiers>win-x64;win-arm64</RuntimeIdentifiers>
+    <RuntimeIdentifier Condition="'$(RuntimeIdentifier)' == ''">win-x64</RuntimeIdentifier>
+  </PropertyGroup>
+  <PropertyGroup>
+    <!-- The ConPTY package derives these from PlatformTarget too early to see the RID;
+         without them OpenConsole.exe is not copied and the inbox conhost is used instead. -->
+    <ConptyRequiresx64Host Condition="'$(RuntimeIdentifier)' == 'win-x64'">true</ConptyRequiresx64Host>
+    <ConptyRequiresARM64Host Condition="'$(RuntimeIdentifier)' == 'win-x64' Or '$(RuntimeIdentifier)' == 'win-arm64'">true</ConptyRequiresARM64Host>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="CI.Microsoft.Terminal.Wpf" />
+    <PackageReference Include="Microsoft.Windows.Console.ConPTY" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\HabilisTerminal.Core\HabilisTerminal.Core.csproj" />
+    <ProjectReference Include="..\HabilisTerminal.Shell\HabilisTerminal.Shell.csproj" />
+    <ProjectReference Include="..\HabilisTerminal.Themes\HabilisTerminal.Themes.csproj" />
+  </ItemGroup>
+</Project>

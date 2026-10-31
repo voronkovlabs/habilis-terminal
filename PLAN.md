@@ -1,4 +1,4 @@
-# Terminal Commander — Implementation Plan (v1)
+# Habilis Terminal — Implementation Plan (v1)
 
 Each stage ends with a verifiable result. A stage is done only when its checks pass.
 All automated tests and experiments run in temporary directories only (see SPEC §16).
@@ -32,7 +32,7 @@ Done when:
 
 ## Stage 2 — Shell integration
 
-Scope: `TerminalCommander.ps1` (prompt wrapper, OSC 133 / 9;9 / 7, PSReadLine handlers on F13–F24),
+Scope: `HabilisTerminal.ps1` (prompt wrapper, OSC 133 / 9;9 / 7, PSReadLine handlers on F13–F24),
 OSC parser on the ConPTY output, session channel directory, win32-input-mode key injection, shell state tracking
 (idle / busy), deferred cd, run-file-through-shell, Ctrl+E / Ctrl+X / Ctrl+Space translation.
 
@@ -91,7 +91,7 @@ Done when:
   "contents" options; delete never enters link targets (target content verified intact); long paths > 260 chars;
   read-only, hidden, system files; locked file (process name reported); access denied via ACL; cancellation mid-file
   leaves no partial target; cross-volume move never loses data on error (uses a sandbox on a second volume configured
-  via an environment variable, e.g. `TCMD_TEST_SECOND_VOLUME`; skipped when not set); Recycle Bin delete on a temp
+  via an environment variable, e.g. `HABI_TEST_SECOND_VOLUME`; skipped when not set); Recycle Bin delete on a temp
   directory; mask renames;
   compare folders with FAT time tolerance.
 
