@@ -47,7 +47,7 @@ RID is applied; the app csproj sets `ConptyRequiresx64Host` / `ConptyRequiresARM
 ## oh-my-posh check
 
 Installed with winget (user scope, MSIX alias in `%LOCALAPPDATA%\Microsoft\WindowsApps`) and loaded only in
-test sessions through the development variable `TCMD_SHELL_ARGS`; the user profile was not modified.
+test sessions through a development variable (`TCMD_SHELL_ARGS`, renamed `TCMD_SHELL_INIT` in stage 2); the user profile was not modified.
 The same command line was run in tcmd and in Windows Terminal:
 
 - Segments, colours, right-aligned block, transient prompt, PSReadLine colouring and predictions: identical.

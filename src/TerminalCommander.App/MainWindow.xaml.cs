@@ -10,6 +10,8 @@ using TerminalCommander.App.Layout;
 using TerminalCommander.App.Panels;
 using TerminalCommander.App.Theming;
 using TerminalCommander.Shell;
+using TerminalCommander.Shell.ConPty;
+using TerminalCommander.Shell.Integration;
 
 namespace TerminalCommander.App;
 
@@ -51,11 +53,14 @@ public partial class MainWindow : Window
             return;
         }
 
-        // Development hook: extra pwsh arguments for test sessions, e.g. loading a prompt theme
-        // without touching the user's profile. Replaced by shell.args in settings (stage 10).
-        var extraArgs = Environment.GetEnvironmentVariable("TCMD_SHELL_ARGS");
-        _shell = new ShellConnection($"\"{pwsh}\" -NoLogo {extraArgs}".TrimEnd(), home);
-        _shell.Exited += _ => Dispatcher.BeginInvoke(Close);
+        // Development hook: PowerShell code run before the integration script in test sessions, e.g. loading
+        // a prompt theme without touching the user's profile. Replaced by settings in stage 10.
+        var initCommand = Environment.GetEnvironmentVariable("TCMD_SHELL_INIT");
+        var host = new ShellHost(new ShellHostOptions(pwsh, ShellScripts.IntegrationScriptPath, home, initCommand));
+        host.Exited += _ => Dispatcher.BeginInvoke(Close);
+        host.DirectoryChanged += path => Dispatcher.BeginInvoke(() => OnShellDirectoryChanged(path));
+        host.RequestCompleted += (_, op, status) => Dispatcher.BeginInvoke(() => OnShellRequestCompleted(op, status));
+        _shell = new ShellConnection(host);
 
         Loaded += OnLoaded;
         DpiChanged += (_, _) => UpdateCellSize();
@@ -136,12 +141,69 @@ public partial class MainWindow : Window
                 if (IsShown(other))
                 {
                     Activate(other);
+                    SyncShellDirectory();
                 }
 
+                return true;
+
+            case Key.PageUp when modifiers == KeyModifiers.Control:
+                Navigate(_active, System.IO.Path.GetDirectoryName(_active.DirectoryPath.TrimEnd('\\')) ?? _active.DirectoryPath);
+                return true;
+
+            case Key.Oem5 when modifiers == KeyModifiers.Control: // Ctrl+\
+                Navigate(_active, System.IO.Path.GetPathRoot(_active.DirectoryPath) ?? _active.DirectoryPath);
+                return true;
+
+            // Command line keys that work from panel focus, as in Far.
+            case Key.E when modifiers == KeyModifiers.Control:
+                _shell?.Host.SendKey(Win32InputSequence.VkUp, controlKeyState: Win32InputSequence.EnhancedKey);
+                return true;
+
+            case Key.X when modifiers == KeyModifiers.Control:
+                _shell?.Host.SendKey(Win32InputSequence.VkDown, controlKeyState: Win32InputSequence.EnhancedKey);
+                return true;
+
+            case Key.Space when modifiers == KeyModifiers.Control:
+                _shell?.Host.SendKey(Win32InputSequence.VkSpace, ' ', Win32InputSequence.LeftCtrl);
                 return true;
         }
 
         return false;
+    }
+
+    /// <summary>Navigation in a panel; the active panel takes the shell with it (SPEC §7).</summary>
+    private void Navigate(PlaceholderPanel panel, string path)
+    {
+        panel.DirectoryPath = path;
+        panel.Message = null;
+        if (panel == _active)
+        {
+            SyncShellDirectory();
+        }
+    }
+
+    private void SyncShellDirectory()
+    {
+        if (_shell is { } shell &&
+            !string.Equals(shell.Host.CurrentDirectory, _active.DirectoryPath, StringComparison.OrdinalIgnoreCase))
+        {
+            shell.Host.ChangeDirectory(_active.DirectoryPath);
+        }
+    }
+
+    /// <summary><c>cd</c> in the shell moves the active panel; the inactive one never follows.</summary>
+    private void OnShellDirectoryChanged(string path)
+    {
+        _active.DirectoryPath = path;
+        _active.Message = null;
+    }
+
+    private void OnShellRequestCompleted(string op, string status)
+    {
+        if (op == "cd" && status != "ok")
+        {
+            _active.Message = status.StartsWith("error;", StringComparison.Ordinal) ? status[6..] : status;
+        }
     }
 
     /// <summary>Printable characters typed in a panel go to the command line (SPEC §4).</summary>

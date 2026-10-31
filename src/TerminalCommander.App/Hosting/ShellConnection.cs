@@ -1,56 +1,47 @@
 using Microsoft.Terminal.Wpf;
-using TerminalCommander.Shell.ConPty;
+using TerminalCommander.Shell.Integration;
 
 namespace TerminalCommander.App.Hosting;
 
-/// <summary>Bridges the Windows Terminal WPF control to a <see cref="ConPtySession"/>.</summary>
+/// <summary>Bridges the Windows Terminal WPF control to a <see cref="ShellHost"/>.</summary>
 public sealed class ShellConnection : ITerminalConnection, IDisposable
 {
-    private readonly string _commandLine;
-    private readonly string? _workingDirectory;
-    private ConPtySession? _session;
     private int _columns = 120;
     private int _rows = 30;
+    private bool _started;
 
-    public ShellConnection(string commandLine, string? workingDirectory)
+    public ShellConnection(ShellHost host)
     {
-        _commandLine = commandLine;
-        _workingDirectory = workingDirectory;
+        Host = host;
+        Host.Output += text => TerminalOutput?.Invoke(this, new TerminalOutputEventArgs(text));
     }
 
     public event EventHandler<TerminalOutputEventArgs>? TerminalOutput;
 
-    /// <summary>Raised on a background thread when the shell process exits.</summary>
-    public event Action<int>? Exited;
+    public ShellHost Host { get; }
 
     public void Start()
     {
-        if (_session is not null)
+        if (_started)
         {
             return;
         }
 
-        _session = ConPtySession.Start(_commandLine, _workingDirectory, _columns, _rows);
-        _session.Output += text => TerminalOutput?.Invoke(this, new TerminalOutputEventArgs(text));
-        _session.Exited += code => Exited?.Invoke(code);
+        _started = true;
+        Host.Start(_columns, _rows);
     }
 
     /// <summary>Input from the terminal control: keys (win32-input-mode sequences) and replies.</summary>
-    public void WriteInput(string data) => _session?.Write(data);
+    public void WriteInput(string data) => Host.Write(data);
 
     public void Resize(uint rows, uint columns)
     {
         _rows = (int)rows;
         _columns = (int)columns;
-        _session?.Resize(_columns, _rows);
+        Host.Resize(_columns, _rows);
     }
 
     public void Close() => Dispose();
 
-    public void Dispose()
-    {
-        var session = _session;
-        _session = null;
-        session?.Dispose();
-    }
+    public void Dispose() => Host.Dispose();
 }

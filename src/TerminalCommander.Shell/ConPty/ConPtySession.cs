@@ -2,10 +2,18 @@ using System.ComponentModel;
 using System.Diagnostics;
 using System.Runtime.InteropServices;
 using System.Text;
-using Microsoft.Win32.SafeHandles;
 using static TerminalCommander.Shell.ConPty.ConPtyNative;
 
 namespace TerminalCommander.Shell.ConPty;
+
+/// <summary>What to start inside a pseudo console.</summary>
+/// <param name="Environment">Variables added to (or overriding) the inherited environment.</param>
+public sealed record ConPtyStartInfo(
+    string CommandLine,
+    string? WorkingDirectory,
+    int Columns,
+    int Rows,
+    IReadOnlyDictionary<string, string>? Environment = null);
 
 /// <summary>
 /// A child process attached to a pseudo console. Created with the same flags as Windows Terminal
@@ -15,30 +23,31 @@ namespace TerminalCommander.Shell.ConPty;
 public sealed class ConPtySession : IDisposable
 {
     private readonly object _sync = new();
+    private readonly Action<string> _onOutput;
+    private readonly Action<int> _onExited;
     private IntPtr _pseudoConsole;
     private FileStream? _input;
     private FileStream? _output;
     private Process? _process;
+    private int _exitReported;
     private bool _disposed;
 
-    private ConPtySession()
+    private ConPtySession(Action<string> onOutput, Action<int> onExited)
     {
+        _onOutput = onOutput;
+        _onExited = onExited;
     }
-
-    /// <summary>Raised on a background thread with decoded output text (VT sequences included).</summary>
-    public event Action<string>? Output;
-
-    /// <summary>Raised on a background thread when the child process exits.</summary>
-    public event Action<int>? Exited;
 
     public int ProcessId { get; private set; }
 
-    public static ConPtySession Start(string commandLine, string? workingDirectory, int columns, int rows)
+    /// <param name="onOutput">Called on a background thread with decoded output (VT sequences included).</param>
+    /// <param name="onExited">Called once on a background thread when the child process exits.</param>
+    public static ConPtySession Start(ConPtyStartInfo startInfo, Action<string> onOutput, Action<int> onExited)
     {
-        var session = new ConPtySession();
+        var session = new ConPtySession(onOutput, onExited);
         try
         {
-            session.StartCore(commandLine, workingDirectory, columns, rows);
+            session.StartCore(startInfo);
             return session;
         }
         catch
@@ -64,8 +73,15 @@ public sealed class ConPtySession : IDisposable
                 return;
             }
 
-            input.Write(bytes);
-            input.Flush();
+            try
+            {
+                input.Write(bytes);
+                input.Flush();
+            }
+            catch (IOException)
+            {
+                // The pseudo console is gone; the exit callback reports it.
+            }
         }
     }
 
@@ -109,7 +125,7 @@ public sealed class ConPtySession : IDisposable
         _process?.Dispose();
     }
 
-    private void StartCore(string commandLine, string? workingDirectory, int columns, int rows)
+    private void StartCore(ConPtyStartInfo startInfo)
     {
         if (!CreatePipe(out var inputRead, out var inputWrite, IntPtr.Zero, 0) ||
             !CreatePipe(out var outputRead, out var outputWrite, IntPtr.Zero, 0))
@@ -117,7 +133,7 @@ public sealed class ConPtySession : IDisposable
             throw new Win32Exception(Marshal.GetLastWin32Error(), "Could not create pseudo console pipes.");
         }
 
-        var size = new COORD { X = (short)Math.Max(1, columns), Y = (short)Math.Max(1, rows) };
+        var size = new COORD { X = (short)Math.Max(1, startInfo.Columns), Y = (short)Math.Max(1, startInfo.Rows) };
         var hr = CreatePseudoConsole(size, inputRead, outputWrite, PSEUDOCONSOLE_RESIZE_QUIRK | PSEUDOCONSOLE_WIN32_INPUT_MODE, out _pseudoConsole);
         if (hr != 0)
         {
@@ -131,7 +147,7 @@ public sealed class ConPtySession : IDisposable
         _input = new FileStream(inputWrite, FileAccess.Write, 1);
         _output = new FileStream(outputRead, FileAccess.Read, 1);
 
-        var processInfo = CreateAttachedProcess(commandLine, workingDirectory);
+        var processInfo = CreateAttachedProcess(startInfo);
         ProcessId = processInfo.dwProcessId;
         _process = Process.GetProcessById(processInfo.dwProcessId);
         CloseHandle(processInfo.hThread);
@@ -141,18 +157,27 @@ public sealed class ConPtySession : IDisposable
         readThread.Start();
 
         _process.EnableRaisingEvents = true;
-        _process.Exited += (_, _) => Exited?.Invoke(SafeExitCode(_process));
+        _process.Exited += (_, _) => ReportExit();
         if (_process.HasExited)
         {
-            Exited?.Invoke(SafeExitCode(_process));
+            ReportExit();
         }
     }
 
-    private PROCESS_INFORMATION CreateAttachedProcess(string commandLine, string? workingDirectory)
+    private void ReportExit()
+    {
+        if (Interlocked.Exchange(ref _exitReported, 1) == 0 && _process is { } process)
+        {
+            _onExited(SafeExitCode(process));
+        }
+    }
+
+    private PROCESS_INFORMATION CreateAttachedProcess(ConPtyStartInfo startInfo)
     {
         var attributeListSize = IntPtr.Zero;
         InitializeProcThreadAttributeList(IntPtr.Zero, 1, 0, ref attributeListSize);
         var attributeList = Marshal.AllocHGlobal(attributeListSize);
+        var environmentBlock = BuildEnvironmentBlock(startInfo.Environment);
         try
         {
             if (!InitializeProcThreadAttributeList(attributeList, 1, 0, ref attributeListSize) ||
@@ -164,12 +189,16 @@ public sealed class ConPtySession : IDisposable
             var startupInfo = new STARTUPINFOEX { lpAttributeList = attributeList };
             startupInfo.StartupInfo.cb = Marshal.SizeOf<STARTUPINFOEX>();
 
-            var commandLineBuffer = (commandLine + '\0').ToCharArray();
+            // Empty std handles: otherwise a parent that has a console (tests, a console host)
+            // passes its own handles and the child writes past the pseudo console.
+            startupInfo.StartupInfo.dwFlags = STARTF_USESTDHANDLES;
+
+            var commandLineBuffer = (startInfo.CommandLine + '\0').ToCharArray();
             if (!CreateProcess(null, commandLineBuffer, IntPtr.Zero, IntPtr.Zero, false,
-                    EXTENDED_STARTUPINFO_PRESENT | CREATE_UNICODE_ENVIRONMENT, IntPtr.Zero,
-                    workingDirectory, ref startupInfo, out var processInfo))
+                    EXTENDED_STARTUPINFO_PRESENT | CREATE_UNICODE_ENVIRONMENT, environmentBlock,
+                    startInfo.WorkingDirectory, ref startupInfo, out var processInfo))
             {
-                throw new Win32Exception(Marshal.GetLastWin32Error(), $"Could not start '{commandLine}'.");
+                throw new Win32Exception(Marshal.GetLastWin32Error(), $"Could not start '{startInfo.CommandLine}'.");
             }
 
             return processInfo;
@@ -178,7 +207,40 @@ public sealed class ConPtySession : IDisposable
         {
             DeleteProcThreadAttributeList(attributeList);
             Marshal.FreeHGlobal(attributeList);
+            if (environmentBlock != IntPtr.Zero)
+            {
+                Marshal.FreeHGlobal(environmentBlock);
+            }
         }
+    }
+
+    /// <summary>Inherited environment plus overrides, as a sorted Unicode block; zero means "inherit as is".</summary>
+    private static IntPtr BuildEnvironmentBlock(IReadOnlyDictionary<string, string>? overrides)
+    {
+        if (overrides is null || overrides.Count == 0)
+        {
+            return IntPtr.Zero;
+        }
+
+        var variables = new SortedDictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        foreach (System.Collections.DictionaryEntry entry in System.Environment.GetEnvironmentVariables())
+        {
+            variables[(string)entry.Key] = (string?)entry.Value ?? string.Empty;
+        }
+
+        foreach (var (name, value) in overrides)
+        {
+            variables[name] = value;
+        }
+
+        var block = new StringBuilder();
+        foreach (var (name, value) in variables)
+        {
+            block.Append(name).Append('=').Append(value).Append('\0');
+        }
+
+        block.Append('\0');
+        return Marshal.StringToHGlobalUni(block.ToString());
     }
 
     private void ReadLoop()
@@ -199,7 +261,7 @@ public sealed class ConPtySession : IDisposable
                 var count = decoder.GetChars(bytes, 0, read, chars, 0, flush: false);
                 if (count > 0)
                 {
-                    Output?.Invoke(new string(chars, 0, count));
+                    _onOutput(new string(chars, 0, count));
                 }
             }
         }

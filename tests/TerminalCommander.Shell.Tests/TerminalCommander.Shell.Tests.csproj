@@ -2,9 +2,13 @@
   <PropertyGroup>
     <OutputType>Exe</OutputType>
     <IsPackable>false</IsPackable>
+    <!-- Integration tests host a real pseudo console: same native layout as the app. -->
+    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+    <ConptyRequiresx64Host>true</ConptyRequiresx64Host>
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="xunit.v3" />
+    <PackageReference Include="Microsoft.Windows.Console.ConPTY" />
   </ItemGroup>
   <ItemGroup>
     <Using Include="Xunit" />

@@ -176,13 +176,14 @@ Drive letter, label, file system, total and free space; summary of the current s
 
 - Only PowerShell 7+ is supported. pwsh is located via `PATH` and standard install locations
   (MSI, Store, winget). If missing, a screen explains how to install it (`winget install Microsoft.PowerShell`).
-- Launch: `pwsh -NoLogo -NoExit -Command ". '<app>\shell\TerminalCommander.ps1'"`.
+- Launch: `pwsh -NoLogo -NoExit -EncodedCommand <". '<app>\shell\TerminalCommander.ps1'">` (encoded, so any path is safe).
   The user's profile runs first as usual; user files are never modified. Integration can be disabled by a setting.
 - The script **wraps the existing `prompt` function** (after the profile and oh-my-posh have defined it) and emits:
   - OSC 133;A/B (prompt ready), 133;C/D (command started / finished);
   - OSC 9;9 (Windows Terminal cwd format) and OSC 7, only when the location is on the FileSystem provider
     (`$PWD.ProviderPath`, so UNC works). Non-filesystem locations (e.g. `HKLM:`) leave the panel unchanged;
-  - a private OSC with the prompt state when needed.
+  - private messages as `OSC 7731;tcmd;<name>;<args>` (`ack;<id>;ok|error;<text>`, `restore-pending`).
+    ConPTY 1.25 passes all of these through (verified in stage 2).
 - The script registers **PSReadLine key handlers on F13–F24**, which we send through ConPTY via win32-input-mode.
 - **Panel → shell cd:** the target path is written to the session channel directory
   (`%TEMP%\TerminalCommander\<pid>\`), then F24 is sent. The handler runs `Set-Location -LiteralPath`

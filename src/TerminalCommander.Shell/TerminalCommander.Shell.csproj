@@ -1,2 +1,9 @@
 <Project Sdk="Microsoft.NET.Sdk">
+  <ItemGroup>
+    <!-- Shipped next to the executable as shell\TerminalCommander.ps1 (also flows to referencing projects). -->
+    <None Include="Scripts\TerminalCommander.ps1" Link="shell\TerminalCommander.ps1" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+  <ItemGroup>
+    <InternalsVisibleTo Include="TerminalCommander.Shell.Tests" />
+  </ItemGroup>
 </Project>

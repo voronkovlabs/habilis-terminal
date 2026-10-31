@@ -14,6 +14,7 @@ internal static class PlaceholderTheme
     public static readonly Color SideBarBorder = Rgb(0x2B2B2B);
     public static readonly Color FocusBorder = Rgb(0x0078D4);
     public static readonly Color DescriptionForeground = Rgb(0x9D9D9D);
+    public static readonly Color ErrorForeground = Rgb(0xF85149);
     public static readonly Color TerminalBackground = Rgb(0x181818);
     public static readonly Color TerminalForeground = Rgb(0xCCCCCC);
     public static readonly Color TerminalSelection = Rgb(0x264F78);

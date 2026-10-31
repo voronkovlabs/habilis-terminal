@@ -14,6 +14,7 @@ public sealed class PlaceholderPanel : Border
 {
     private readonly TextBlock _title;
     private readonly TextBlock _path;
+    private readonly TextBlock _message;
     private bool _isActive;
 
     public PlaceholderPanel(string title)
@@ -42,9 +43,20 @@ public sealed class PlaceholderPanel : Border
             TextTrimming = TextTrimming.CharacterEllipsis,
         };
 
+        _message = new TextBlock
+        {
+            FontFamily = new FontFamily("Segoe UI"),
+            FontSize = 12,
+            Margin = new Thickness(0, 6, 0, 0),
+            Foreground = new SolidColorBrush(PlaceholderTheme.ErrorForeground),
+            TextWrapping = TextWrapping.Wrap,
+            Visibility = Visibility.Collapsed,
+        };
+
         var stack = new StackPanel();
         stack.Children.Add(_title);
         stack.Children.Add(_path);
+        stack.Children.Add(_message);
         Child = stack;
     }
 
@@ -52,6 +64,17 @@ public sealed class PlaceholderPanel : Border
     {
         get => _path.Text;
         set => _path.Text = value;
+    }
+
+    /// <summary>An error or notice shown under the path; null hides it.</summary>
+    public string? Message
+    {
+        get => _message.Visibility == Visibility.Visible ? _message.Text : null;
+        set
+        {
+            _message.Text = value ?? string.Empty;
+            _message.Visibility = string.IsNullOrEmpty(value) ? Visibility.Collapsed : Visibility.Visible;
+        }
     }
 
     /// <summary>The active panel of the pair; it keeps its highlight while focus is in the terminal.</summary>
