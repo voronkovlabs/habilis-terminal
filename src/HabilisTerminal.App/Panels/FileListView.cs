@@ -407,7 +407,7 @@ public sealed class FileListView : FrameworkElement
             }
             else
             {
-                long? folderSize = item.Entry.IsDirectory && !item.IsParent && state.FolderSizes.TryGetValue(item.Name, out var size) ? size : null;
+                long? folderSize = item.Entry.IsDirectory && !item.IsParent && state.FolderSizes.TryGetValue(item.Name, out var size) ? size.Bytes : null;
                 var text = PanelColumns.FormatCell(column.Kind, item, state.Culture, folderSize);
                 var brush = isMarked ? PanelPalette.MarkedForeground : PanelPalette.DescriptionForeground;
                 DrawText(dc, text, brush, x + CellPadding, cell.Y, width - (2 * CellPadding), RowHeight, column.AlignRight, false, pixelsPerDip);

@@ -192,7 +192,7 @@ public sealed class FilePanel : Border
         }
 
         var path = System.IO.Path.Combine(source.CurrentPath, item.Name);
-        _quickView.Show(path, item.Entry.IsDirectory, source.State.FolderSizes.TryGetValue(item.Name, out var size) ? size : null);
+        _quickView.Show(path, item.Entry.IsDirectory, source.State.FolderSizes.TryGetValue(item.Name, out var size) ? size.Bytes : null);
     }
 
     public bool IsActive
@@ -702,6 +702,8 @@ public sealed class FilePanel : Border
         var item = State.Current;
         _status.Text = item.Name;
         _statusRight.Text = item.IsParent ? string.Empty
+            : item.Entry.IsDirectory && State.FolderSizes.TryGetValue(item.Name, out var totals)
+                ? $"{totals.Files.ToString("N0", culture)} {(totals.Files == 1 ? "file" : "files")}   {PanelColumns.FormatCompactSize(totals.Bytes, culture)}"
             : item.Entry.IsDirectory ? item.Entry.LastWriteTimeUtc.ToLocalTime().ToString("g", culture)
             : $"{PanelColumns.FormatCompactSize(item.Entry.Length, culture)}   {item.Entry.LastWriteTimeUtc.ToLocalTime().ToString("g", culture)}";
     }

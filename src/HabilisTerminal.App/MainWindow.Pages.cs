@@ -47,7 +47,7 @@ public partial class MainWindow
         }
     }
 
-    /// <summary>F3: files open in the viewer; on a folder the size is computed in the background (Far).</summary>
+    /// <summary>F3: files open in the viewer; on a folder its files are counted and sized in the background (Far).</summary>
     private void View(FilePanel panel)
     {
         var item = panel.State.Current;
@@ -83,9 +83,8 @@ public partial class MainWindow
     private static async Task ComputeFolderSizeAsync(FilePanel panel, string name, string path)
     {
         var result = await Task.Run(() => DirectorySize.Compute(path));
-        panel.State.FolderSizes[name] = result.Bytes;
-        panel.State.MoveCursor(1);
-        panel.Refresh();
+        panel.State.FolderSizes[name] = result;
+        panel.Refresh(); // the cursor stays on the folder so its status line shows the totals
         if (result.Inaccessible > 0)
         {
             panel.Message = $"{result.Inaccessible} folder(s) inside '{name}' could not be read; the size is partial.";

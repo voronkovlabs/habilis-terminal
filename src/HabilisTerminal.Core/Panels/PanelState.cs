@@ -1,5 +1,6 @@
 using System.Globalization;
 using HabilisTerminal.Core.FileSystem;
+using HabilisTerminal.Core.Viewing;
 
 namespace HabilisTerminal.Core.Panels;
 
@@ -53,8 +54,8 @@ public sealed class PanelState
 
     public Selection Selection { get; } = new();
 
-    /// <summary>Folder sizes computed with F3, shown in the size column until the directory changes.</summary>
-    public Dictionary<string, long> FolderSizes { get; } = new(StringComparer.OrdinalIgnoreCase);
+    /// <summary>Folder totals computed with F3, shown in the size column and the status line until the directory changes.</summary>
+    public Dictionary<string, DirectorySize.Result> FolderSizes { get; } = new(StringComparer.OrdinalIgnoreCase);
 
     public SortOptions Sort { get; private set; } = new();
 

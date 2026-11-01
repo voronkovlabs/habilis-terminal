@@ -294,7 +294,8 @@ F6 switches between viewer and editor, as in Far. One page at a time (no F12 scr
 - Search (F7, Shift+F7 next), go to line / offset.
 - Images (png, jpg, gif, bmp, ico, webp) via WPF decoders.
 - F3 on a directory computes its size in the background (cancellable, junctions not traversed);
-  the result is shown in the size column.
+  the cursor stays on it, the panel's status line shows the number of files and their size, and the size
+  column shows the size.
 - Ctrl+Q shows the same control as quick view in the opposite panel.
 
 ### Editor (F4)
