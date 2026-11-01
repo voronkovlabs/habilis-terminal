@@ -79,6 +79,42 @@ public sealed class FolderSizeSchedule
         return next;
     }
 
+    /// <summary>
+    /// True when a visible folder outranks <paramref name="current"/>, the folder being counted for
+    /// <paramref name="owners"/>: the count should pause (#37). Same order as <see cref="TakeNext"/>, with the
+    /// current folder counted as still pending for its owners; folders out of view never interrupt a count.
+    /// </summary>
+    public bool ShouldYield(string current, IReadOnlyCollection<object> owners)
+    {
+        foreach (var request in _requests.OrderByDescending(r => r.Touched))
+        {
+            foreach (var path in request.Visible)
+            {
+                if (owners.Contains(request.Owner) && string.Equals(path, current, StringComparison.OrdinalIgnoreCase))
+                {
+                    return false;
+                }
+
+                if (request.Pending.Contains(path))
+                {
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    }
+
+    /// <summary>A paused count: the folder is pending again for the owners that still ask for it.</summary>
+    public void Restore(string path, IEnumerable<object> owners)
+    {
+        foreach (var request in _requests.Where(r => owners.Contains(r.Owner) && r.Order.Contains(path, StringComparer.OrdinalIgnoreCase)))
+        {
+            request.Pending.Add(path);
+            request.Next = 0;
+        }
+    }
+
     private Request? Find(object owner) => _requests.FirstOrDefault(r => r.Owner == owner);
 
     private sealed class Request(object owner)
