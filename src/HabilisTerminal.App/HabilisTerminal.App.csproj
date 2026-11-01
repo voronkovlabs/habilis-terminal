@@ -5,6 +5,8 @@
     <AssemblyName>habi</AssemblyName>
     <RootNamespace>HabilisTerminal.App</RootNamespace>
     <ApplicationManifest>app.manifest</ApplicationManifest>
+    <StartupObject>HabilisTerminal.App.Program</StartupObject>
+    <ApplicationIcon Condition="Exists('Assets\habi.ico')">Assets\habi.ico</ApplicationIcon>
     <!-- A concrete RID puts conpty.dll next to habi.exe (Microsoft.Windows.Console.ConPTY). -->
     <RuntimeIdentifiers>win-x64;win-arm64</RuntimeIdentifiers>
     <RuntimeIdentifier Condition="'$(RuntimeIdentifier)' == ''">win-x64</RuntimeIdentifier>
@@ -19,11 +21,18 @@
     <PackageReference Include="AvalonEdit" />
     <PackageReference Include="CI.Microsoft.Terminal.Wpf" />
     <PackageReference Include="Microsoft.Windows.Console.ConPTY" />
+    <PackageReference Include="Velopack" />
+  </ItemGroup>
+  <ItemGroup>
+    <!-- Program.Main starts the app: Velopack hooks must run before WPF. -->
+    <ApplicationDefinition Remove="App.xaml" />
+    <Page Include="App.xaml" />
   </ItemGroup>
   <ItemGroup>
     <!-- Codicons (CC BY 4.0) for UI glyphs. -->
     <Resource Include="Assets\codicon.ttf" />
     <None Include="..\..\ThirdPartyNotices.txt" Link="ThirdPartyNotices.txt" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="..\..\LICENSE" Link="LICENSE.txt" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\HabilisTerminal.Core\HabilisTerminal.Core.csproj" />

@@ -109,9 +109,17 @@ internal sealed class DialogWindow<T> : Window
 public static class ThemedDialog
 {
     /// <summary>Shows a dialog modally; returns the chosen button's result or <paramref name="cancelResult"/>.</summary>
-    public static T Show<T>(Window owner, string title, UIElement body, IReadOnlyList<DialogButton<T>> buttons, T cancelResult, UIElement? focus = null)
+    /// <param name="owner">The window to centre on; null before the main window exists (centred on the screen, in the taskbar).</param>
+    public static T Show<T>(Window? owner, string title, UIElement body, IReadOnlyList<DialogButton<T>> buttons, T cancelResult, UIElement? focus = null)
     {
         var dialog = new DialogWindow<T>(title, body, buttons, cancelResult) { Owner = owner };
+        if (owner is null)
+        {
+            dialog.WindowStartupLocation = WindowStartupLocation.CenterScreen;
+            dialog.ShowInTaskbar = true;
+            dialog.Title = title;
+        }
+
         dialog.Loaded += (_, _) =>
         {
             var target = focus ?? (UIElement?)FindDefault(dialog) ?? dialog;

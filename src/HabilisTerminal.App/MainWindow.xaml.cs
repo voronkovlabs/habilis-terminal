@@ -60,15 +60,8 @@ public partial class MainWindow : Window
         RestoreLayout(state);
 
         var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
-        var pwsh = !string.IsNullOrWhiteSpace(_settings.ShellPath) && File.Exists(_settings.ShellPath) ? _settings.ShellPath : PwshLocator.Find();
-        if (pwsh is null)
-        {
-            MessageBox.Show(
-                "PowerShell 7 (pwsh.exe) was not found.\n\nInstall it with:\n    winget install Microsoft.PowerShell",
-                "Habilis Terminal", MessageBoxButton.OK, MessageBoxImage.Error);
-            Close();
-            return;
-        }
+        // App checks for pwsh before creating the window; this only guards against it disappearing in between.
+        var pwsh = App.FindPwsh() ?? throw new InvalidOperationException("PowerShell 7 (pwsh.exe) was not found.");
 
         var leftStart = StartPath(state.Left, home);
         var rightStart = StartPath(state.Right, home);
@@ -96,6 +89,7 @@ public partial class MainWindow : Window
             }
 
             StartStateTimer();
+            App.Updates.UpdateReady += OnUpdateReady;
             await _left.NavigateAsync(leftStart);
             await _right.NavigateAsync(rightStart);
         };
@@ -115,6 +109,7 @@ public partial class MainWindow : Window
         Closed += (_, _) =>
         {
             _stateTimer?.Stop();
+            App.Updates.UpdateReady -= OnUpdateReady;
             if (App.Settings is { } settings)
             {
                 settings.Changed -= OnSettingsFileChanged;

@@ -39,5 +39,5 @@ Date: 2026-11-01.
 - Two monitors with different scale factors, unplugging a monitor while running and changing the scale live: this
   machine has one 1920×1080 monitor, and changing the Windows scale is a system setting we do not touch. The code
   paths are Windows' own (`SetWindowPlacement`, per-monitor v2 manifest, `TerminalDpiChanged` in the control, our
-  cell size recomputed on `DpiChanged`), which stage 1 checked for the terminal control.
+  cell size recomputed on `DpiChanged`), which stage 1 also could not exercise with a single monitor.
 - Clipboard side-by-side comparison with Windows Terminal beyond the cases above.

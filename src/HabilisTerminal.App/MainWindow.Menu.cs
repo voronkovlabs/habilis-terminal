@@ -55,6 +55,7 @@ public partial class MainWindow
                 new MenuCommand("File icon theme…", null, () => Fire(PickIconThemeAsync())),
                 MenuCommand.Separator,
                 new MenuCommand("Keyboard help", "F1", ShowHelp),
+                new MenuCommand("About Habilis Terminal", null, ShowAbout),
             ]),
             PanelMenu(RightMenu, _right),
         };
@@ -211,6 +212,65 @@ public partial class MainWindow
         }
 
         Close();
+    }
+
+    private void OnUpdateReady(string version) =>
+        Toasts.Notify("update", "Update ready", $"Habilis Terminal {version} has been downloaded. It is installed when you exit, or now:",
+            ("Restart to update", RestartToUpdate));
+
+    private void RestartToUpdate()
+    {
+        if (PageHost.Content is Editing.EditorPage editor && !editor.ConfirmLeave())
+        {
+            return;
+        }
+
+        SaveState();
+        App.Updates.RestartToUpdate();
+    }
+
+    private void ShowAbout()
+    {
+        var version = typeof(MainWindow).Assembly.GetCustomAttributes(typeof(System.Reflection.AssemblyInformationalVersionAttribute), false)
+            .OfType<System.Reflection.AssemblyInformationalVersionAttribute>().FirstOrDefault()?.InformationalVersion.Split('+')[0] ?? "?";
+        var mode = App.Updates.InstalledVersion is not null ? "installed, updates from GitHub Releases"
+            : App.Paths.IsPortable ? "portable" : "development build";
+        var body = new System.Windows.Controls.StackPanel { MaxWidth = 520 };
+        void Line(string text, string style = "Habi.LabelStyle")
+        {
+            var block = new System.Windows.Controls.TextBlock { Text = text, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 0, 0, 4) };
+            block.SetResourceReference(StyleProperty, style);
+            body.Children.Add(block);
+        }
+
+        Line($"Version {version} ({mode})");
+        Line($".NET {Environment.Version}, {System.Runtime.InteropServices.RuntimeInformation.ProcessArchitecture.ToString().ToLowerInvariant()}", "Habi.DescriptionStyle");
+        Line($"Shell: {App.FindPwsh()}", "Habi.DescriptionStyle");
+        Line($"Settings: {App.Paths.SettingsFile}", "Habi.DescriptionStyle");
+        Line("MIT License. Includes VS Code themes and Seti icons (MIT), Material Icon Theme (MIT), Codicons (CC BY 4.0), " +
+             "the Windows Terminal control and ConPTY (MIT), AvalonEdit (MIT) and Velopack (MIT).", "Habi.DescriptionStyle");
+
+        var choice = ThemedDialog.Show(this, "Habilis Terminal", body,
+        [
+            new DialogButton<int>("_OK", 0, IsDefault: true, IsCancel: true),
+            new DialogButton<int>("Third-party _notices", 1),
+            new DialogButton<int>("_GitHub", 2),
+        ], 0);
+
+        var notices = Path.Combine(AppContext.BaseDirectory, "ThirdPartyNotices.txt");
+        switch (choice)
+        {
+            case 1 when File.Exists(notices):
+                OpenViewer(notices, _active);
+                break;
+            case 2:
+                App.OpenInBrowser(Updates.UpdateService.RepositoryUrl);
+                FocusActivePanel();
+                break;
+            default:
+                FocusActivePanel();
+                break;
+        }
     }
 
     private void ShowHelp()

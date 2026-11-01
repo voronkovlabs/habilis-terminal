@@ -1,0 +1,82 @@
+name: build
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+      - name: Build
+        run: dotnet build -c Release
+      - name: Test
+        run: dotnet test -c Release --no-build
+
+  release:
+    # A tag vX.Y.Z builds the installers, update packages and portable zips and publishes a GitHub release.
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: test
+    runs-on: windows-latest
+    permissions:
+      contents: write
+    env:
+      REPO_URL: https://github.com/${{ github.repository }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+      - name: Restore tools
+        run: dotnet tool restore
+      - name: Package
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          $version = '${{ github.ref_name }}'.TrimStart('v')
+          New-Item -ItemType Directory artifacts | Out-Null
+          foreach ($rid in 'win-x64', 'win-arm64') {
+            $publish = "publish/$rid"
+            dotnet publish src/HabilisTerminal.App -c Release -r $rid --self-contained true -p:Version=$version -o $publish
+            if ($LASTEXITCODE) { exit $LASTEXITCODE }
+
+            # Previous release for delta updates; the first release has none.
+            dotnet vpk download github --repoUrl $env:REPO_URL --channel $rid --outputDir "releases/$rid" --token $env:GH_TOKEN
+            dotnet vpk pack --packId HabilisTerminal --packVersion $version --packDir $publish --mainExe habi.exe `
+              --packTitle "Habilis Terminal" --packAuthors "Sergey Voronkov" --icon src/HabilisTerminal.App/Assets/habi.ico `
+              --runtime $rid --channel $rid --outputDir "releases/$rid"
+            if ($LASTEXITCODE) { exit $LASTEXITCODE }
+
+            # Our own portable zip: the app plus the 'portable' marker (settings and state stay next to habi.exe).
+            Remove-Item "releases/$rid/*-Portable.zip"
+            New-Item "$publish/portable" -ItemType File | Out-Null
+            Compress-Archive -Path "$publish/*" -DestinationPath "artifacts/HabilisTerminal-$version-$rid-portable.zip"
+          }
+      - name: Publish release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          $version = '${{ github.ref_name }}'.TrimStart('v')
+          foreach ($rid in 'win-x64', 'win-arm64') {
+            dotnet vpk upload github --repoUrl $env:REPO_URL --token $env:GH_TOKEN --channel $rid --outputDir "releases/$rid" `
+              --tag ${{ github.ref_name }} --releaseName "Habilis Terminal $version" --publish --merge
+            if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          }
+          gh release upload ${{ github.ref_name }} artifacts/*.zip --clobber
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-${{ github.ref_name }}
+          path: |
+            releases/*/*Setup.exe
+            artifacts/*.zip
