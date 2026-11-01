@@ -30,7 +30,7 @@ dotnet test -c Release --no-build
   - It builds Release, copies the output to `%TEMP%\habi-tests\<Name>` with a `portable` marker, starts it and prints the pid.
   - Thanks to the marker, settings and state stay next to the exe and never reach the owner's `%APPDATA%` or `%LOCALAPPDATA%`.
   - Use a new name each time, so every copy starts with a clean state.
-  - Close every copy you started when your checks are done: `tools/ui/Stop-TestCopies.ps1` stops every habi under `%TEMP%habi-tests` and prints what it stopped (never any other habi). Leave a copy running only when the owner asks ("запусти"), and tell them its path.
+  - Close every copy you started when your checks are done: `tools/ui/Stop-TestCopies.ps1` stops every habi under `%TEMP%\habi-tests\` and prints what it stopped (never any other habi). Leave a copy running only when the owner asks ("запусти"), and tell them its path.
 - **Drive the window** with `tools/ui/uitool.ps1`. Always target the copy with `-Process pid:N`: the owner may be running their own habi at the same time.
   - **Keys.** `keys` only sends while the target is in the foreground. Once the owner's typing landed in a test window, so test in your own copy and never in theirs.
   - **Screenshots.**
