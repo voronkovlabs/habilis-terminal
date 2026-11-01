@@ -70,10 +70,19 @@ public partial class MainWindow
             return HandleLayoutKeyInTerminal(key, modifiers);
         }
 
-        // Quick search sees its keys first (Backspace, Esc, Ctrl+Enter...).
-        if (panel.IsQuickSearchActive && panel.HandleKey(key, modifiers))
+        // Quick search sees its keys first (Backspace, Esc, Ctrl+Enter...). A typed character is left unhandled, so it
+        // arrives as text input and appends (OnPreviewTextInput); no key binding may take it meanwhile (issue #39).
+        if (panel.IsQuickSearchActive)
         {
-            return true;
+            if (panel.IsQuickSearchTyping(key, modifiers))
+            {
+                return false;
+            }
+
+            if (panel.HandleKey(key, modifiers))
+            {
+                return true;
+            }
         }
 
         if (HandleWindowKey(panel, key, modifiers))

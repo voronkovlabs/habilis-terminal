@@ -558,9 +558,8 @@ public sealed class FilePanel : Border
             return true;
         }
 
-        // Alt+letter starts quick search (Far); the letter follows the keyboard layout.
-        if (modifiers is KeyModifiers.Alt or (KeyModifiers.Alt | KeyModifiers.Shift) &&
-            KeyText.CharOf(key, modifiers.HasFlag(KeyModifiers.Shift)) is { } letter && !char.IsWhiteSpace(letter))
+        // Alt+letter starts quick search (Far).
+        if (AltLetter(key, modifiers) is { } letter)
         {
             QuickSearchText = string.Empty;
             AppendQuickSearch(letter.ToString());
@@ -569,6 +568,21 @@ public sealed class FilePanel : Border
 
         return false;
     }
+
+    /// <summary>
+    /// A key typed without Alt or Ctrl that will arrive as text input (a character in the current layout, or a packet
+    /// from an IME or injected Unicode, which has no key). Quick search takes it as text and stays open.
+    /// </summary>
+    public bool IsQuickSearchTyping(Key key, KeyModifiers modifiers) =>
+        IsQuickSearchActive && modifiers is KeyModifiers.None or KeyModifiers.Shift &&
+        (key is Key.None or Key.ImeProcessed || KeyText.CharOf(key, modifiers == KeyModifiers.Shift) is { } typed && !char.IsControl(typed));
+
+    /// <summary>The character of Alt+key or Alt+Shift+key in the current keyboard layout, or null.</summary>
+    private static char? AltLetter(Key key, KeyModifiers modifiers) =>
+        modifiers is KeyModifiers.Alt or (KeyModifiers.Alt | KeyModifiers.Shift) &&
+        KeyText.CharOf(key, modifiers.HasFlag(KeyModifiers.Shift)) is { } letter && !char.IsWhiteSpace(letter)
+            ? letter
+            : null;
 
     /// <summary>Printable text typed while quick search is open.</summary>
     public void AppendQuickSearch(string text)
@@ -675,6 +689,13 @@ public sealed class FilePanel : Border
             case Key.LeftShift or Key.RightShift or Key.LeftCtrl or Key.RightCtrl or Key.LeftAlt or Key.RightAlt or Key.System:
                 return false;
             default:
+                // Alt still held: the next letter appends, as in Far (issue #39). Plain letters arrive as text input.
+                if (AltLetter(key, modifiers) is { } letter)
+                {
+                    AppendQuickSearch(letter.ToString());
+                    return true;
+                }
+
                 // Any other key closes the search and is processed normally (Far).
                 CloseQuickSearch();
                 return false;
