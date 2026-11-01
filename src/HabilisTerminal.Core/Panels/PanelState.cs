@@ -57,6 +57,30 @@ public sealed class PanelState
     /// <summary>Folder totals computed with F3, shown in the size column and the status line until the directory changes.</summary>
     public Dictionary<string, DirectorySize.Result> FolderSizes { get; } = new(StringComparer.OrdinalIgnoreCase);
 
+    /// <summary>
+    /// The selection's item count, and the files and bytes in it: selected files plus the contents of selected folders
+    /// already counted with F3.
+    /// </summary>
+    public (int Items, int Files, long Bytes) SummarizeSelection()
+    {
+        var (files, directories, bytes) = Selection.Summarize(_items);
+        var items = files + directories;
+        foreach (var entry in _items)
+        {
+            if (entry.IsDirectory && Selection.Contains(entry.Name) && FolderSizes.TryGetValue(entry.Name, out var totals))
+            {
+                files += totals.Files;
+                bytes += totals.Bytes;
+            }
+        }
+
+        return (items, files, bytes);
+    }
+
+    /// <summary>F3 with folders selected counts all of them (Far); otherwise only the current entry.</summary>
+    public IReadOnlyList<string> SelectedFolders() =>
+        _items.Where(e => e.IsDirectory && Selection.Contains(e.Name)).Select(e => e.Name).ToArray();
+
     public SortOptions Sort { get; private set; } = new();
 
     /// <summary>Shift+F12: selected entries go first.</summary>

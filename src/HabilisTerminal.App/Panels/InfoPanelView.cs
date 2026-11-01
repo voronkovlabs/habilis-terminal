@@ -62,12 +62,13 @@ public sealed class InfoPanelView : FrameworkElement
             lines.Add(("Read time", $"first screen {source.FirstScreenTime?.TotalMilliseconds:0} ms, all {full.TotalMilliseconds:0} ms", false));
         }
 
-        var (selectedFiles, selectedFolders, selectedBytes) = state.Selection.Summarize(state.Entries);
-        if (selectedFiles + selectedFolders > 0)
+        var (selectedItems, selectedFiles, selectedBytes) = state.SummarizeSelection();
+        if (selectedItems > 0)
         {
             lines.Add((string.Empty, string.Empty, false));
             lines.Add(("Selection", string.Empty, true));
-            lines.Add(("Items", (selectedFiles + selectedFolders).ToString("N0", culture), false));
+            lines.Add(("Items", selectedItems.ToString("N0", culture), false));
+            lines.Add(("Files", selectedFiles.ToString("N0", culture), false));
             lines.Add(("Size", PanelColumns.FormatCompactSize(selectedBytes, culture), false));
         }
 

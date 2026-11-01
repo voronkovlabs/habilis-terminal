@@ -30,6 +30,21 @@ public class PanelStateTests
     }
 
     [Fact]
+    public void Selection_totals_include_folders_counted_with_f3()
+    {
+        var state = Create(@"C:\work", File("a.txt", 10), Dir("counted"), Dir("not-counted"), Dir("unselected"));
+        state.Selection.Toggle("a.txt");
+        state.Selection.Toggle("counted");
+        state.Selection.Toggle("not-counted");
+        Assert.Equal(["counted", "not-counted"], state.SelectedFolders());
+
+        state.FolderSizes["counted"] = new Viewing.DirectorySize.Result(500, 4, 1, 0);
+        state.FolderSizes["unselected"] = new Viewing.DirectorySize.Result(9000, 9, 0, 0);
+
+        Assert.Equal((3, 5, 510L), state.SummarizeSelection());
+    }
+
+    [Fact]
     public void Parent_entry_is_first_except_at_the_root()
     {
         Assert.Equal(["..", "sub", "a.txt"], Names(Create(@"C:\work", File("a.txt"), Dir("sub"))));

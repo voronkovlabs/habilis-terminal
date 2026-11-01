@@ -47,9 +47,19 @@ public partial class MainWindow
         }
     }
 
-    /// <summary>F3: files open in the viewer; on a folder its files are counted and sized in the background (Far).</summary>
+    /// <summary>
+    /// F3: files open in the viewer. On a folder its files are counted and sized in the background; with folders
+    /// selected all of them are counted (Far).
+    /// </summary>
     private void View(FilePanel panel)
     {
+        var selected = panel.State.SelectedFolders();
+        if (selected.Count > 0)
+        {
+            Fire(ComputeFolderSizesAsync(panel, selected));
+            return;
+        }
+
         var item = panel.State.Current;
         if (item.IsParent || panel.State.Count == 0)
         {
@@ -59,7 +69,7 @@ public partial class MainWindow
         var path = Path.Combine(panel.CurrentPath, item.Name);
         if (item.Entry.IsDirectory)
         {
-            Fire(ComputeFolderSizeAsync(panel, item.Name, path));
+            Fire(ComputeFolderSizesAsync(panel, [item.Name]));
             return;
         }
 
@@ -80,14 +90,26 @@ public partial class MainWindow
         ShowPage(page);
     }
 
-    private static async Task ComputeFolderSizeAsync(FilePanel panel, string name, string path)
+    private static async Task ComputeFolderSizesAsync(FilePanel panel, IReadOnlyList<string> names)
     {
-        var result = await Task.Run(() => DirectorySize.Compute(path));
-        panel.State.FolderSizes[name] = result;
-        panel.Refresh(); // the cursor stays on the folder so its status line shows the totals
-        if (result.Inaccessible > 0)
+        var directory = panel.CurrentPath;
+        var unreadable = 0;
+        foreach (var name in names)
         {
-            panel.Message = $"{result.Inaccessible} folder(s) inside '{name}' could not be read; the size is partial.";
+            var result = await Task.Run(() => DirectorySize.Compute(Path.Combine(directory, name)));
+            if (!string.Equals(panel.CurrentPath, directory, StringComparison.OrdinalIgnoreCase))
+            {
+                return; // the panel moved on; the totals belong to a listing it no longer shows
+            }
+
+            panel.State.FolderSizes[name] = result;
+            unreadable += result.Inaccessible;
+            panel.Refresh(); // the cursor stays put: the status line shows the folder's or the selection's totals
+        }
+
+        if (unreadable > 0)
+        {
+            panel.Message = $"{unreadable} folder(s) could not be read; the totals are partial.";
         }
     }
 

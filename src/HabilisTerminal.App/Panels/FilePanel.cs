@@ -682,11 +682,11 @@ public sealed class FilePanel : Border
     private void UpdateStatus()
     {
         var culture = CultureInfo.CurrentCulture;
-        var (files, directories, bytes) = State.Selection.Summarize(State.Entries);
-        if (files + directories > 0)
+        var (items, files, bytes) = State.SummarizeSelection();
+        if (items > 0)
         {
-            _status.Text = $"{files + directories:N0} selected";
-            _statusRight.Text = PanelColumns.FormatCompactSize(bytes, culture);
+            _status.Text = $"{items:N0} selected";
+            _statusRight.Text = FormatTotals(files, bytes, culture);
             _status.Foreground = PanelPalette.MarkedForeground;
             return;
         }
@@ -703,10 +703,13 @@ public sealed class FilePanel : Border
         _status.Text = item.Name;
         _statusRight.Text = item.IsParent ? string.Empty
             : item.Entry.IsDirectory && State.FolderSizes.TryGetValue(item.Name, out var totals)
-                ? $"{totals.Files.ToString("N0", culture)} {(totals.Files == 1 ? "file" : "files")}   {PanelColumns.FormatCompactSize(totals.Bytes, culture)}"
+                ? FormatTotals(totals.Files, totals.Bytes, culture)
             : item.Entry.IsDirectory ? item.Entry.LastWriteTimeUtc.ToLocalTime().ToString("g", culture)
             : $"{PanelColumns.FormatCompactSize(item.Entry.Length, culture)}   {item.Entry.LastWriteTimeUtc.ToLocalTime().ToString("g", culture)}";
     }
+
+    private static string FormatTotals(int files, long bytes, CultureInfo culture) =>
+        $"{files.ToString("N0", culture)} {(files == 1 ? "file" : "files")}   {PanelColumns.FormatCompactSize(bytes, culture)}";
 
     private void UpdateFocusVisuals()
     {
