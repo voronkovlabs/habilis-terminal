@@ -357,7 +357,7 @@ public partial class MainWindow
         WorkspaceLayout.SetRole(_right, WorkspaceRole.RightPanel);
         (Workspace.LeftVisible, Workspace.RightVisible) = (Workspace.RightVisible, Workspace.LeftVisible);
         _restoreVisibility = (_restoreVisibility.Right, _restoreVisibility.Left);
-        Workspace.InvalidateArrange();
+        Workspace.InvalidateMeasure();
         if (!IsShown(_active))
         {
             Activate(Other(_active));

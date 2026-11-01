@@ -23,31 +23,31 @@ public sealed class WorkspaceLayout : Panel
 
     public static readonly DependencyProperty RoleProperty = DependencyProperty.RegisterAttached(
         "Role", typeof(WorkspaceRole), typeof(WorkspaceLayout),
-        new FrameworkPropertyMetadata(WorkspaceRole.Terminal, FrameworkPropertyMetadataOptions.AffectsParentArrange));
+        new FrameworkPropertyMetadata(WorkspaceRole.Terminal, FrameworkPropertyMetadataOptions.AffectsParentMeasure));
 
     public static readonly DependencyProperty LeftVisibleProperty = DependencyProperty.Register(
         nameof(LeftVisible), typeof(bool), typeof(WorkspaceLayout),
-        new FrameworkPropertyMetadata(true, FrameworkPropertyMetadataOptions.AffectsArrange));
+        new FrameworkPropertyMetadata(true, FrameworkPropertyMetadataOptions.AffectsMeasure));
 
     public static readonly DependencyProperty RightVisibleProperty = DependencyProperty.Register(
         nameof(RightVisible), typeof(bool), typeof(WorkspaceLayout),
-        new FrameworkPropertyMetadata(true, FrameworkPropertyMetadataOptions.AffectsArrange));
+        new FrameworkPropertyMetadata(true, FrameworkPropertyMetadataOptions.AffectsMeasure));
 
     public static readonly DependencyProperty TerminalRowsProperty = DependencyProperty.Register(
         nameof(TerminalRows), typeof(int), typeof(WorkspaceLayout),
-        new FrameworkPropertyMetadata(10, FrameworkPropertyMetadataOptions.AffectsArrange));
+        new FrameworkPropertyMetadata(10, FrameworkPropertyMetadataOptions.AffectsMeasure));
 
     public static readonly DependencyProperty SinglePanelRatioProperty = DependencyProperty.Register(
         nameof(SinglePanelRatio), typeof(double), typeof(WorkspaceLayout),
-        new FrameworkPropertyMetadata(0.5, FrameworkPropertyMetadataOptions.AffectsArrange));
+        new FrameworkPropertyMetadata(0.5, FrameworkPropertyMetadataOptions.AffectsMeasure));
 
     public static readonly DependencyProperty SplitRatioProperty = DependencyProperty.Register(
         nameof(SplitRatio), typeof(double), typeof(WorkspaceLayout),
-        new FrameworkPropertyMetadata(0.5, FrameworkPropertyMetadataOptions.AffectsArrange));
+        new FrameworkPropertyMetadata(0.5, FrameworkPropertyMetadataOptions.AffectsMeasure));
 
     public static readonly DependencyProperty CellSizeProperty = DependencyProperty.Register(
         nameof(CellSize), typeof(Size), typeof(WorkspaceLayout),
-        new FrameworkPropertyMetadata(new Size(8, 16), FrameworkPropertyMetadataOptions.AffectsArrange));
+        new FrameworkPropertyMetadata(new Size(8, 16), FrameworkPropertyMetadataOptions.AffectsMeasure));
 
     public static WorkspaceRole GetRole(UIElement element) => (WorkspaceRole)element.GetValue(RoleProperty);
 
@@ -93,14 +93,26 @@ public sealed class WorkspaceLayout : Panel
 
     protected override Size MeasureOverride(Size availableSize)
     {
-        foreach (UIElement child in InternalChildren)
-        {
-            child.Measure(availableSize);
-        }
-
-        return new Size(
+        var size = new Size(
             double.IsInfinity(availableSize.Width) ? 0 : availableSize.Width,
             double.IsInfinity(availableSize.Height) ? 0 : availableSize.Height);
+
+        // Each child is measured in its own slot. Measured with the whole workspace, a panel whose status line holds a
+        // long file name wanted more than its slot, WPF arranged it at that width and clipped it, and the list columns
+        // jumped as the cursor moved.
+        var (left, right, terminal) = ComputeRects(size);
+        foreach (UIElement child in InternalChildren)
+        {
+            var rect = GetRole(child) switch
+            {
+                WorkspaceRole.LeftPanel => left,
+                WorkspaceRole.RightPanel => right,
+                _ => terminal,
+            };
+            child.Measure(rect.IsEmpty ? new Size(0, 0) : rect.Size);
+        }
+
+        return size;
     }
 
     protected override Size ArrangeOverride(Size finalSize)
