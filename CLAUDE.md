@@ -21,7 +21,7 @@ The to-do and done list lives in the GitHub issues of voronkovlabs/habilis-termi
 ## How the owner works
 - **The current phase.** The owner tries the app and reports deviations from Far Manager or UI problems, often with a screenshot or a short video, in Russian.
   - Each report: open an issue, fix, test (`dotnet test` plus a UI check), commit and push to main, close the issue.
-  - Then start a fresh test copy with `tools/ui/New-TestCopy.ps1` and leave it running for the owner. Report its path, what changed, and what was and was not verified.
+  - Close every test copy you started once your checks are done (`tools/ui/Stop-TestCopies.ps1`). Start a fresh copy with `tools/ui/New-TestCopy.ps1` and leave it running only when the owner asks ("запусти"). Report its path, what changed, and what was and was not verified.
 - **"Запусти" / "запусти опять"** means: start a fresh test copy of the current build for the owner to try.
 - **Far is the reference.** When a behaviour is unclear, offer "as in Far" as the recommended option.
 - **Misreadings happen.** For example, Tab first got implemented as "show the other panel". When a report is ambiguous, ask with concrete options before building.
