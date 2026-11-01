@@ -33,6 +33,7 @@ public sealed class TopMenu
     private readonly Border _dropDown;
     private readonly TaskCompletionSource<MenuCommand?> _result = new();
     private readonly Border _root;
+    private readonly FrameworkElement _target;
     private int _group;
     private int _item;
 
@@ -40,6 +41,7 @@ public sealed class TopMenu
     {
         _groups = groups;
         _group = group;
+        _target = target;
 
         var barBorder = new Border { Child = _bar, Width = target.ActualWidth, Height = target.ActualHeight, HorizontalAlignment = HorizontalAlignment.Left };
         barBorder.SetResourceReference(Border.BackgroundProperty, "Habi.TitleBarBackground");
@@ -128,12 +130,21 @@ public sealed class TopMenu
             _items.Children.Add(BuildRow(commands[i], i));
         }
 
-        // Under its header.
-        _bar.UpdateLayout();
+        // Under its header. The title bar's headers are laid out already; this popup's copy is not before it opens.
+        var headers = _target is Panel strip && strip.Children.Count == _groups.Count ? strip.Children : _bar.Children;
         var left = 0.0;
         for (var i = 0; i < _group; i++)
         {
-            left += ((FrameworkElement)_bar.Children[i]).ActualWidth;
+            left += ((FrameworkElement)headers[i]).ActualWidth;
+        }
+
+        // Shifted left when it would cross the window's right edge (Right's drop-down in a narrow window).
+        if (Window.GetWindow(_target) is { } window && _target.IsVisible)
+        {
+            _dropDown.Margin = default; // DesiredSize includes the margin of the previous menu
+            _dropDown.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
+            var room = window.ActualWidth - _target.TranslatePoint(default, window).X - 8;
+            left = Math.Max(0, Math.Min(left, room - _dropDown.DesiredSize.Width));
         }
 
         _dropDown.Margin = new Thickness(left, 0, 0, 0);
