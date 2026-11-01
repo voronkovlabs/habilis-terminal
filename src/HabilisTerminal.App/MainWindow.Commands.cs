@@ -609,12 +609,13 @@ public partial class MainWindow
             return;
         }
 
-        // A hidden panel comes back at the chosen place (Far).
-        Activate(panel);
+        // A hidden panel comes back at the chosen place and, picked explicitly, becomes the active one (Far).
         if (!IsShown(panel))
         {
             SetPanelVisibility(panel == _left || Workspace.LeftVisible, panel == _right || Workspace.RightVisible);
         }
+
+        Activate(panel);
 
         FocusActivePanel();
         await panel.NavigateAsync(target);

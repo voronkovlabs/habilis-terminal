@@ -4,6 +4,7 @@ using System.Windows;
 using System.Windows.Interop;
 using HabilisTerminal.App.Panels;
 using HabilisTerminal.App.Viewing;
+using HabilisTerminal.Core.Panels;
 using HabilisTerminal.Core.Settings;
 
 namespace HabilisTerminal.App;
@@ -210,7 +211,9 @@ public partial class MainWindow
             UpdateTabToPanel();
         }
 
-        if (state.ActivePanel == _right.Side && state.Right.Visible)
+        // A shown panel is always active: a saved active panel that is hidden gives way to the visible one.
+        var visible = (state.Left.Visible, state.Right.Visible);
+        if (!PanelVisibilityRule.ActiveIsLeft(state.ActivePanel != _right.Side, visible, visible))
         {
             Activate(_right);
         }

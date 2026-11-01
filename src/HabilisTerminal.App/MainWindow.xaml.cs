@@ -303,10 +303,10 @@ public partial class MainWindow : Window
 
     private void SetPanelVisibility(bool left, bool right)
     {
-        var wasVisible = AnyPanelVisible;
-        if (wasVisible && !left && !right)
+        (bool Left, bool Right) before = (Workspace.LeftVisible, Workspace.RightVisible);
+        if ((before.Left || before.Right) && !left && !right)
         {
-            _restoreVisibility = (Workspace.LeftVisible, Workspace.RightVisible);
+            _restoreVisibility = before;
         }
 
         Workspace.LeftVisible = left;
@@ -319,14 +319,15 @@ public partial class MainWindow : Window
             return;
         }
 
-        if (!IsShown(_active))
+        // Every path that shows or hides a panel ends here, so the rule of issue #35 lives in one place.
+        var active = PanelVisibilityRule.ActiveIsLeft(_active == _left, before, (left, right)) ? _left : _right;
+        if (active != _active)
         {
-            Activate(left ? _left : _right);
+            Activate(active);
             SyncShellDirectory();
         }
 
-        // The terminal keeps focus (layout keys typed at the prompt) unless the panels just reappeared.
-        if (!wasVisible || !TerminalHasFocus)
+        if (PanelVisibilityRule.FocusesPanel(before, (left, right), TerminalHasFocus))
         {
             FocusActivePanel();
         }
