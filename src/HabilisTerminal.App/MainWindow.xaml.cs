@@ -288,7 +288,8 @@ public partial class MainWindow : Window
             SyncShellDirectory();
         }
 
-        if (!wasVisible || PanelHasFocus || !IsShown(FocusedPanel()))
+        // The terminal keeps focus (layout keys typed at the prompt) unless the panels just reappeared.
+        if (!wasVisible || !TerminalHasFocus)
         {
             FocusActivePanel();
         }

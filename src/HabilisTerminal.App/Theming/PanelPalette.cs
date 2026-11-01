@@ -55,6 +55,9 @@ internal static class PanelPalette
         var background = theme.GetOpaque("sideBar.background");
         Color Opaque(string key) => ToColor((theme.Get(key) ?? background).Over(background));
 
+        // Scroll bar sliders keep the theme's alpha: they are drawn over the panel, page or terminal background alike.
+        Color Translucent(string key) => theme.Get(key) is { } color ? ToColor(color) : Opaque("descriptionForeground");
+
         var border = Opaque("sideBar.border");
         if (ToColor(background) == border)
         {
@@ -95,6 +98,9 @@ internal static class PanelPalette
             resources["Habi.Placeholder"] = Freeze(Opaque("input.placeholderForeground"));
             resources["Habi.Progress"] = Freeze(Opaque("progressBar.background"));
             resources["Habi.ProgressTrack"] = Freeze(Opaque("scrollbarSlider.background"));
+            resources["Habi.ScrollbarSlider"] = Freeze(Translucent("scrollbarSlider.background"));
+            resources["Habi.ScrollbarSliderHover"] = Freeze(Translucent("scrollbarSlider.hoverBackground"));
+            resources["Habi.ScrollbarSliderActive"] = Freeze(Translucent("scrollbarSlider.activeBackground"));
             resources["Habi.InputBorder"] = Freeze(Opaque("input.border") == ToColor(theme.GetOpaque("input.background").Over(background)) ? Opaque("widget.border") : Opaque("input.border"));
             resources["Habi.ButtonBackground"] = Freeze(Opaque("button.background"));
             resources["Habi.ButtonForeground"] = Freeze(Opaque("button.foreground"));

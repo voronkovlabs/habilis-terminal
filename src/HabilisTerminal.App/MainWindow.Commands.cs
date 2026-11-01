@@ -61,7 +61,7 @@ public partial class MainWindow
 
         if (FocusedPanel() is not { } panel)
         {
-            return false;
+            return HandleLayoutKeyInTerminal(key, modifiers);
         }
 
         // Quick search sees its keys first (Backspace, Esc, Ctrl+Enter...).
@@ -76,6 +76,36 @@ public partial class MainWindow
         }
 
         return panel.HandleKey(key, modifiers);
+    }
+
+    /// <summary>
+    /// Far's panel layout keys also work from the command line. Only at the prompt: a running program (TUI, ssh)
+    /// gets every key.
+    /// </summary>
+    private bool HandleLayoutKeyInTerminal(Key key, KeyModifiers modifiers)
+    {
+        if (!TerminalHasFocus || !AnyPanelVisible || _shell?.Host.State != Shell.Integration.ShellState.Idle || modifiers != KeyModifiers.Control)
+        {
+            return false;
+        }
+
+        switch (key)
+        {
+            case Key.U:
+                SwapPanels(focusPanel: false);
+                return true;
+            case Key.P:
+                ToggleInactivePanel();
+                return true;
+            case Key.F1:
+                SetPanelVisibility(!Workspace.LeftVisible, Workspace.RightVisible);
+                return true;
+            case Key.F2:
+                SetPanelVisibility(Workspace.LeftVisible, !Workspace.RightVisible);
+                return true;
+            default:
+                return false;
+        }
     }
 
     private bool HandleWindowKey(FilePanel panel, Key key, KeyModifiers modifiers)
@@ -312,7 +342,7 @@ public partial class MainWindow
         }
     }
 
-    private void SwapPanels()
+    private void SwapPanels(bool focusPanel = true)
     {
         // Far: visibility belongs to the panel, so a hidden panel stays hidden; with one panel shown (Ctrl+P),
         // the panel and the terminal trade sides.
@@ -328,7 +358,10 @@ public partial class MainWindow
             SyncShellDirectory();
         }
 
-        FocusActivePanel();
+        if (focusPanel)
+        {
+            FocusActivePanel();
+        }
     }
 
     /// <summary>Ctrl+P: hides the inactive panel, so the terminal takes its place beside the active one; again shows both.</summary>
