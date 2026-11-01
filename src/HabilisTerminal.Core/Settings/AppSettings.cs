@@ -33,8 +33,6 @@ public sealed class AppSettings
 
     public bool TerminalMultilinePasteWarning => Get<bool>("terminal.multilinePasteWarning");
 
-    public int TerminalScrollback => Get<int>("terminal.scrollback");
-
     public string ShellPath => Get<string>("shell.path");
 
     public string ShellArgs => Get<string>("shell.args");

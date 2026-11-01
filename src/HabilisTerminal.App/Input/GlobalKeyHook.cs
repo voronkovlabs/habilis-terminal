@@ -25,12 +25,18 @@ public sealed class GlobalKeyHook : IDisposable
     private const int VK_CONTROL = 0x11;
     private const int VK_MENU = 0x12;
 
+    private const int WM_RBUTTONDOWN = 0x0204;
+    private const int WM_MOUSEWHEEL = 0x020A;
+
     private readonly Func<Key, KeyModifiers, bool> _handler;
+    private readonly Func<MSG, KeyModifiers, bool>? _mouseHandler;
 
     /// <param name="handler">Returns true when the key is consumed and must not reach its target.</param>
-    public GlobalKeyHook(Func<Key, KeyModifiers, bool> handler)
+    /// <param name="mouseHandler">Right button down and wheel messages; returns true when consumed.</param>
+    public GlobalKeyHook(Func<Key, KeyModifiers, bool> handler, Func<MSG, KeyModifiers, bool>? mouseHandler = null)
     {
         _handler = handler;
+        _mouseHandler = mouseHandler;
         ComponentDispatcher.ThreadPreprocessMessage += OnThreadPreprocessMessage;
     }
 
@@ -38,7 +44,18 @@ public sealed class GlobalKeyHook : IDisposable
 
     private void OnThreadPreprocessMessage(ref MSG msg, ref bool handled)
     {
-        if (handled || (msg.message != WM_KEYDOWN && msg.message != WM_SYSKEYDOWN))
+        if (handled)
+        {
+            return;
+        }
+
+        if (msg.message is WM_RBUTTONDOWN or WM_MOUSEWHEEL)
+        {
+            handled = _mouseHandler?.Invoke(msg, CurrentModifiers()) == true;
+            return;
+        }
+
+        if (msg.message != WM_KEYDOWN && msg.message != WM_SYSKEYDOWN)
         {
             return;
         }

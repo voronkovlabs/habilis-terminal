@@ -35,7 +35,6 @@ public static class SettingsCatalog
         new("terminal.fontSize", Terminal, "Font Size", "Font size of the terminal, in points.", SettingKind.Number, 11, Minimum: 6, Maximum: 48),
         new("terminal.defaultRows", Terminal, "Default Rows", "Terminal height in rows below the panels on first start.", SettingKind.Number, 12, Minimum: 2, Maximum: 200),
         new("terminal.multilinePasteWarning", Terminal, "Multi-line Paste Warning", "Ask before pasting text with several lines.", SettingKind.Toggle, true),
-        new("terminal.scrollback", Terminal, "Scrollback", "Lines kept in the terminal history.", SettingKind.Number, 9001, Minimum: 0, Maximum: 100000, RequiresRestart: true),
         new("shell.path", Terminal, "Shell Path", "Path to pwsh.exe. Empty finds PowerShell 7 automatically.", SettingKind.Text, "", RequiresRestart: true),
         new("shell.args", Terminal, "Shell Arguments", "Extra arguments for pwsh, e.g. -NoProfile.", SettingKind.Text, "", RequiresRestart: true),
         new("shell.integration", Terminal, "Shell Integration",

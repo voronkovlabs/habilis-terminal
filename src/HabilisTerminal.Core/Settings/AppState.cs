@@ -23,7 +23,7 @@ public sealed record PanelSnapshot
     public bool Visible { get; init; } = true;
 }
 
-/// <summary>Window placement in device-independent units (the restored, not maximized, bounds).</summary>
+/// <summary>Restored (not maximised) window bounds in physical pixels, workspace coordinates (<c>GetWindowPlacement</c>).</summary>
 public sealed record WindowPlacement(double Left, double Top, double Width, double Height, bool Maximized);
 
 /// <summary>A file opened in the viewer or editor, for Alt+F11.</summary>

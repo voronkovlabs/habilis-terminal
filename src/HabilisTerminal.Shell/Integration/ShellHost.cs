@@ -41,6 +41,7 @@ public sealed class ShellHost : IDisposable
     private readonly object _sync = new();
     private readonly ShellHostOptions _options;
     private readonly OscScanner _scanner = new();
+    private readonly BracketedPasteTracker _modes = new();
     private readonly LinkedList<Request> _queue = new();
     private readonly Timer _timeoutTimer;
     private ConPtySession? _session;
@@ -147,8 +148,15 @@ public sealed class ShellHost : IDisposable
         return $"\"{_options.PwshPath}\" -NoLogo{noProfile}{extra} -NoExit -EncodedCommand {encoded}";
     }
 
+    /// <summary>The shell asked for bracketed paste (DECSET 2004): pasted text is wrapped in ESC[200~ … ESC[201~.</summary>
+    public bool BracketedPaste => _modes.Enabled;
+
+    /// <summary>Clipboard text as it must be written for a paste (CR line breaks, bracketed when the shell asked).</summary>
+    public string PrepareForPaste(string text) => _modes.Wrap(text);
+
     private void OnOutput(string text)
     {
+        _modes.Feed(text);
         _scanner.Scan(text, payload =>
         {
             if (OscDecoder.Decode(payload) is { } shellEvent)

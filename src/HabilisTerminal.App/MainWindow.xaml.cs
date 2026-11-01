@@ -195,7 +195,7 @@ public partial class MainWindow : Window
 
     private void OnLoaded()
     {
-        _keyHook = new GlobalKeyHook(OnGlobalKey);
+        _keyHook = new GlobalKeyHook(OnGlobalKey, OnTerminalMouse);
         UpdateCellSize();
 
         ApplyTerminalTheme(_themes.Current);

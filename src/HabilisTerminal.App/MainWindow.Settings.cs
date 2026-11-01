@@ -1,5 +1,7 @@
 using System.IO;
+using System.Runtime.InteropServices;
 using System.Windows;
+using System.Windows.Interop;
 using HabilisTerminal.App.Panels;
 using HabilisTerminal.App.Viewing;
 using HabilisTerminal.Core.Settings;
@@ -20,7 +22,7 @@ public partial class MainWindow
 
     private string TerminalFontFamily => _settings.TerminalFontFamily;
 
-    private int TerminalFontSize => _settings.TerminalFontSize;
+    private int TerminalFontSize => Math.Clamp(_settings.TerminalFontSize + _terminalZoom, 6, 48);
 
     /// <summary>Applies settings that can change while running; the shell settings apply on the next start.</summary>
     private void ApplySettings(AppSettings settings)
@@ -136,7 +138,11 @@ public partial class MainWindow
 
     // ----- State -----
 
-    /// <summary>Window size and position before the window is shown; ignored when it would be off every screen.</summary>
+    /// <summary>
+    /// Window placement in physical pixels of the monitor it was on (SPEC §13). Applied once the window handle exists and
+    /// before it is shown: <c>SetWindowPlacement</c> keeps the window on its monitor (re-scaled when that monitor's DPI
+    /// differs), maximises it there, and moves it into view when that monitor is gone.
+    /// </summary>
     private void RestoreWindowPlacement(AppState state)
     {
         if (state.Window is not { } placement || placement.Width < 200 || placement.Height < 150)
@@ -144,23 +150,36 @@ public partial class MainWindow
             return;
         }
 
-        var screen = new Rect(SystemParameters.VirtualScreenLeft, SystemParameters.VirtualScreenTop, SystemParameters.VirtualScreenWidth, SystemParameters.VirtualScreenHeight);
-        var bounds = new Rect(placement.Left, placement.Top, placement.Width, placement.Height);
-        var visible = Rect.Intersect(screen, bounds);
-        if (visible.IsEmpty || visible.Width < 100 || visible.Height < 50)
+        WindowStartupLocation = WindowStartupLocation.Manual;
+        SourceInitialized += (_, _) =>
         {
-            return;
+            var native = new WINDOWPLACEMENT
+            {
+                length = Marshal.SizeOf<WINDOWPLACEMENT>(),
+                showCmd = placement.Maximized ? SW_SHOWMAXIMIZED : SW_SHOWNORMAL,
+                rcNormalPosition = new RECT
+                {
+                    Left = (int)placement.Left,
+                    Top = (int)placement.Top,
+                    Right = (int)(placement.Left + placement.Width),
+                    Bottom = (int)(placement.Top + placement.Height),
+                },
+            };
+            SetWindowPlacement(new WindowInteropHelper(this).Handle, ref native);
+        };
+    }
+
+    private WindowPlacement? CaptureWindowPlacement()
+    {
+        var handle = new WindowInteropHelper(this).Handle;
+        var native = new WINDOWPLACEMENT { length = Marshal.SizeOf<WINDOWPLACEMENT>() };
+        if (handle == IntPtr.Zero || !GetWindowPlacement(handle, ref native))
+        {
+            return null;
         }
 
-        WindowStartupLocation = WindowStartupLocation.Manual;
-        Left = placement.Left;
-        Top = placement.Top;
-        Width = placement.Width;
-        Height = placement.Height;
-        if (placement.Maximized)
-        {
-            SourceInitialized += (_, _) => WindowState = WindowState.Maximized;
-        }
+        var bounds = native.rcNormalPosition;
+        return new WindowPlacement(bounds.Left, bounds.Top, bounds.Right - bounds.Left, bounds.Bottom - bounds.Top, native.showCmd == SW_SHOWMAXIMIZED);
     }
 
     private void RestoreLayout(AppState state)
@@ -210,7 +229,6 @@ public partial class MainWindow
 
     private AppState CaptureState()
     {
-        var bounds = WindowState == WindowState.Normal ? new Rect(Left, Top, Width, Height) : RestoreBounds;
         return new AppState
         {
             Left = Snapshot(_left, Workspace.LeftVisible),
@@ -219,7 +237,7 @@ public partial class MainWindow
             TerminalRows = Workspace.TerminalRows,
             SplitRatio = Workspace.SplitRatio,
             SinglePanelRatio = Workspace.SinglePanelRatio,
-            Window = bounds.IsEmpty ? null : new WindowPlacement(bounds.Left, bounds.Top, bounds.Width, bounds.Height, WindowState == WindowState.Maximized),
+            Window = CaptureWindowPlacement(),
             FolderHistory = _history.RecentFirst,
             FileHistory = [.. _fileHistory],
         };
@@ -265,4 +283,42 @@ public partial class MainWindow
             _fileHistory.RemoveAt(_fileHistory.Count - 1);
         }
     }
+
+    private const int SW_SHOWNORMAL = 1;
+    private const int SW_SHOWMAXIMIZED = 3;
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct RECT
+    {
+        public int Left;
+        public int Top;
+        public int Right;
+        public int Bottom;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct POINT
+    {
+        public int X;
+        public int Y;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct WINDOWPLACEMENT
+    {
+        public int length;
+        public int flags;
+        public int showCmd;
+        public POINT ptMinPosition;
+        public POINT ptMaxPosition;
+        public RECT rcNormalPosition;
+    }
+
+    [DllImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool GetWindowPlacement(IntPtr hWnd, ref WINDOWPLACEMENT placement);
+
+    [DllImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool SetWindowPlacement(IntPtr hWnd, ref WINDOWPLACEMENT placement);
 }

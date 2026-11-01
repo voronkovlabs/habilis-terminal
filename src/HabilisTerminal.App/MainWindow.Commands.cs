@@ -42,6 +42,15 @@ public partial class MainWindow
             case Key.F4 when modifiers == KeyModifiers.Alt:
                 Close();
                 return true;
+
+            // Terminal-level clipboard; Ctrl+C / Ctrl+V go to the shell (SPEC §12).
+            case Key.C when modifiers == (KeyModifiers.Control | KeyModifiers.Shift) && TerminalHasFocus:
+                CopyTerminalSelection();
+                return true;
+
+            case Key.V when modifiers == (KeyModifiers.Control | KeyModifiers.Shift) && TerminalHasFocus:
+                PasteIntoTerminal();
+                return true;
         }
 
         // A full-window page (viewer, editor, settings) handles its own keys.
