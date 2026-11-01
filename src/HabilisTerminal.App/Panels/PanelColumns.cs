@@ -25,7 +25,7 @@ public sealed record ColumnSpec(ColumnKind Kind, string Title, double DefaultWid
 public static class PanelColumns
 {
     public static readonly ColumnSpec Name = new(ColumnKind.Name, "Name", 0, false, SortMode.Name);
-    private static readonly ColumnSpec Size = new(ColumnKind.Size, "Size", 96, true, SortMode.Size);
+    private static readonly ColumnSpec Size = new(ColumnKind.Size, "Size", 104, true, SortMode.Size);
     private static readonly ColumnSpec Date = new(ColumnKind.Date, "Date", 84, true, SortMode.Modified);
     private static readonly ColumnSpec Time = new(ColumnKind.Time, "Time", 52, true, SortMode.Modified);
     private static readonly ColumnSpec Created = new(ColumnKind.Created, "Created", 128, true, SortMode.Created);
@@ -33,6 +33,7 @@ public static class PanelColumns
     private static readonly ColumnSpec Accessed = new(ColumnKind.Accessed, "Accessed", 128, true, SortMode.Accessed);
     private static readonly ColumnSpec Attributes = new(ColumnKind.Attributes, "Attr", 56, false, null);
     private static readonly ColumnSpec CompactSize = new(ColumnKind.CompactSize, "Size", 72, true, SortMode.Size);
+    private static readonly ColumnSpec MediumSize = new(ColumnKind.CompactSize, "Size", 76, true, SortMode.Size);
     private static readonly ColumnSpec ModifiedShort = new(ColumnKind.ModifiedShort, "Modified", 128, true, SortMode.Modified);
 
     /// <summary>Number of name columns for the multi-column modes; 1 for table modes.</summary>
@@ -43,9 +44,10 @@ public static class PanelColumns
         _ => 1,
     };
 
-    /// <summary>Columns after the name, for table modes.</summary>
+    /// <summary>Columns after the name: for table modes, and after each name column in Medium.</summary>
     public static IReadOnlyList<ColumnSpec> DetailColumns(PanelViewMode mode) => mode switch
     {
+        PanelViewMode.Medium => [MediumSize],
         PanelViewMode.Full => [Size, Date, Time],
         PanelViewMode.Wide => [Size],
         PanelViewMode.Detailed => [Size, Created, Modified, Accessed, Attributes],
@@ -53,15 +55,19 @@ public static class PanelColumns
         _ => [],
     };
 
-    public static string FormatCell(ColumnKind kind, PanelItem item, CultureInfo culture, long? folderSize = null)
+    /// <summary>
+    /// Text of a cell. <paramref name="folderSize"/> is the folder's known size; <paramref name="autoSized"/> says
+    /// the panel sizes folders in the background, so a folder not sized yet shows nothing instead of "Folder".
+    /// </summary>
+    public static string FormatCell(ColumnKind kind, PanelItem item, CultureInfo culture, FolderSize? folderSize = null, bool autoSized = false)
     {
         var entry = item.Entry;
         return kind switch
         {
-            ColumnKind.Size when folderSize is { } size => size.ToString("N0", culture),
-            ColumnKind.CompactSize when folderSize is { } size => FormatCompactSize(size, culture),
             ColumnKind.Size or ColumnKind.CompactSize when item.IsParent => "Up",
-            ColumnKind.Size or ColumnKind.CompactSize when entry.IsDirectory => entry.IsReparsePoint ? "Link" : "Folder",
+            ColumnKind.Size when folderSize is { } size => SizeFormat.Folder(size, compact: false, culture),
+            ColumnKind.CompactSize when folderSize is { } size => SizeFormat.Folder(size, compact: true, culture),
+            ColumnKind.Size or ColumnKind.CompactSize when entry.IsDirectory => entry.IsReparsePoint ? "Link" : autoSized ? string.Empty : "Folder",
             ColumnKind.Size => entry.Length.ToString("N0", culture),
             ColumnKind.CompactSize => FormatCompactSize(entry.Length, culture),
             _ when item.IsParent => string.Empty,
@@ -75,19 +81,7 @@ public static class PanelColumns
         };
     }
 
-    public static string FormatCompactSize(long bytes, CultureInfo culture)
-    {
-        string[] units = ["B", "KB", "MB", "GB", "TB"];
-        double value = bytes;
-        var unit = 0;
-        while (value >= 1024 && unit < units.Length - 1)
-        {
-            value /= 1024;
-            unit++;
-        }
-
-        return unit == 0 ? $"{bytes.ToString(culture)} B" : $"{value.ToString(value < 10 ? "0.0" : "0", culture)} {units[unit]}";
-    }
+    public static string FormatCompactSize(long bytes, CultureInfo culture) => SizeFormat.Compact(bytes, culture);
 
     /// <summary>Far-style attribute letters: R A H S C E (read-only, archive, hidden, system, compressed, encrypted) plus L for links.</summary>
     public static string FormatAttributes(FileAttributes attributes)

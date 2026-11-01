@@ -30,6 +30,8 @@ public static class SettingsCatalog
         new("panels.fontFamily", Panels, "Font Family", "Font of the file panels.", SettingKind.Text, "Segoe UI"),
         new("panels.fontSize", Panels, "Font Size", "Font size of the file panels, in pixels.", SettingKind.Number, 13, Minimum: 8, Maximum: 32),
         new("panels.showHidden", Panels, "Show Hidden Files", "Show hidden and system files (Ctrl+H toggles it for a panel).", SettingKind.Toggle, true),
+        new("panels.folderSizes", Panels, "Folder Sizes",
+            "Count folder sizes in the background on local fixed drives and show them in the size columns. F3 sizes a folder on any drive.", SettingKind.Toggle, true),
 
         new("terminal.fontFamily", Terminal, "Font Family", "Font of the terminal.", SettingKind.Text, "Cascadia Mono"),
         new("terminal.fontSize", Terminal, "Font Size", "Font size of the terminal, in points.", SettingKind.Number, 11, Minimum: 6, Maximum: 48),

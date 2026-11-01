@@ -42,6 +42,11 @@ public partial class MainWindow
         var title = $"{(move ? "Moving" : "Copying")} {(names.Length == 1 ? names[0] : $"{names.Length} items")}";
         var result = await RunAsync(title, [.. sources, destination], (handler, control) =>
             new CopyOperation(sources, destination, chosen.Options, move, handler, control).Run());
+        string[] changedPaths = move ? [.. sources, destination] : [destination];
+        foreach (var changed in changedPaths)
+        {
+            FilePanel.InvalidateFolderSizes(changed);
+        }
 
         source.State.Selection.Clear();
         await source.ReloadAsync();
@@ -94,6 +99,10 @@ public partial class MainWindow
         var paths = names.Select(n => Path.Combine(panel.CurrentPath, n)).ToArray();
         var title = $"{(permanent ? "Deleting" : "Moving to Recycle Bin")} {(names.Length == 1 ? names[0] : $"{names.Length} items")}";
         await RunAsync(title, paths, (handler, control) => new DeleteOperation(paths, permanent, handler, control).Run());
+        foreach (var deletedPath in paths)
+        {
+            FilePanel.InvalidateFolderSizes(deletedPath);
+        }
 
         panel.State.Selection.Clear();
         await panel.ReloadAsync();

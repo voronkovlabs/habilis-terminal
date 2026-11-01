@@ -47,6 +47,7 @@ public sealed class FileListView : FrameworkElement
     private int _topIndex;
     private int _hoverIndex = -1;
     private (ColumnSpec Column, double StartX, double StartWidth)? _resizing;
+    private (int Top, int Count) _reportedRange = (-1, -1);
 
     public FileListView()
     {
@@ -60,6 +61,15 @@ public sealed class FileListView : FrameworkElement
     public event Action<int, int, bool>? ItemClicked;
 
     public event Action<SortMode>? HeaderClicked;
+
+    /// <summary>The visible rows changed (scroll, resize, view mode): first index and count. Raised while rendering.</summary>
+    public event Action<int, int>? VisibleRangeChanged;
+
+    /// <summary>The panel sizes folders in the background: folders not sized yet show an empty size cell.</summary>
+    public bool AutoSizedFolders { get; set; }
+
+    /// <summary>First visible index and the number of visible slots.</summary>
+    public (int Top, int Count) VisibleRange => (_topIndex, PageSize);
 
     public PanelState? State
     {
@@ -207,13 +217,19 @@ public sealed class FileListView : FrameworkElement
                 }
 
                 var cell = new Rect(column * columnWidth, ListTop + (row * RowHeight), columnWidth, RowHeight);
-                DrawItem(dc, index, cell, columns == 1 ? details : [], pixelsPerDip);
+                DrawItem(dc, index, cell, details, pixelsPerDip);
             }
 
             if (column > 0)
             {
                 dc.DrawRectangle(PanelPalette.Border, null, new Rect(column * columnWidth, ListTop, 1, rows * RowHeight));
             }
+        }
+
+        if (VisibleRange != _reportedRange)
+        {
+            _reportedRange = VisibleRange;
+            VisibleRangeChanged?.Invoke(_reportedRange.Top, _reportedRange.Count);
         }
     }
 
@@ -407,10 +423,22 @@ public sealed class FileListView : FrameworkElement
             }
             else
             {
-                long? folderSize = item.Entry.IsDirectory && !item.IsParent && state.FolderSizes.TryGetValue(item.Name, out var size) ? size.Bytes : null;
-                var text = PanelColumns.FormatCell(column.Kind, item, state.Culture, folderSize);
+                var folderSize = item.Entry.IsDirectory && !item.IsParent ? state.FolderSizeOf(item.Name) : null;
+                var text = PanelColumns.FormatCell(column.Kind, item, state.Culture, folderSize, AutoSizedFolders);
                 var brush = isMarked ? PanelPalette.MarkedForeground : PanelPalette.DescriptionForeground;
+
+                // A running total is dimmed until the folder is fully counted.
+                var counting = folderSize is { IsFinal: false } && column.Kind is ColumnKind.Size or ColumnKind.CompactSize;
+                if (counting)
+                {
+                    dc.PushOpacity(0.5);
+                }
+
                 DrawText(dc, text, brush, x + CellPadding, cell.Y, width - (2 * CellPadding), RowHeight, column.AlignRight, false, pixelsPerDip);
+                if (counting)
+                {
+                    dc.Pop();
+                }
             }
         }
 

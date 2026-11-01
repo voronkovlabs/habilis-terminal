@@ -38,8 +38,9 @@ public class PanelStateTests
         state.Selection.Toggle("not-counted");
         Assert.Equal(["counted", "not-counted"], state.SelectedFolders());
 
-        state.FolderSizes["counted"] = new Viewing.DirectorySize.Result(500, 4, 1, 0);
-        state.FolderSizes["unselected"] = new Viewing.DirectorySize.Result(9000, 9, 0, 0);
+        state.FolderSizes.Set(Path.Combine(state.Path, "counted"), new Viewing.DirectorySize.Result(500, 4, 1, 0));
+        state.FolderSizes.Set(Path.Combine(state.Path, "unselected"), new Viewing.DirectorySize.Result(9000, 9, 0, 0));
+        state.FolderSizes.Set(Path.Combine(state.Path, "not-counted"), new Viewing.DirectorySize.Result(7000, 7, 0, 0), isFinal: false);
 
         Assert.Equal((3, 5, 510L), state.SummarizeSelection());
     }

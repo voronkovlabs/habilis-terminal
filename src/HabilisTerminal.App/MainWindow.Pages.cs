@@ -188,6 +188,7 @@ public partial class MainWindow
     private static async Task ReturnToPanelAsync(FilePanel panel, string file)
     {
         var directory = Path.GetDirectoryName(file)!;
+        FilePanel.InvalidateFolderSizes(file); // the editor may have changed the file's size
         if (!string.Equals(directory, panel.CurrentPath.TrimEnd('\\'), StringComparison.OrdinalIgnoreCase))
         {
             await panel.NavigateAsync(directory, Path.GetFileName(file));

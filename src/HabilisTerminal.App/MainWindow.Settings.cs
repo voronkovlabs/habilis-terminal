@@ -50,6 +50,13 @@ public partial class MainWindow
             repaintPanels = true;
         }
 
+        FilePanel.AutoFolderSizes = settings.PanelsFolderSizes;
+        if (previous is not null && previous.PanelsFolderSizes != settings.PanelsFolderSizes)
+        {
+            _left.RequestFolderSizes();
+            _right.RequestFolderSizes();
+        }
+
         if (previous is null || previous.ViewerFontFamily != settings.ViewerFontFamily || previous.ViewerFontSize != settings.ViewerFontSize)
         {
             ViewerView.SetFont(settings.ViewerFontFamily, settings.ViewerFontSize);

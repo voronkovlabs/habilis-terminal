@@ -25,6 +25,8 @@ public sealed class AppSettings
 
     public bool PanelsShowHidden => Get<bool>("panels.showHidden");
 
+    public bool PanelsFolderSizes => Get<bool>("panels.folderSizes");
+
     public string TerminalFontFamily => Get<string>("terminal.fontFamily");
 
     public int TerminalFontSize => Get<int>("terminal.fontSize");

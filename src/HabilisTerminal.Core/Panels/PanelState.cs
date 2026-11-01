@@ -54,12 +54,19 @@ public sealed class PanelState
 
     public Selection Selection { get; } = new();
 
-    /// <summary>Folder totals computed with F3, shown in the size column and the status line until the directory changes.</summary>
-    public Dictionary<string, DirectorySize.Result> FolderSizes { get; } = new(StringComparer.OrdinalIgnoreCase);
+    /// <summary>
+    /// Folder sizes by full path (F3 and the background counter), shown in the size column, the status line and the
+    /// selection totals. Both panels share one cache for the app's lifetime.
+    /// </summary>
+    public FolderSizeCache FolderSizes { get; set; } = new();
+
+    /// <summary>The known size of the folder <paramref name="name"/> in this listing: final or still counting.</summary>
+    public FolderSize? FolderSizeOf(string name) =>
+        name != PanelItem.ParentName && FolderSizes.TryGet(System.IO.Path.Combine(Path, name), out var size) ? size : null;
 
     /// <summary>
     /// The selection's item count, and the files and bytes in it: selected files plus the contents of selected folders
-    /// already counted with F3.
+    /// already sized (F3 or the background counter; running totals are left out).
     /// </summary>
     public (int Items, int Files, long Bytes) SummarizeSelection()
     {
@@ -67,10 +74,10 @@ public sealed class PanelState
         var items = files + directories;
         foreach (var entry in _items)
         {
-            if (entry.IsDirectory && Selection.Contains(entry.Name) && FolderSizes.TryGetValue(entry.Name, out var totals))
+            if (entry.IsDirectory && Selection.Contains(entry.Name) && FolderSizeOf(entry.Name) is { IsFinal: true } size)
             {
-                files += totals.Files;
-                bytes += totals.Bytes;
+                files += size.Totals.Files;
+                bytes += size.Bytes;
             }
         }
 
@@ -126,7 +133,6 @@ public sealed class PanelState
         else
         {
             Selection.Clear();
-            FolderSizes.Clear();
         }
 
         Rebuild();
@@ -263,7 +269,7 @@ public sealed class PanelState
     private void Rebuild()
     {
         IReadOnlyList<FileEntry> visible = ShowHidden ? _raw : _raw.Where(e => !e.IsHidden && !e.IsSystem).ToArray();
-        var sorted = EntrySorter.Sort(visible, Sort, Culture);
+        var sorted = EntrySorter.Sort(visible, Sort, Culture, Sort.Mode == SortMode.Size ? e => FolderSizeOf(e.Name)?.Bytes : null);
         if (SelectedFirst && Selection.Count > 0)
         {
             // Stable partition; directories-first is kept inside each part.

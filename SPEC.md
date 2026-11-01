@@ -148,7 +148,7 @@ Compare folders has no default hotkey (Far behaviour); it is available from F9 �
 | Key | Mode | Columns |
 |---|---|---|
 | Ctrl+1 | Brief | Names in several columns |
-| Ctrl+2 | Medium | Names in two columns |
+| Ctrl+2 | Medium | Two columns, each name with a narrow size column |
 | Ctrl+3 | Full | Name, size, date, time |
 | Ctrl+4 | Wide | Name, size |
 | Ctrl+5 | Detailed | Name, size, all dates, attributes |
@@ -158,6 +158,21 @@ New panels start in Medium, as in Far.
 
 - VS Code list / table look: column headers, file icons in all modes, resizable columns, hover and focus styles.
 - Clicking a column header sorts by that column.
+
+### Folder sizes
+- Every size column shows file sizes at once and folder sizes as they are computed in the background (issue #36):
+  one thread at the lowest priority in Windows background mode (lower disk priority too), visible folders first,
+  re-ordered on scroll; leaving the folder stops its counting. Two panels on the same folder count it once.
+- Only on local fixed drives. On network and removable drives folders are sized by F3 alone.
+- A folder not counted yet shows an empty cell; the running total is dimmed; the final value is in the normal colour.
+  A folder with unreadable parts shows a lower bound, e.g. "≥ 1.2 GB". Links ("Link") are not counted, as with F3;
+  hard links may be counted twice. ".." has no size. Repaints happen at most a few times a second.
+- Sizes are cached for the app's lifetime and shared by both panels, F3, the status line and the selection totals,
+  so a folder never shows two numbers. Ctrl+R and the app's own copy, move, delete and editor saves drop the sizes
+  of the affected folders and every folder above them; they are counted again.
+- No live re-sort: when sorting by size, folders take their sizes into account on the next sort or Ctrl+R, and the
+  cursor never jumps.
+- Setting `panels.folderSizes` (default `true`) turns automatic counting off; F3 still works.
 
 ### Sorting
 Name, extension, modified, size, unsorted, created, accessed; sort menu (Ctrl+F12) with
@@ -293,7 +308,8 @@ F6 switches between viewer and editor, as in Far. One page at a time (no F12 scr
 - Encodings: auto-detection (BOM, UTF-8 heuristic), manual switch to UTF-8, UTF-16 LE/BE, ANSI (1251), OEM (866).
 - Search (F7, Shift+F7 next), go to line / offset.
 - Images (png, jpg, gif, bmp, ico, webp) via WPF decoders.
-- F3 on a directory computes its size in the background (cancellable, junctions not traversed);
+- F3 on a directory computes its size in the background (cancellable, junctions not traversed) and stores it in the
+  shared folder-size cache (§6);
   the cursor stays on it, the panel's status line shows the number of files and their size, and the size
   column shows the size. With folders selected F3 counts all of them; the status line then shows the
   selection's files and size, the contents of the counted folders included. While counting, the status line
@@ -401,7 +417,7 @@ Approach:
   opens the file in the built-in editor. The page is generated from the JSON Schema.
 - Notable settings: `theme`, `useAccentColor`, `iconTheme`, `deleteToRecycleBin`, confirmations, `shell.path`,
   `shell.args`, `shell.integration`, `terminal.fontFamily`, `terminal.fontSize`, `terminal.defaultRows`,
-  `terminal.multilinePasteWarning`, `panels.font`, `viewer.*`, `editor.largeFileThresholdMB`, `editor.syntaxHighlighting`,
+  `terminal.multilinePasteWarning`, `panels.font`, `panels.folderSizes`, `viewer.*`, `editor.largeFileThresholdMB`, `editor.syntaxHighlighting`,
   `confirmExit`.
 
 ## 15. Packaging and distribution

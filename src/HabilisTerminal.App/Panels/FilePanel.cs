@@ -38,10 +38,19 @@ public sealed class FilePanel : Border
     private DirectoryWatcher? _watcher;
     private Border? _statusBorder;
     private bool _isActive;
+    private bool _autoSizing;
+    private int _sizesRepaintQueued;
+    private static FolderSizeWorker? s_sizeWorker;
 
     public FilePanel(string side)
     {
         Side = side;
+        State.FolderSizes = FolderSizes;
+        SizeWorker.Updated += OnFolderSizesUpdated;
+
+        // Another panel's Ctrl+R or a file operation may have dropped sizes this panel shows (an ancestor, say).
+        FolderSizes.Invalidated += _ => Dispatcher.BeginInvoke(RequestFolderSizes, DispatcherPriority.Background);
+        _list.VisibleRangeChanged += (_, _) => UpdateVisibleFolders();
         Focusable = true;
         FocusVisualStyle = null;
         Background = PanelPalette.Background;
@@ -128,6 +137,17 @@ public sealed class FilePanel : Border
 
     public string Side { get; }
 
+    /// <summary>Folder sizes shared by both panels, F3 and the selection totals, kept for the app's lifetime (SPEC §6).</summary>
+    public static FolderSizeCache FolderSizes { get; } = new();
+
+    /// <summary>The <c>panels.folderSizes</c> setting: size folders in the background on local fixed drives.</summary>
+    public static bool AutoFolderSizes { get; set; } = true;
+
+    private static FolderSizeWorker SizeWorker => s_sizeWorker ??= new FolderSizeWorker(FolderSizes);
+
+    /// <summary>The app changed something at <paramref name="path"/> (copy, move, delete, editor save): its sizes are stale.</summary>
+    public static void InvalidateFolderSizes(string path) => FolderSizes.Invalidate(path);
+
     public PanelState State { get; } = new();
 
     public string CurrentPath => State.Path;
@@ -194,7 +214,7 @@ public sealed class FilePanel : Border
         }
 
         var path = System.IO.Path.Combine(source.CurrentPath, item.Name);
-        _quickView.Show(path, item.Entry.IsDirectory, source.State.FolderSizes.TryGetValue(item.Name, out var size) ? size.Bytes : null);
+        _quickView.Show(path, item.Entry.IsDirectory, source.State.FolderSizeOf(item.Name) is { IsFinal: true } size ? size.Bytes : null);
     }
 
     public bool IsActive
@@ -273,6 +293,11 @@ public sealed class FilePanel : Border
         }
 
         var samePath = string.Equals(path, State.Path, StringComparison.OrdinalIgnoreCase);
+        if (!samePath)
+        {
+            SizeWorker.Cancel(this); // leaving the folder stops its counting
+        }
+
         Message = null;
         CloseQuickSearch();
         var complete = first.Length < DirectoryReader.DefaultFirstBatchSize;
@@ -283,6 +308,7 @@ public sealed class FilePanel : Border
                 // Large directory: show the first screen now; a refresh keeps the old listing until the new one is read.
                 State.SetListing(path, first, focusName);
                 Refresh();
+                RequestFolderSizes();
                 FirstScreenTime = stopwatch.Elapsed;
             }
 
@@ -311,6 +337,7 @@ public sealed class FilePanel : Border
 
         FullListingTime = stopwatch.Elapsed;
         Refresh();
+        RequestFolderSizes();
         if (!samePath)
         {
             Watch(path);
@@ -320,8 +347,80 @@ public sealed class FilePanel : Border
         return true;
     }
 
-    /// <summary>Ctrl+R: re-reads the directory, keeping cursor and selection.</summary>
+    /// <summary>Re-reads the directory, keeping cursor and selection.</summary>
     public Task<bool> ReloadAsync() => NavigateAsync(State.Path);
+
+    /// <summary>Ctrl+R: re-reads the directory and counts its folder sizes again.</summary>
+    public Task<bool> RefreshAsync()
+    {
+        if (State.Path.Length > 0)
+        {
+            FolderSizes.Invalidate(State.Path);
+        }
+
+        return ReloadAsync();
+    }
+
+    /// <summary>
+    /// Asks the background counter for the sizes of this listing's folders (visible ones first), or stops it when
+    /// the setting is off or the drive is not a local fixed one.
+    /// </summary>
+    public void RequestFolderSizes()
+    {
+        var auto = AutoFolderSizes && FolderSizeWorker.IsAutoCountable(State.Path);
+        if (auto != _autoSizing)
+        {
+            _autoSizing = auto;
+            _list.AutoSizedFolders = auto;
+            _list.InvalidateVisual();
+        }
+
+        if (!auto)
+        {
+            SizeWorker.Cancel(this);
+            return;
+        }
+
+        SizeWorker.Request(this, State.Entries.Where(IsSizable).Select(e => System.IO.Path.Combine(State.Path, e.Name)));
+        UpdateVisibleFolders();
+    }
+
+    private static bool IsSizable(FileEntry entry) => entry.IsDirectory && !entry.IsReparsePoint;
+
+    private void UpdateVisibleFolders()
+    {
+        if (!_autoSizing)
+        {
+            return;
+        }
+
+        var (top, count) = _list.VisibleRange;
+        var visible = new List<string>();
+        for (var i = top; i < Math.Min(State.Count, top + count); i++)
+        {
+            var item = State.ItemAt(i);
+            if (!item.IsParent && IsSizable(item.Entry))
+            {
+                visible.Add(System.IO.Path.Combine(State.Path, item.Name));
+            }
+        }
+
+        SizeWorker.SetVisible(this, visible);
+    }
+
+    /// <summary>On the worker thread, at most a few times a second: repaint the sizes on the UI thread.</summary>
+    private void OnFolderSizesUpdated()
+    {
+        if (Interlocked.Exchange(ref _sizesRepaintQueued, 1) == 0)
+        {
+            Dispatcher.BeginInvoke(() =>
+            {
+                _sizesRepaintQueued = 0;
+                _list.InvalidateVisual();
+                UpdateStatus();
+            }, DispatcherPriority.Background);
+        }
+    }
 
     /// <summary>After a font or icon change: rows may have a new height.</summary>
     public void InvalidatePanel()
@@ -437,7 +536,7 @@ public sealed class FilePanel : Border
                 Refresh();
                 return true;
             case Key.R when modifiers == KeyModifiers.Control:
-                _ = ReloadAsync();
+                _ = RefreshAsync();
                 return true;
             case Key.F12 when modifiers == KeyModifiers.Shift:
                 State.SetSelectedFirst(!State.SelectedFirst);
@@ -672,6 +771,7 @@ public sealed class FilePanel : Border
         {
             State.SetListing(path, updated);
             Refresh();
+            RequestFolderSizes();
         }
         else
         {
@@ -704,18 +804,24 @@ public sealed class FilePanel : Border
                 counting.Name = name;
                 counting.Totals = new DirectorySize.Result(0, 0, 0, 0);
                 UpdateStatus();
+                var path = System.IO.Path.Combine(counting.Path, name);
+                counting.FullPath = path;
+                var stamp = FolderSizes.Stamp;
+                SizeWorker.Skip(path);
                 var progress = new Progress<DirectorySize.Result>(totals =>
                 {
                     // Reports queue up on the dispatcher; one from a cancelled count must not repaint.
                     if (_counting == counting && !counting.Cancel.IsCancellationRequested)
                     {
                         counting.Totals = totals;
+                        FolderSizes.Set(path, totals, isFinal: false, startStamp: stamp);
                         UpdateStatus();
+                        _list.InvalidateVisual();
                     }
                 });
-                var path = System.IO.Path.Combine(counting.Path, name);
                 var result = await Task.Run(() => DirectorySize.Compute(path, new Throttled(progress), counting.Cancel.Token), counting.Cancel.Token);
-                State.FolderSizes[name] = result;
+                FolderSizes.Set(path, result, isFinal: true, startStamp: stamp);
+                counting.FullPath = null;
                 unreadable += result.Inaccessible;
                 _list.Refresh();
             }
@@ -725,11 +831,21 @@ public sealed class FilePanel : Border
         }
         finally
         {
+            if (counting.FullPath is { } stopped)
+            {
+                FolderSizes.RemoveRunning(stopped);
+            }
+
             counting.Cancel.Dispose();
             if (_counting == counting)
             {
                 _counting = null;
                 UpdateStatus();
+            }
+
+            if (State.Path == counting.Path)
+            {
+                RequestFolderSizes(); // a stopped F3 count goes back to the background counter
             }
         }
 
@@ -750,6 +866,9 @@ public sealed class FilePanel : Border
         public CancellationTokenSource Cancel { get; } = cancel;
 
         public string Name { get; set; } = string.Empty;
+
+        /// <summary>The folder being counted now; null between folders.</summary>
+        public string? FullPath { get; set; }
 
         public DirectorySize.Result Totals { get; set; } = new(0, 0, 0, 0);
     }
@@ -801,8 +920,8 @@ public sealed class FilePanel : Border
         var item = State.Current;
         _status.Text = item.Name;
         _statusRight.Text = item.IsParent ? string.Empty
-            : item.Entry.IsDirectory && State.FolderSizes.TryGetValue(item.Name, out var totals)
-                ? FormatTotals(totals.Files, totals.Bytes, culture)
+            : item.Entry.IsDirectory && State.FolderSizeOf(item.Name) is { } size
+                ? (size.IsPartial ? SizeFormat.AtLeast : string.Empty) + FormatTotals(size.Totals.Files, size.Bytes, culture)
             : item.Entry.IsDirectory ? item.Entry.LastWriteTimeUtc.ToLocalTime().ToString("g", culture)
             : $"{PanelColumns.FormatCompactSize(item.Entry.Length, culture)}   {item.Entry.LastWriteTimeUtc.ToLocalTime().ToString("g", culture)}";
     }
