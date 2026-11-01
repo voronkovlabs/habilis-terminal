@@ -54,11 +54,10 @@ jobs:
             dotnet vpk download github --repoUrl $env:REPO_URL --channel $rid --outputDir "releases/$rid" --token $env:GH_TOKEN
             dotnet vpk pack --packId HabilisTerminal --packVersion $version --packDir $publish --mainExe habi.exe `
               --packTitle "Habilis Terminal" --packAuthors "Sergey Voronkov" --icon src/HabilisTerminal.App/Assets/habi.ico `
-              --runtime $rid --channel $rid --outputDir "releases/$rid"
+              --runtime $rid --channel $rid --outputDir "releases/$rid" --noPortable
             if ($LASTEXITCODE) { exit $LASTEXITCODE }
 
-            # Our own portable zip: the app plus the 'portable' marker (settings and state stay next to habi.exe).
-            Remove-Item "releases/$rid/*-Portable.zip"
+            # Our own portable zip instead of Velopack's: the app plus the 'portable' marker (settings and state stay next to habi.exe).
             New-Item "$publish/portable" -ItemType File | Out-Null
             Compress-Archive -Path "$publish/*" -DestinationPath "artifacts/HabilisTerminal-$version-$rid-portable.zip"
           }
