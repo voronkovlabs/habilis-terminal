@@ -37,6 +37,7 @@ public partial class App : Application
     protected override void OnStartup(StartupEventArgs e)
     {
         base.OnStartup(e);
+        Reporting.CrashCapture.Install(this);
         Paths = AppPaths.Resolve(AppContext.BaseDirectory);
         Settings = new SettingsStore(Paths.SettingsFile);
         Settings.Load();
@@ -53,6 +54,8 @@ public partial class App : Application
         MainWindow = new MainWindow();
         MainWindow.Show();
         Updates.Start(MainWindow.Dispatcher);
+        OfferCrashReport(MainWindow);
+        Reporting.CrashCapture.StartTestTrigger(MainWindow.Dispatcher);
     }
 
     protected override void OnExit(ExitEventArgs e)
@@ -119,6 +122,16 @@ public partial class App : Application
             {
                 return true;
             }
+        }
+    }
+
+    /// <summary>A crash report written last time is offered once the window is up (issue #22).</summary>
+    private static void OfferCrashReport(Window window)
+    {
+        var pending = Core.Reporting.CrashReport.LoadPending(Paths.CrashDirectory);
+        if (pending.Count > 0)
+        {
+            window.Dispatcher.BeginInvoke(() => Reporting.ReportDialog.OfferCrash(window, pending), System.Windows.Threading.DispatcherPriority.ApplicationIdle);
         }
     }
 

@@ -18,6 +18,9 @@ public sealed record AppPaths(string SettingsDirectory, string StateDirectory, b
 
     public string ThemesDirectory => Path.Combine(SettingsDirectory, "themes");
 
+    /// <summary>Crash reports waiting to be offered on the next start.</summary>
+    public string CrashDirectory => Path.Combine(StateDirectory, "crashes");
+
     public static AppPaths Resolve(string executableDirectory) => Resolve(
         executableDirectory,
         Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),

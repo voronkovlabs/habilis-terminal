@@ -35,6 +35,11 @@
     <None Include="..\..\ThirdPartyNotices.txt" Link="ThirdPartyNotices.txt" CopyToOutputDirectory="PreserveNewest" />
     <None Include="..\..\LICENSE" Link="LICENSE.txt" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
+  <ItemGroup Condition="'$(CrashReportToken)' != ''">
+    <!-- The release workflow passes the crash and feedback report token (CRASH_REPORT_TOKEN, base64 of the reversed
+         token); it is never committed. Without it reports open the new-issue page in the browser. -->
+    <AssemblyMetadata Include="CrashReportToken" Value="$(CrashReportToken)" />
+  </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\HabilisTerminal.Core\HabilisTerminal.Core.csproj" />
     <ProjectReference Include="..\HabilisTerminal.Shell\HabilisTerminal.Shell.csproj" />

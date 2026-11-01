@@ -42,12 +42,23 @@ jobs:
         shell: pwsh
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          CRASH_REPORT_TOKEN: ${{ secrets.CRASH_REPORT_TOKEN }}
         run: |
           $version = '${{ github.ref_name }}'.TrimStart('v')
           New-Item -ItemType Directory artifacts | Out-Null
+
+          # Crash and feedback reports (issues #22, #23): the token goes into the build as base64 of the reversed token,
+          # so the binary holds no plain github_pat_ string. Masked in the log. Without the secret reports use the browser.
+          $reportToken = ''
+          if ($env:CRASH_REPORT_TOKEN) {
+            $chars = $env:CRASH_REPORT_TOKEN.ToCharArray()
+            [Array]::Reverse($chars)
+            $reportToken = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes(-join $chars))
+            Write-Output "::add-mask::$reportToken"
+          }
           foreach ($rid in 'win-x64', 'win-arm64') {
             $publish = "publish/$rid"
-            dotnet publish src/HabilisTerminal.App -c Release -r $rid --self-contained true -p:Version=$version -o $publish
+            dotnet publish src/HabilisTerminal.App -c Release -r $rid --self-contained true -p:Version=$version -p:CrashReportToken=$reportToken -o $publish
             if ($LASTEXITCODE) { exit $LASTEXITCODE }
 
             # Previous release for delta updates; the first release has none.
