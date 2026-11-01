@@ -97,7 +97,9 @@ public sealed class FileListView : FrameworkElement
 
     private double ListTop => HasHeader ? HeaderHeight : 0;
 
-    private bool HasHeader => _state is not null && ColumnCount == 1;
+    /// <summary>Table modes, and name-column modes with detail columns (Medium, issue #40); Brief has none.</summary>
+    private bool HasHeader =>
+        _state is not null && (ColumnCount == 1 || PanelColumns.DetailColumns(_state.ViewMode).Count > 0);
 
     /// <summary>Drops cached text (it holds brushes of the previous theme) and repaints.</summary>
     public void ApplyTheme()
@@ -341,10 +343,10 @@ public sealed class FileListView : FrameworkElement
             return null;
         }
 
-        // The grip on the left edge of each detail column resizes that column.
-        foreach (var (column, columnX, _) in LayoutColumns(PanelColumns.DetailColumns(_state.ViewMode), 0, ActualWidth).Skip(1))
+        // The grip on the left edge of each detail column resizes that column (in every name column alike).
+        foreach (var (column, columnX, _) in HeaderLayout(PanelColumns.DetailColumns(_state.ViewMode)))
         {
-            if (Math.Abs(x - columnX) <= SeparatorGrip)
+            if (column.Kind != ColumnKind.Name && Math.Abs(x - columnX) <= SeparatorGrip)
             {
                 return column;
             }
@@ -356,14 +358,22 @@ public sealed class FileListView : FrameworkElement
     private ColumnSpec? HeaderColumnAt(double x) =>
         _state is null
             ? null
-            : LayoutColumns(PanelColumns.DetailColumns(_state.ViewMode), 0, ActualWidth).FirstOrDefault(c => x >= c.X && x < c.X + c.Width).Column;
+            : HeaderLayout(PanelColumns.DetailColumns(_state.ViewMode)).FirstOrDefault(c => x >= c.X && x < c.X + c.Width).Column;
+
+    /// <summary>Header cells over every name column: one set in table modes, Name | Size twice in Medium.</summary>
+    private IEnumerable<(ColumnSpec Column, double X, double Width)> HeaderLayout(IReadOnlyList<ColumnSpec> details)
+    {
+        var columns = ColumnCount;
+        var columnWidth = ActualWidth / columns;
+        return Enumerable.Range(0, columns).SelectMany(column => LayoutColumns(details, column * columnWidth, columnWidth));
+    }
 
     private void DrawHeader(DrawingContext dc, IReadOnlyList<ColumnSpec> details, double pixelsPerDip)
     {
         dc.DrawRectangle(PanelPalette.HeaderBackground, null, new Rect(0, 0, ActualWidth, HeaderHeight));
         dc.DrawRectangle(PanelPalette.Border, null, new Rect(0, HeaderHeight - 1, ActualWidth, 1));
         var sort = _state!.Sort;
-        foreach (var (column, x, width) in LayoutColumns(details, 0, ActualWidth))
+        foreach (var (column, x, width) in HeaderLayout(details))
         {
             var title = column.Title;
             if (column.SortMode == sort.Mode && !(column.Kind == ColumnKind.Time))
@@ -373,7 +383,7 @@ public sealed class FileListView : FrameworkElement
 
             var left = column.Kind == ColumnKind.Name ? x + CellPadding + IconWidth : x + CellPadding;
             DrawText(dc, title, PanelPalette.DescriptionForeground, left, 0, width - (left - x) - CellPadding, HeaderHeight, column.AlignRight, bold: true, pixelsPerDip);
-            if (column.Kind != ColumnKind.Name)
+            if (column.Kind != ColumnKind.Name || x > 0)
             {
                 dc.DrawRectangle(PanelPalette.Border, null, new Rect(x, 4, 1, HeaderHeight - 8));
             }
