@@ -13,7 +13,7 @@ public sealed class HelpPage : DockPanel, IPage
         ("Focus and layout",
         [
             ("Ctrl+Tab", "Switch focus between panels and the command line"),
-            ("Tab", "Switch between the left and right panel"),
+            ("Tab", "Switch between the left and right panel (also with one panel shown)"),
             ("Ctrl+O", "Hide / show panels"),
             ("Ctrl+F1 / Ctrl+F2", "Hide / show the left / right panel"),
             ("Ctrl+P", "Hide / show the inactive panel"),

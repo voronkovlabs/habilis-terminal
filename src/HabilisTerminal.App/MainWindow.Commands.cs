@@ -119,6 +119,15 @@ public partial class MainWindow
                     FocusActivePanel();
                     SyncShellDirectory();
                 }
+                else if (Workspace.LeftVisible ^ Workspace.RightVisible)
+                {
+                    // Far: with the inactive panel hidden (Ctrl+P), Tab shows the other panel on its own side instead.
+                    var other = Other(panel);
+                    SetPanelVisibility(other == _left, other == _right);
+                    Activate(other);
+                    FocusActivePanel();
+                    SyncShellDirectory();
+                }
 
                 return true;
 
