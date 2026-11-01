@@ -10,7 +10,7 @@ public sealed record PanelSnapshot
 {
     public string? Path { get; init; }
 
-    public PanelViewMode ViewMode { get; init; } = PanelViewMode.Full;
+    public PanelViewMode ViewMode { get; init; } = PanelViewMode.Medium;
 
     public SortMode Sort { get; init; } = SortMode.Name;
 

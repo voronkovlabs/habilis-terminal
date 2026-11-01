@@ -95,6 +95,7 @@ public partial class MainWindow : Window
         };
         DpiChanged += (_, _) => UpdateCellSize();
         PreviewTextInput += OnPreviewTextInput;
+        PreviewKeyDown += OnPreviewArrowKey;
         Closing += (_, e) =>
         {
             // Unsaved edits are never lost silently, whatever closes the window (F10, Alt+F4, the close button).
@@ -196,6 +197,38 @@ public partial class MainWindow : Window
         ApplyTerminalTheme(_themes.Current);
         Terminal.Connection = _shell;
         FocusActivePanel();
+    }
+
+    /// <summary>
+    /// Arrow keys in a panel. WPF dispatches a key before the global hook sees it, and an arrow nobody handled moves
+    /// focus to the neighbouring element (Left in the right panel jumped to the left panel), so arrows are taken here.
+    /// </summary>
+    private void OnPreviewArrowKey(object sender, KeyEventArgs e)
+    {
+        var key = e.Key == Key.System ? e.SystemKey : e.Key;
+        if (key is not (Key.Left or Key.Right or Key.Up or Key.Down) || FocusedPanel() is null)
+        {
+            return;
+        }
+
+        var modifiers = KeyModifiers.None;
+        if (Keyboard.Modifiers.HasFlag(ModifierKeys.Alt))
+        {
+            modifiers |= KeyModifiers.Alt;
+        }
+
+        if (Keyboard.Modifiers.HasFlag(ModifierKeys.Control))
+        {
+            modifiers |= KeyModifiers.Control;
+        }
+
+        if (Keyboard.Modifiers.HasFlag(ModifierKeys.Shift))
+        {
+            modifiers |= KeyModifiers.Shift;
+        }
+
+        OnGlobalKey(key, modifiers);
+        e.Handled = true;
     }
 
     /// <summary>Printable characters typed in a panel go to the command line, or to quick search while it is open (SPEC §4).</summary>

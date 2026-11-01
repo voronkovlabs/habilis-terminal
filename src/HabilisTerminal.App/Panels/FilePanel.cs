@@ -378,11 +378,28 @@ public sealed class FilePanel : Border
             case Key.End when modifiers == KeyModifiers.None:
                 MoveTo(State.Count - 1);
                 return true;
+            // Far: the same row of the neighbouring column, clamped to the first / last file; one column acts as Home / End.
             case Key.Left when modifiers == KeyModifiers.None:
-                Move(multiColumn ? -rows : -page);
+                if (multiColumn)
+                {
+                    Move(-rows);
+                }
+                else
+                {
+                    MoveTo(0);
+                }
+
                 return true;
             case Key.Right when modifiers == KeyModifiers.None:
-                Move(multiColumn ? rows : page);
+                if (multiColumn)
+                {
+                    Move(rows);
+                }
+                else
+                {
+                    MoveTo(State.Count - 1);
+                }
+
                 return true;
             case Key.Enter when modifiers == KeyModifiers.None:
                 Open(State.Current);

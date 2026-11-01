@@ -64,7 +64,7 @@ public sealed class PanelState
     /// <summary>Ctrl+H.</summary>
     public bool ShowHidden { get; private set; } = true;
 
-    public PanelViewMode ViewMode { get; set; } = PanelViewMode.Full;
+    public PanelViewMode ViewMode { get; set; } = PanelViewMode.Medium;
 
     public CultureInfo Culture { get; set; } = CultureInfo.CurrentCulture;
 

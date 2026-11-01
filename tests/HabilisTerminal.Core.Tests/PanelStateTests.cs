@@ -23,6 +23,13 @@ public class PanelStateTests
     private static string[] Names(PanelState state) => Enumerable.Range(0, state.Count).Select(i => state.ItemAt(i).Name).ToArray();
 
     [Fact]
+    public void New_panels_start_in_medium_view_like_far()
+    {
+        Assert.Equal(PanelViewMode.Medium, new PanelState().ViewMode);
+        Assert.Equal(PanelViewMode.Medium, new Settings.PanelSnapshot().ViewMode);
+    }
+
+    [Fact]
     public void Parent_entry_is_first_except_at_the_root()
     {
         Assert.Equal(["..", "sub", "a.txt"], Names(Create(@"C:\work", File("a.txt"), Dir("sub"))));

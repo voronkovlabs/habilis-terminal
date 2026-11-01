@@ -16,6 +16,7 @@ public sealed class HelpPage : DockPanel, IPage
             ("Tab", "Switch between the left and right panel"),
             ("Ctrl+O", "Hide / show panels"),
             ("Ctrl+F1 / Ctrl+F2", "Hide / show the left / right panel"),
+            ("Ctrl+P", "Hide / show the inactive panel"),
             ("Ctrl+U", "Swap panels"),
             ("Ctrl+Up / Ctrl+Down", "Terminal height"),
             ("Ctrl+Left / Ctrl+Right", "Single-panel width"),

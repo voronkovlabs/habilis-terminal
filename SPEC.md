@@ -12,7 +12,7 @@ A Windows file manager in the spirit of Far Manager, built on .NET.
   PSReadLine, oh-my-posh and TUI programs must behave exactly as in Windows Terminal.
 - Two file panels with real graphics (not character cells). Visual style follows VS Code
   (Explorer lists, quick pick, command-palette-like dialogs). VS Code is a **visual reference only**;
-  no VS Code behaviour or features are borrowed (no command palette, no Ctrl+P, no keybindings.json).
+  no VS Code behaviour or features are borrowed (no command palette, no keybindings.json; Ctrl+P is Far's).
 - Keyboard shortcuts follow Far Manager as closely as possible, except where this spec explicitly deviates.
 - Panels and terminal **never overlap**: they share the window in a grid layout (see §3).
 
@@ -93,7 +93,7 @@ Far Manager defaults unless noted.
 
 | Keys | Action |
 |---|---|
-| Up/Down, PgUp/PgDn, Home/End, Left/Right | Move cursor (Left/Right move between columns in Brief/Medium) |
+| Up/Down, PgUp/PgDn, Home/End, Left/Right | Move cursor (Left/Right: the neighbouring column in multi-column modes, Home/End in one-column modes; never another panel) |
 | Tab | Switch active panel |
 | Enter | Open directory / run file through the shell (§7) |
 | Ctrl+PgUp | Parent directory |
@@ -113,7 +113,8 @@ Far Manager defaults unless noted.
 | Alt+F11 | View / edit history |
 | Ctrl+F1 / Ctrl+F2 | Hide / show left / right panel |
 | Ctrl+O | Hide / show panels |
-| Ctrl+U | Swap panels |
+| Ctrl+P | Hide / show the inactive panel (the terminal takes its place) |
+| Ctrl+U | Swap panels (a hidden panel stays hidden; with one panel, panel and terminal swap sides) |
 | Ctrl+R | Re-read panel |
 | Ctrl+H | Toggle hidden and system files |
 | Ctrl+L | Info panel (in the opposite panel) |
@@ -147,6 +148,8 @@ Compare folders has no default hotkey (Far behaviour); it is available from F9 �
 | Ctrl+4 | Wide | Name, size |
 | Ctrl+5 | Detailed | Name, size, all dates, attributes |
 | Ctrl+0 | Alternative full | As in Far |
+
+New panels start in Medium, as in Far.
 
 - VS Code list / table look: column headers, file icons in all modes, resizable columns, hover and focus styles.
 - Clicking a column header sorts by that column.

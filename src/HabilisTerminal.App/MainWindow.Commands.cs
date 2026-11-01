@@ -120,6 +120,10 @@ public partial class MainWindow
                 SwapPanels();
                 return true;
 
+            case Key.P when modifiers == KeyModifiers.Control:
+                ToggleInactivePanel();
+                return true;
+
             case Key.L when modifiers == KeyModifiers.Control:
                 ToggleInfoPanel();
                 return true;
@@ -310,9 +314,13 @@ public partial class MainWindow
 
     private void SwapPanels()
     {
+        // Far: visibility belongs to the panel, so a hidden panel stays hidden; with one panel shown (Ctrl+P),
+        // the panel and the terminal trade sides.
         (_left, _right) = (_right, _left);
         WorkspaceLayout.SetRole(_left, WorkspaceRole.LeftPanel);
         WorkspaceLayout.SetRole(_right, WorkspaceRole.RightPanel);
+        (Workspace.LeftVisible, Workspace.RightVisible) = (Workspace.RightVisible, Workspace.LeftVisible);
+        _restoreVisibility = (_restoreVisibility.Right, _restoreVisibility.Left);
         Workspace.InvalidateArrange();
         if (!IsShown(_active))
         {
@@ -321,6 +329,19 @@ public partial class MainWindow
         }
 
         FocusActivePanel();
+    }
+
+    /// <summary>Ctrl+P: hides the inactive panel, so the terminal takes its place beside the active one; again shows both.</summary>
+    private void ToggleInactivePanel()
+    {
+        if (Workspace.LeftVisible && Workspace.RightVisible)
+        {
+            SetPanelVisibility(_active == _left, _active == _right);
+        }
+        else
+        {
+            SetPanelVisibility(true, true);
+        }
     }
 
     private void ToggleInfoPanel()
