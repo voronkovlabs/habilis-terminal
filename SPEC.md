@@ -346,6 +346,10 @@ F6 switches between viewer and editor, as in Far. One page at a time (no F12 scr
   **Dark Modern** themes (from the MIT-licensed VS Code repository). The Windows accent colour tints focus and
   selection keys (can be disabled). VS Code `settings.json` is **not** read.
 - The user may put VS Code theme JSON files into `themes\` and choose one manually in settings.
+- Bundled **Far Manager** theme (`"theme": "far"`, issue #42): Far's classic blue scheme (navy panels, aqua text,
+  white folder icons, yellow marked files, teal cursor with black text, black terminal with the legacy console
+  palette). It keeps its own cursor colour: the Windows accent does not tint it. Pairs well with a monospace
+  `panels.fontFamily` such as Consolas.
 - Theme changes apply live without restart (`WM_SETTINGCHANGE`, file watcher). The terminal is recoloured
   together with the panels through `TerminalTheme`. Invalid theme → fallback to the bundled theme with a notification.
 

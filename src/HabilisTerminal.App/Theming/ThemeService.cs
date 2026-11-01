@@ -61,7 +61,8 @@ public sealed class ThemeService : IDisposable
             theme = ThemeLoader.LoadBuiltIn(WindowsAppearance.BuiltInThemeFor(SystemParameters.HighContrast));
         }
 
-        if (_useAccent && WindowsAppearance.AccentColor is { } accent)
+        var keepsOwnAccent = file is null && BuiltInName(_requested) is { } fixedPalette && ThemeLoader.KeepsOwnAccent(fixedPalette);
+        if (_useAccent && !keepsOwnAccent && WindowsAppearance.AccentColor is { } accent)
         {
             theme = WindowsAppearance.ApplyAccent(theme, accent);
         }

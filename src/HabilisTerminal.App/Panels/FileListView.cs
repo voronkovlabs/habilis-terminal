@@ -468,7 +468,11 @@ public sealed class FileListView : FrameworkElement
             {
                 var folderSize = item.Entry.IsDirectory && !item.IsParent ? state.FolderSizeOf(item.Name) : null;
                 var text = PanelColumns.FormatCell(column.Kind, item, state.Culture, folderSize, AutoSizedFolders);
-                var brush = isMarked ? PanelPalette.MarkedForeground : PanelPalette.DescriptionForeground;
+                // On the focused cursor row the details use the selection colour, like the name: the description
+                // colour can match the selection background (the Far theme's teal, issue #42).
+                var brush = isMarked ? PanelPalette.MarkedForeground
+                    : isCursor && IsActivePanel && HasPanelFocus ? PanelPalette.ActiveSelectionForeground
+                    : PanelPalette.DescriptionForeground;
 
                 // A running total is dimmed until the folder is fully counted.
                 var counting = folderSize is { IsFinal: false } && column.Kind is ColumnKind.Size or ColumnKind.CompactSize;
