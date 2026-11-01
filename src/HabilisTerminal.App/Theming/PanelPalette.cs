@@ -95,6 +95,14 @@ internal static class PanelPalette
             resources["Habi.Placeholder"] = Freeze(Opaque("input.placeholderForeground"));
             resources["Habi.Progress"] = Freeze(Opaque("progressBar.background"));
             resources["Habi.ProgressTrack"] = Freeze(Opaque("scrollbarSlider.background"));
+            resources["Habi.InputBorder"] = Freeze(Opaque("input.border") == ToColor(theme.GetOpaque("input.background").Over(background)) ? Opaque("widget.border") : Opaque("input.border"));
+            resources["Habi.ButtonBackground"] = Freeze(Opaque("button.background"));
+            resources["Habi.ButtonForeground"] = Freeze(Opaque("button.foreground"));
+            resources["Habi.ButtonBorder"] = Freeze(Opaque("button.border"));
+            resources["Habi.SecondaryButtonBackground"] = Freeze(Opaque("button.secondaryBackground"));
+            resources["Habi.SecondaryButtonForeground"] = Freeze(Opaque("button.secondaryForeground"));
+            resources["Habi.Error"] = ErrorForeground;
+            resources["Habi.Background"] = Background;
         }
     }
 

@@ -20,6 +20,7 @@ public partial class MainWindow
     /// <summary>Keys intercepted before they reach either panels or terminal (SPEC §4, §5).</summary>
     private bool OnGlobalKey(Key key, KeyModifiers modifiers)
     {
+        Trace($"key {modifiers}+{key} focusedPanel={FocusedPanel()?.Side ?? "-"} wpfLeft={_left.IsKeyboardFocused} wpfRight={_right.IsKeyboardFocused} win32={GetFocus():X}");
         switch (key)
         {
             case Key.O when modifiers == KeyModifiers.Control:
@@ -85,19 +86,19 @@ public partial class MainWindow
                 return true;
 
             case Key.F1 when modifiers == KeyModifiers.Alt:
-                _ = ShowDriveMenuAsync(_left);
+                Fire(ShowDriveMenuAsync(_left));
                 return true;
 
             case Key.F2 when modifiers == KeyModifiers.Alt:
-                _ = ShowDriveMenuAsync(_right);
+                Fire(ShowDriveMenuAsync(_right));
                 return true;
 
             case Key.F12 when modifiers == KeyModifiers.Alt:
-                _ = ShowFolderHistoryAsync();
+                Fire(ShowFolderHistoryAsync());
                 return true;
 
             case Key.F12 when modifiers == KeyModifiers.Control:
-                _ = ShowSortMenuAsync(panel);
+                Fire(ShowSortMenuAsync(panel));
                 return true;
 
             case Key.U when modifiers == KeyModifiers.Control:
@@ -109,11 +110,39 @@ public partial class MainWindow
                 return true;
 
             case Key.Add when modifiers == KeyModifiers.None:
-                _ = SelectByMaskAsync(panel, select: true);
+                Fire(SelectByMaskAsync(panel, select: true));
                 return true;
 
             case Key.Subtract when modifiers == KeyModifiers.None:
-                _ = SelectByMaskAsync(panel, select: false);
+                Fire(SelectByMaskAsync(panel, select: false));
+                return true;
+
+            // File operations (SPEC §8).
+            case Key.F5 when modifiers == KeyModifiers.None:
+            case Key.F5 when modifiers == KeyModifiers.Shift:
+                Fire(CopyOrMoveAsync(panel, move: false, inPlace: modifiers == KeyModifiers.Shift));
+                return true;
+
+            case Key.F6 when modifiers == KeyModifiers.None:
+            case Key.F6 when modifiers == KeyModifiers.Shift:
+                Fire(CopyOrMoveAsync(panel, move: true, inPlace: modifiers == KeyModifiers.Shift));
+                return true;
+
+            case Key.F7 when modifiers == KeyModifiers.None:
+                Fire(MakeDirectoryAsync(panel));
+                return true;
+
+            case Key.F8 when modifiers == KeyModifiers.None:
+            case Key.Delete when modifiers == KeyModifiers.None:
+                Fire(DeleteAsync(panel, permanent: !DeleteToRecycleBin));
+                return true;
+
+            case Key.Delete when modifiers == KeyModifiers.Shift:
+                Fire(DeleteAsync(panel, permanent: true));
+                return true;
+
+            case Key.A when modifiers == KeyModifiers.Control:
+                Fire(EditAttributesAsync(panel));
                 return true;
 
             case Key.F10 when modifiers == KeyModifiers.None:
@@ -175,6 +204,31 @@ public partial class MainWindow
         }
 
         return false;
+    }
+
+    /// <summary>Starts a UI command; failures are traced and shown instead of disappearing in a forgotten task.</summary>
+    private async void Fire(Task command)
+    {
+        try
+        {
+            await command;
+        }
+        catch (Exception ex)
+        {
+            Trace($"command failed: {ex}");
+            OperationDialogs.Message(this, "Unexpected error", ex.Message);
+        }
+    }
+
+    private static readonly string? TraceFile = Environment.GetEnvironmentVariable("HABI_TRACE");
+
+    /// <summary>Development trace (HABI_TRACE=path) for focus and key routing problems.</summary>
+    internal static void Trace(string message)
+    {
+        if (TraceFile is not null)
+        {
+            File.AppendAllText(TraceFile, $"{DateTime.Now:HH:mm:ss.fff} {message}{Environment.NewLine}");
+        }
     }
 
     private static string FullPath(FilePanel panel, string name) =>

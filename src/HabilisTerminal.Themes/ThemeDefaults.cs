@@ -10,7 +10,9 @@ public readonly record struct DefaultColor(ThemeColor? Color, string? Reference)
 public static class ThemeDefaults
 {
     private static readonly IReadOnlyDictionary<string, DefaultColor> Dark = Build(
-        ("foreground", "#CCCCCC"), ("descriptionForeground", "#CCCCCCB3"), ("errorForeground", "#F48771"),
+        ("foreground", "#CCCCCC"), ("descriptionForeground", "#CCCCCCB3"),
+        ("button.background", "#0E639C"), ("button.foreground", "#FFFFFF"), ("button.border", "#00000000"),
+        ("button.secondaryBackground", "#3A3D41"), ("button.secondaryForeground", "#FFFFFF"), ("errorForeground", "#F48771"),
         ("focusBorder", "#007FD4"), ("icon.foreground", "#C5C5C5"), ("widget.border", "#454545"),
         ("editor.background", "#1E1E1E"), ("editor.foreground", "#D4D4D4"), ("editor.selectionBackground", "#264F78"),
         ("editorCursor.foreground", "#AEAFAD"), ("editorLineNumber.foreground", "#858585"),
@@ -35,7 +37,9 @@ public static class ThemeDefaults
         ("terminal.ansiBrightWhite", "#E5E5E5"));
 
     private static readonly IReadOnlyDictionary<string, DefaultColor> Light = Build(
-        ("foreground", "#616161"), ("descriptionForeground", "#717171"), ("errorForeground", "#A1260D"),
+        ("foreground", "#616161"), ("descriptionForeground", "#717171"),
+        ("button.background", "#007ACC"), ("button.foreground", "#FFFFFF"), ("button.border", "#00000000"),
+        ("button.secondaryBackground", "#5F6A79"), ("button.secondaryForeground", "#FFFFFF"), ("errorForeground", "#A1260D"),
         ("focusBorder", "#0090F1"), ("icon.foreground", "#424242"), ("widget.border", "#C8C8C8"),
         ("editor.background", "#FFFFFF"), ("editor.foreground", "#000000"), ("editor.selectionBackground", "#ADD6FF"),
         ("editorCursor.foreground", "#000000"), ("editorLineNumber.foreground", "#237893"),
@@ -60,7 +64,9 @@ public static class ThemeDefaults
         ("terminal.ansiBrightWhite", "#A5A5A5"));
 
     private static readonly IReadOnlyDictionary<string, DefaultColor> HighContrast = Build(
-        ("foreground", "#FFFFFF"), ("descriptionForeground", "#FFFFFFB3"), ("errorForeground", "#F48771"),
+        ("foreground", "#FFFFFF"), ("descriptionForeground", "#FFFFFFB3"),
+        ("button.background", "#00000000"), ("button.foreground", "#FFFFFF"), ("button.border", "=contrastBorder"),
+        ("button.secondaryBackground", "#00000000"), ("button.secondaryForeground", "#FFFFFF"), ("errorForeground", "#F48771"),
         ("focusBorder", "#F38518"), ("contrastBorder", "#6FC3DF"), ("icon.foreground", "#FFFFFF"), ("widget.border", "=contrastBorder"),
         ("editor.background", "#000000"), ("editor.foreground", "#FFFFFF"), ("editor.selectionBackground", "#FFFFFF"),
         ("editorCursor.foreground", "#FFFFFF"), ("editorLineNumber.foreground", "#FFFFFF"),
@@ -85,7 +91,9 @@ public static class ThemeDefaults
         ("terminal.ansiBrightWhite", "#FFFFFF"));
 
     private static readonly IReadOnlyDictionary<string, DefaultColor> HighContrastLight = Build(
-        ("foreground", "#292929"), ("descriptionForeground", "#292929B3"), ("errorForeground", "#B5200D"),
+        ("foreground", "#292929"), ("descriptionForeground", "#292929B3"),
+        ("button.background", "#0F4A85"), ("button.foreground", "#FFFFFF"), ("button.border", "=contrastBorder"),
+        ("button.secondaryBackground", "#FFFFFF"), ("button.secondaryForeground", "#292929"), ("errorForeground", "#B5200D"),
         ("focusBorder", "#006BBD"), ("contrastBorder", "#0F4A85"), ("icon.foreground", "#292929"), ("widget.border", "=contrastBorder"),
         ("editor.background", "#FFFFFF"), ("editor.foreground", "#292929"), ("editor.selectionBackground", "#0F4A85"),
         ("editorCursor.foreground", "#0F4A85"), ("editorLineNumber.foreground", "#292929"),

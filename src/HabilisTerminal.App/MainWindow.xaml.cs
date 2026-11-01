@@ -227,8 +227,32 @@ public partial class MainWindow : Window
         }
     }
 
-    private FilePanel? FocusedPanel() =>
-        _left.IsKeyboardFocused ? _left : _right.IsKeyboardFocused ? _right : null;
+    /// <summary>
+    /// The panel with keyboard focus. WPF can keep a panel as its focused element while Win32 focus is in the terminal
+    /// window, so the terminal's real focus wins.
+    /// </summary>
+    private FilePanel? FocusedPanel()
+    {
+        if (FindHwndHost(Terminal) is { Handle: var terminal } && terminal != IntPtr.Zero && IsChildOrSelf(terminal, GetFocus()))
+        {
+            return null;
+        }
+
+        return _left.IsKeyboardFocused ? _left : _right.IsKeyboardFocused ? _right : null;
+    }
+
+    private static bool IsChildOrSelf(IntPtr parent, IntPtr window)
+    {
+        for (var current = window; current != IntPtr.Zero; current = GetParent(current))
+        {
+            if (current == parent)
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
 
     private bool IsShown(FilePanel? panel) =>
         panel == _left ? Workspace.LeftVisible : panel == _right && Workspace.RightVisible;
@@ -251,8 +275,15 @@ public partial class MainWindow : Window
 
     private void FocusActivePanel()
     {
-        // The panel may only become visible after the next layout pass.
-        Dispatcher.BeginInvoke(() => _active.Focus(), System.Windows.Threading.DispatcherPriority.Input);
+        // The panel may only become visible after the next layout pass. Win32 focus is taken back from the terminal
+        // window first: WPF may still consider the panel focused and would not move it otherwise.
+        Dispatcher.BeginInvoke(() =>
+        {
+            SetFocus(new WindowInteropHelper(this).Handle);
+            Keyboard.ClearFocus();
+            var focused = _active.Focus();
+            Trace($"focus panel {_active.Side}: {focused}, win32={GetFocus():X}");
+        }, System.Windows.Threading.DispatcherPriority.Input);
     }
 
     private void FocusTerminal()
@@ -262,6 +293,7 @@ public partial class MainWindow : Window
         {
             Keyboard.ClearFocus();
             SetFocus(host.Handle);
+            Trace($"focus terminal {host.Handle:X}");
         }
     }
 
@@ -368,6 +400,12 @@ public partial class MainWindow : Window
 
     [DllImport("user32.dll")]
     private static extern IntPtr SetFocus(IntPtr hWnd);
+
+    [DllImport("user32.dll")]
+    private static extern IntPtr GetFocus();
+
+    [DllImport("user32.dll")]
+    private static extern IntPtr GetParent(IntPtr hWnd);
 
     [DllImport("dwmapi.dll")]
     private static extern int DwmSetWindowAttribute(IntPtr hwnd, int attribute, ref int value, int size);
