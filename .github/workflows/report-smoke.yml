@@ -1,0 +1,22 @@
+name: report-smoke
+
+# Manual real-API check of crash and feedback reports (issue #24): creates a test crash issue, repeats the crash (must
+# become a comment), creates a test feedback issue, then closes them. The token stays in CI.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  report-smoke:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+      - name: Send test reports
+        env:
+          REPORT_SMOKE_TOKEN: ${{ secrets.CRASH_REPORT_TOKEN }}
+        run: dotnet run --project tools/ReportSmoke -c Release

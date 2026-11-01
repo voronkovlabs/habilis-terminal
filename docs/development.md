@@ -44,6 +44,7 @@ dotnet test -c Release --no-build
   - `HABI_TEST_CRASH=ui|thread|task` crashes a copy 3 s after its window opens (`CrashCapture.StartTestTrigger`). The report lands in `<state>\crashes\crash-*.json` (next to habi.exe in a test copy) and the next start offers it.
   - Builds without a token open the prefilled new-issue page in the browser instead of sending. That is the only way to test sending here: **never create real issues through the API without the owner's go-ahead.**
   - `HABI_REPORT_TOKEN=<token>` gives a development build a token for one deliberate real send. Release builds get `CRASH_REPORT_TOKEN` from the release workflow (base64 of the reversed token in `AssemblyMetadata("CrashReportToken")`).
+  - **Real API check:** the manual `report-smoke` workflow (`gh workflow run report-smoke.yml`) runs `tools/ReportSmoke` in CI with the secret. It creates a test crash issue, repeats the crash (which must become a comment) and creates a test feedback issue, then closes them. Run it only with the owner's go-ahead.
   - While a dialog is open, `uitool.ps1 keys -Process pid:N` sends keys to the main window if that is in the foreground. Click the dialog first (`click`), then keys reach it.
 - **Not available on this machine:**
   - Only one 1920×1080 monitor at 100% scale.
