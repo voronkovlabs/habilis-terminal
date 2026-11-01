@@ -179,7 +179,7 @@ public partial class MainWindow
         }
 
         var bounds = native.rcNormalPosition;
-        return new WindowPlacement(bounds.Left, bounds.Top, bounds.Right - bounds.Left, bounds.Bottom - bounds.Top, native.showCmd == SW_SHOWMAXIMIZED);
+        return new WindowPlacement(bounds.Left, bounds.Top, bounds.Right - bounds.Left, bounds.Bottom - bounds.Top, WindowPlacement.IsMaximized(native.showCmd, native.flags));
     }
 
     private void RestoreLayout(AppState state)

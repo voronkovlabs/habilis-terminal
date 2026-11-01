@@ -24,7 +24,19 @@ public sealed record PanelSnapshot
 }
 
 /// <summary>Restored (not maximised) window bounds in physical pixels, workspace coordinates (<c>GetWindowPlacement</c>).</summary>
-public sealed record WindowPlacement(double Left, double Top, double Width, double Height, bool Maximized);
+public sealed record WindowPlacement(double Left, double Top, double Width, double Height, bool Maximized)
+{
+    private const int SwShowMaximized = 3;
+    private const int SwShowMinimized = 2;
+    private const int WpfRestoreToMaximized = 0x2;
+
+    /// <summary>
+    /// Maps <c>WINDOWPLACEMENT.showCmd</c>/<c>flags</c> to "reopen maximized": a window minimized from maximized
+    /// (<c>WPF_RESTORETOMAXIMIZED</c>) counts as maximized, one minimized from normal as normal.
+    /// </summary>
+    public static bool IsMaximized(int showCmd, int flags) =>
+        showCmd == SwShowMaximized || (showCmd == SwShowMinimized && (flags & WpfRestoreToMaximized) != 0);
+}
 
 /// <summary>A file opened in the viewer or editor, for Alt+F11.</summary>
 public sealed record FileHistoryEntry(string Path, bool Edited);
