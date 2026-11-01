@@ -7,7 +7,7 @@
 #   OSC 133;A / 133;B        prompt starts / prompt ends, waiting for input
 #   OSC 133;C / 133;D;code   command accepted / command finished
 #   OSC 9;9;"path"           current file system directory
-#   OSC 7731;habi;...        Habilis Terminal messages (ack, restore-pending)
+#   OSC 7731;habi;...        Habilis Terminal messages (ack, restore-pending, focus-panel)
 
 if ($global:__Habi -or -not $env:HABI_CHANNEL) {
     return
@@ -19,6 +19,7 @@ $global:__Habi = [pscustomobject]@{
     OriginalReadLine = $function:PSConsoleHostReadLine
     CommandRan       = $false
     Restore          = $null
+    TabFunction      = (Get-PSReadLineKeyHandler -Chord Tab | Select-Object -First 1).Function
 }
 
 function global:__HabiOsc([string] $Payload) {
@@ -116,4 +117,26 @@ Set-PSReadLineKeyHandler -Chord F24 -BriefDescription HabilisTerminalRequest -De
     }
 
     [Console]::Write((__HabiOsc "7731;habi;ack;$($request.id);$status"))
+}
+
+# One panel shown (Ctrl+P): Tab on an empty command line returns focus to the panel, as Tab switches panels in
+# Far. Habilis Terminal creates the 'tab-to-panel' file in the channel while that layout is on. Otherwise Tab
+# does whatever it was bound to before (TabCompleteNext by default, MenuComplete in many profiles).
+Set-PSReadLineKeyHandler -Chord Tab -BriefDescription HabilisTerminalTab -Description 'Complete, or go to the panel on an empty line' -ScriptBlock {
+    param($key, $arg)
+    $state = $global:__Habi
+    $line = $null
+    $cursor = $null
+    [Microsoft.PowerShell.PSConsoleReadLine]::GetBufferState([ref] $line, [ref] $cursor)
+    if ($line.Length -eq 0 -and (Test-Path -LiteralPath (Join-Path $state.Channel 'tab-to-panel'))) {
+        [Console]::Write((__HabiOsc '7731;habi;focus-panel'))
+        return
+    }
+
+    $function = $state.TabFunction
+    if (-not $function -or -not [Microsoft.PowerShell.PSConsoleReadLine].GetMethod($function)) {
+        $function = 'TabCompleteNext'
+    }
+
+    [Microsoft.PowerShell.PSConsoleReadLine]::$function($key, $arg)
 }

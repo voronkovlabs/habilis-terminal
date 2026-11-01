@@ -74,8 +74,16 @@ public partial class MainWindow : Window
             Integration: _settings.ShellIntegration));
         host.Exited += _ => Dispatcher.BeginInvoke(Close);
         host.DirectoryChanged += path => Dispatcher.BeginInvoke(() => OnShellDirectoryChanged(path));
+        host.FocusPanelRequested += () => Dispatcher.BeginInvoke(() =>
+        {
+            if (!IsPageOpen && TerminalHasFocus && IsShown(_active))
+            {
+                FocusActivePanel();
+            }
+        });
         host.RequestCompleted += (_, op, status) => Dispatcher.BeginInvoke(() => OnShellRequestCompleted(op, status));
         _shell = new ShellConnection(host);
+        UpdateTabToPanel(); // the layout was restored before the shell existed
 
         Loaded += async (_, _) =>
         {
@@ -265,6 +273,15 @@ public partial class MainWindow : Window
         }
     }
 
+    /// <summary>One panel shown: Tab moves focus between the panel and the terminal (see the integration script).</summary>
+    private void UpdateTabToPanel()
+    {
+        if (_shell is not null)
+        {
+            _shell.Host.TabToPanel = Workspace.LeftVisible ^ Workspace.RightVisible;
+        }
+    }
+
     private void SetPanelVisibility(bool left, bool right)
     {
         var wasVisible = AnyPanelVisible;
@@ -275,6 +292,7 @@ public partial class MainWindow : Window
 
         Workspace.LeftVisible = left;
         Workspace.RightVisible = right;
+        UpdateTabToPanel();
 
         if (!AnyPanelVisible)
         {

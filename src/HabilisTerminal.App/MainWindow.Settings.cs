@@ -207,6 +207,7 @@ public partial class MainWindow
         {
             Workspace.LeftVisible = state.Left.Visible;
             Workspace.RightVisible = state.Right.Visible;
+            UpdateTabToPanel();
         }
 
         if (state.ActivePanel == _right.Side && state.Right.Visible)

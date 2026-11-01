@@ -121,12 +121,9 @@ public partial class MainWindow
                 }
                 else if (Workspace.LeftVisible ^ Workspace.RightVisible)
                 {
-                    // Far: with the inactive panel hidden (Ctrl+P), Tab shows the other panel on its own side instead.
-                    var other = Other(panel);
-                    SetPanelVisibility(other == _left, other == _right);
-                    Activate(other);
-                    FocusActivePanel();
-                    SyncShellDirectory();
+                    // One panel shown (Ctrl+P): the terminal stands in for the other panel. Tab on its empty command
+                    // line comes back (integration script).
+                    FocusTerminal();
                 }
 
                 return true;

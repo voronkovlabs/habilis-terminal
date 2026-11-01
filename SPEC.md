@@ -94,7 +94,7 @@ Far Manager defaults unless noted.
 | Keys | Action |
 |---|---|
 | Up/Down, PgUp/PgDn, Home/End, Left/Right | Move cursor (Left/Right: the neighbouring column in multi-column modes, Home/End in one-column modes; never another panel) |
-| Tab | Switch active panel (with the inactive panel hidden, show the other panel in its place) |
+| Tab | Switch active panel. With one panel shown (Ctrl+P) the terminal stands in for the other panel: Tab moves focus to it, and Tab on an empty command line moves back (otherwise Tab completes) |
 | Enter | Open directory / run file through the shell (§7) |
 | Ctrl+PgUp | Parent directory |
 | Ctrl+\\ | Root of the drive |

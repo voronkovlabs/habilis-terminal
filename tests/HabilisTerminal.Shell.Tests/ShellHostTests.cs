@@ -112,6 +112,31 @@ public class ShellHostTests
     }
 
     [Fact]
+    public async Task Tab_on_an_empty_line_asks_for_the_panel_only_while_enabled()
+    {
+        using var shell = new TestShell();
+        var requests = 0;
+        shell.Host.FocusPanelRequested += () => Interlocked.Increment(ref requests);
+        await shell.WaitIdleAsync();
+
+        shell.Host.Write("\t");
+        await Task.Delay(500, TestContext.Current.CancellationToken);
+        Assert.Equal(0, Volatile.Read(ref requests));
+
+        shell.Host.TabToPanel = true;
+        shell.Host.Write("\t");
+        await TestShell.WaitUntilAsync(() => Volatile.Read(ref requests) == 1, "focus-panel request");
+
+        // With text on the line Tab completes as before.
+        shell.Host.Write("Write-Outp\t");
+        await shell.WaitForTextAsync("Write-Output");
+        Assert.Equal(1, Volatile.Read(ref requests));
+
+        shell.Host.TabToPanel = false;
+        Assert.False(shell.Host.TabToPanel);
+    }
+
+    [Fact]
     public async Task Non_filesystem_location_does_not_change_directory()
     {
         using var shell = new TestShell();

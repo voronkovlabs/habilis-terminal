@@ -68,6 +68,38 @@ public sealed class ShellHost : IDisposable
 
     public event Action<int>? Exited;
 
+    /// <summary>Tab on an empty command line while <see cref="TabToPanel"/> is on. Background thread.</summary>
+    public event Action? FocusPanelRequested;
+
+    /// <summary>
+    /// One panel shown: Tab on an empty command line asks to focus the panel instead of completing. Kept as a flag
+    /// file in the channel, which the integration script checks when Tab is pressed.
+    /// </summary>
+    public bool TabToPanel
+    {
+        get => File.Exists(Path.Combine(ChannelDirectory, "tab-to-panel"));
+        set
+        {
+            var flag = Path.Combine(ChannelDirectory, "tab-to-panel");
+            try
+            {
+                if (value)
+                {
+                    Directory.CreateDirectory(ChannelDirectory);
+                    File.WriteAllText(flag, string.Empty);
+                }
+                else
+                {
+                    File.Delete(flag);
+                }
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                // Without the flag Tab simply completes; nothing else depends on it.
+            }
+        }
+    }
+
     public string ChannelDirectory { get; }
 
     public ShellState State { get; private set; } = ShellState.Starting;
@@ -204,6 +236,10 @@ public sealed class ShellHost : IDisposable
 
             case ShellEvent.Message { Name: "ack" } ack when ack.Arguments.Count >= 2:
                 CompleteInFlight(ack.Arguments[0], string.Join(';', ack.Arguments.Skip(1)));
+                break;
+
+            case ShellEvent.Message { Name: "focus-panel" }:
+                FocusPanelRequested?.Invoke();
                 break;
 
             case ShellEvent.Message { Name: "restore-pending" }:
