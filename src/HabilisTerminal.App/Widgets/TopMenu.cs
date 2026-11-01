@@ -20,8 +20,8 @@ public sealed record MenuCommand(string Label, string? Shortcut, Action? Run, bo
 public sealed record MenuGroup(string Title, IReadOnlyList<MenuCommand> Commands);
 
 /// <summary>
-/// F9 (SPEC §5): a menu bar across the top of the window with VS Code-styled drop-downs — Left / Files / Commands /
-/// Options / Right. Left / Right switch menus, Up / Down move, Enter runs, a letter jumps to the next command starting
+/// F9 (SPEC §5): VS Code-styled drop-downs for the menu headers in the title bar — Left / Files / Commands /
+/// Options / Right. The popup draws its own copy of the headers exactly over the title bar's ones. Left / Right switch menus, Up / Down move, Enter runs, a letter jumps to the next command starting
 /// with it, Esc / F9 / F10 close. The chosen command runs after the menu has closed.
 /// </summary>
 public sealed class TopMenu
@@ -41,13 +41,12 @@ public sealed class TopMenu
         _groups = groups;
         _group = group;
 
-        var barBorder = new Border { Child = _bar, BorderThickness = new Thickness(0, 0, 0, 1), Width = target.ActualWidth, Padding = new Thickness(4, 0, 4, 0) };
-        barBorder.SetResourceReference(Border.BackgroundProperty, "Habi.WidgetBackground");
-        barBorder.SetResourceReference(Border.BorderBrushProperty, "Habi.WidgetBorder");
+        var barBorder = new Border { Child = _bar, Width = target.ActualWidth, Height = target.ActualHeight, HorizontalAlignment = HorizontalAlignment.Left };
+        barBorder.SetResourceReference(Border.BackgroundProperty, "Habi.TitleBarBackground");
         for (var i = 0; i < groups.Count; i++)
         {
             var index = i;
-            var header = new Border { Padding = new Thickness(10, 5, 10, 5), Child = Text(groups[i].Title), Background = Brushes.Transparent };
+            var header = CreateHeader(groups[i].Title, target.ActualHeight);
             header.MouseLeftButtonDown += (_, e) =>
             {
                 e.Handled = true;
@@ -90,6 +89,14 @@ public sealed class TopMenu
         _popup.Opened += (_, _) => Keyboard.Focus(_root);
     }
 
+    /// <summary>A menu header; the title bar and the popup build theirs alike so they line up.</summary>
+    public static Border CreateHeader(string title, double height)
+    {
+        var text = Text(title);
+        text.SetResourceReference(TextBlock.ForegroundProperty, "Habi.TitleBarForeground");
+        return new Border { Padding = new Thickness(8, 0, 8, 0), Height = height, Child = text, Background = Brushes.Transparent, CornerRadius = new CornerRadius(3) };
+    }
+
     public static async Task<MenuCommand?> ShowAsync(FrameworkElement target, IReadOnlyList<MenuGroup> groups, int initialGroup)
     {
         var menu = new TopMenu(target, groups, Math.Clamp(initialGroup, 0, groups.Count - 1));
@@ -123,7 +130,7 @@ public sealed class TopMenu
 
         // Under its header.
         _bar.UpdateLayout();
-        var left = 4.0;
+        var left = 0.0;
         for (var i = 0; i < _group; i++)
         {
             left += ((FrameworkElement)_bar.Children[i]).ActualWidth;

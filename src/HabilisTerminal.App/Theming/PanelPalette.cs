@@ -109,6 +109,8 @@ internal static class PanelPalette
             resources["Habi.SecondaryButtonForeground"] = Freeze(Opaque("button.secondaryForeground"));
             resources["Habi.Error"] = ErrorForeground;
             resources["Habi.Background"] = Background;
+            resources["Habi.TitleBarBackground"] = Freeze(Opaque("titleBar.activeBackground"));
+            resources["Habi.TitleBarForeground"] = Freeze(Opaque("titleBar.activeForeground"));
         }
     }
 

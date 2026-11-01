@@ -15,8 +15,11 @@ public partial class MainWindow
     private const string LeftMenu = "Left";
     private const string RightMenu = "Right";
 
-    /// <summary>F9: opens on the menu of the active panel's side, like Far.</summary>
-    private async Task ShowTopMenuAsync()
+    /// <summary>The menu headers in the title bar, in the order of <see cref="ShowTopMenuAsync"/>'s groups.</summary>
+    private static readonly string[] MenuTitles = [LeftMenu, "Files", "Commands", "Options", RightMenu];
+
+    /// <summary>F9 opens on the menu of the active panel's side, like Far; a click on a title bar header opens that one.</summary>
+    private async Task ShowTopMenuAsync(int? group = null)
     {
         var groups = new List<MenuGroup>
         {
@@ -61,7 +64,7 @@ public partial class MainWindow
             PanelMenu(RightMenu, _right),
         };
 
-        var result = await TopMenu.ShowAsync(Workspace, groups, _active == _right ? groups.Count - 1 : 0);
+        var result = await TopMenu.ShowAsync(_titleBar.MenuStrip, groups, group ?? (_active == _right ? groups.Count - 1 : 0));
         if (result?.Run is { } run)
         {
             run();

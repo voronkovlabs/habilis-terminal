@@ -2,6 +2,7 @@ using System.IO;
 using System.Globalization;
 using System.Runtime.InteropServices;
 using System.Windows;
+using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Interop;
 using System.Windows.Media;
@@ -33,10 +34,27 @@ public partial class MainWindow : Window
     private (bool Left, bool Right) _restoreVisibility = (true, true);
     private GlobalKeyHook? _keyHook;
     private System.Windows.Threading.DispatcherTimer? _themeReloadTimer;
+    private readonly Widgets.TitleBar _titleBar;
 
     public MainWindow()
     {
         InitializeComponent();
+        Widgets.TitleBar.Install(this);
+        _titleBar = new Widgets.TitleBar(this, MenuTitles);
+        _titleBar.MenuRequested += group =>
+        {
+            if (!IsPageOpen)
+            {
+                Fire(ShowTopMenuAsync(group));
+            }
+        };
+        DockPanel.SetDock(_titleBar, Dock.Top);
+        Root.Children.Insert(0, _titleBar);
+
+        // Maximized, a WindowChrome window reaches past the screen by its resize frame; keep the content on screen.
+        void ApplyInset() => Root.Margin = WindowState == WindowState.Maximized ? Widgets.TitleBar.MaximizedInset(this) : default;
+        StateChanged += (_, _) => ApplyInset();
+        Loaded += (_, _) => ApplyInset(); // a restored maximized placement raises no StateChanged
 
         var state = App.State?.Load() ?? new Core.Settings.AppState();
         RestoreWindowPlacement(state);

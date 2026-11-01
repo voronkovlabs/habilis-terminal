@@ -43,6 +43,11 @@ Fallback options if it proves unusable: build the WPF control from the Windows T
 
 ## 3. Window layout
 
+The window draws its own title bar (VS Code style, `WindowChrome`): the app icon and the menu headers
+Left / Files / Commands / Options / Right on the left, the caption buttons on the right, and the empty
+rest drags the window like a normal caption. A click on a header opens that menu, as F9 does. The
+maximize button supports Windows 11 Snap Layouts.
+
 The outer window never changes size when panels are shown or hidden. Only the terminal area
 (and therefore the PTY size) changes.
 
@@ -131,7 +136,7 @@ Far Manager defaults unless noted.
 | F6 / Shift+F6 | Move-rename / rename the item under the cursor |
 | F7 | Make directory |
 | F8 / Shift+Del | Delete (per setting) / delete permanently |
-| F9 | Top menu: Left / Files / Commands / Options / Right (VS Code-styled) |
+| F9 | Menu: Left / Files / Commands / Options / Right, the headers in the title bar (VS Code-styled) |
 | F10 | Exit (confirmation configurable, as in Far) |
 | F2, F11 | Unassigned in v1 |
 

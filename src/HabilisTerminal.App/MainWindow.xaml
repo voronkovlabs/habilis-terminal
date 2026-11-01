@@ -10,6 +10,7 @@
         KeyboardNavigation.ControlTabNavigation="None"
         KeyboardNavigation.DirectionalNavigation="None">
     <!-- Focus moves only through our own keys (Tab, Ctrl+Tab), never through WPF keyboard navigation. -->
+    <DockPanel x:Name="Root" LastChildFill="True">
     <Grid>
         <layout:WorkspaceLayout x:Name="Workspace"
                                 KeyboardNavigation.TabNavigation="None"
@@ -21,4 +22,5 @@
              shown, so the terminal keeps its size and the shell is not resized. -->
         <ContentControl x:Name="PageHost" Visibility="Collapsed" Focusable="False" />
     </Grid>
+    </DockPanel>
 </Window>

@@ -31,6 +31,7 @@
   <ItemGroup>
     <!-- Codicons (CC BY 4.0) for UI glyphs. -->
     <Resource Include="Assets\codicon.ttf" />
+    <Resource Include="Assets\habi.ico" />
     <None Include="..\..\ThirdPartyNotices.txt" Link="ThirdPartyNotices.txt" CopyToOutputDirectory="PreserveNewest" />
     <None Include="..\..\LICENSE" Link="LICENSE.txt" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
