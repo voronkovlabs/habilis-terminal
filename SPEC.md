@@ -122,8 +122,8 @@ Far Manager defaults unless noted.
 | Ctrl+U | Swap panels (a hidden panel stays hidden; with one panel, panel and terminal swap sides) |
 | Ctrl+R | Re-read panel |
 | Ctrl+H | Toggle hidden and system files |
-| Ctrl+L | Info panel (in the opposite panel) |
-| Ctrl+Q | Quick view (in the opposite panel) |
+| Ctrl+L | Info panel (in the opposite panel; a hidden opposite panel is shown, and hidden again when the info goes; also at the prompt) |
+| Ctrl+Q | Quick view (in the opposite panel; same as Ctrl+L for a hidden panel and at the prompt) |
 | Ctrl+1…5, Ctrl+0 | View modes (§6) |
 | Ctrl+F3…F9 | Sort by name / extension / modified / size / unsorted / created / accessed |
 | Ctrl+F12 | Sort menu |

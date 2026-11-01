@@ -10,6 +10,7 @@ using HabilisTerminal.App.Theming;
 using HabilisTerminal.App.Widgets;
 using HabilisTerminal.Core.Drives;
 using HabilisTerminal.Core.FileSystem;
+using HabilisTerminal.Core.Panels;
 using HabilisTerminal.Shell.ConPty;
 
 namespace HabilisTerminal.App;
@@ -122,6 +123,12 @@ public partial class MainWindow
                 return true;
             case Key.F2:
                 SetPanelVisibility(Workspace.LeftVisible, !Workspace.RightVisible);
+                return true;
+            case Key.L when IsShown(_active):
+                ToggleInfoPanel();
+                return true;
+            case Key.Q when IsShown(_active):
+                ToggleQuickView();
                 return true;
             default:
                 return false;
@@ -416,12 +423,51 @@ public partial class MainWindow
         }
     }
 
+    /// <summary>Ctrl+L: the info panel of the active panel in the other panel.</summary>
     private void ToggleInfoPanel()
     {
         var other = Other(_active);
+        var on = HiddenPanelReveal.TurnsOn(IsShown(other), other.InfoSource is not null);
         other.QuickViewSource = null;
-        other.InfoSource = other.InfoSource is null ? _active : null;
-        _active.InfoSource = null;
+        other.InfoSource = on ? _active : null;
+        if (_active.InfoSource is not null)
+        {
+            _active.InfoSource = null;
+            if (ReferenceEquals(_reveal.Revealed, _active) && _active.QuickViewSource is null)
+            {
+                _reveal.Forget();
+            }
+        }
+
+        RevealOtherContent(other, on);
+    }
+
+    /// <summary>
+    /// Info or quick view turned on in a hidden panel shows it; turned off, a panel shown only for it hides again and
+    /// the layout comes back (issue #38). <see cref="SetPanelVisibility"/> keeps the rule of issue #35.
+    /// </summary>
+    private void RevealOtherContent(FilePanel target, bool on)
+    {
+        var fromTerminal = TerminalHasFocus;
+        if (!(on ? _reveal.ContentOn(target, IsShown(target)) : _reveal.ContentOff(target)))
+        {
+            return;
+        }
+
+        SetPanelVisibility(
+            target == _left ? on : Workspace.LeftVisible,
+            target == _right ? on : Workspace.RightVisible,
+            keepReveal: true);
+
+        // Shown from the prompt, the active panel takes focus (#35); hidden again, focus goes back to the prompt.
+        if (on)
+        {
+            _revealFromTerminal = fromTerminal;
+        }
+        else if (_revealFromTerminal && !fromTerminal)
+        {
+            FocusTerminal();
+        }
     }
 
     private static async Task SelectByMaskAsync(FilePanel panel, bool select)

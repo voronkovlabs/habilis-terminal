@@ -32,6 +32,8 @@ public partial class MainWindow : Window
     private FilePanel _right = new("Right");
     private FilePanel _active;
     private (bool Left, bool Right) _restoreVisibility = (true, true);
+    private readonly HiddenPanelReveal _reveal = new();
+    private bool _revealFromTerminal;
     private GlobalKeyHook? _keyHook;
     private System.Windows.Threading.DispatcherTimer? _themeReloadTimer;
     private readonly Widgets.TitleBar _titleBar;
@@ -284,11 +286,11 @@ public partial class MainWindow : Window
         if (AnyPanelVisible)
         {
             _restoreVisibility = (Workspace.LeftVisible, Workspace.RightVisible);
-            SetPanelVisibility(false, false);
+            SetPanelVisibility(false, false, keepReveal: true);
         }
         else
         {
-            SetPanelVisibility(_restoreVisibility.Left, _restoreVisibility.Right);
+            SetPanelVisibility(_restoreVisibility.Left, _restoreVisibility.Right, keepReveal: true);
         }
     }
 
@@ -301,9 +303,18 @@ public partial class MainWindow : Window
         }
     }
 
-    private void SetPanelVisibility(bool left, bool right)
+    /// <param name="keepReveal">
+    /// False for layout changes that make a panel shown by Ctrl+L / Ctrl+Q part of the layout (issue #38); Ctrl+O and
+    /// the reveal itself keep it.
+    /// </param>
+    private void SetPanelVisibility(bool left, bool right, bool keepReveal = false)
     {
         (bool Left, bool Right) before = (Workspace.LeftVisible, Workspace.RightVisible);
+        if (!keepReveal)
+        {
+            _reveal.Forget();
+        }
+
         if ((before.Left || before.Right) && !left && !right)
         {
             _restoreVisibility = before;

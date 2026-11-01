@@ -2,6 +2,7 @@ using System.IO;
 using System.Windows;
 using HabilisTerminal.App.Panels;
 using HabilisTerminal.App.Viewing;
+using HabilisTerminal.Core.Panels;
 using HabilisTerminal.Core.Viewing;
 
 namespace HabilisTerminal.App;
@@ -94,14 +95,16 @@ public partial class MainWindow
     private void ToggleQuickView()
     {
         var other = Other(_active);
-        if (other.QuickViewSource is not null)
+        if (!HiddenPanelReveal.TurnsOn(IsShown(other), other.QuickViewSource is not null))
         {
             other.QuickViewSource = null;
+            RevealOtherContent(other, on: false);
             return;
         }
 
         other.InfoSource = null;
         other.QuickViewSource = _active;
+        RevealOtherContent(other, on: true);
     }
 
     /// <summary>F4 from the panel.</summary>
