@@ -56,7 +56,7 @@ public partial class MainWindow
         var selected = panel.State.SelectedFolders();
         if (selected.Count > 0)
         {
-            Fire(ComputeFolderSizesAsync(panel, selected));
+            Fire(panel.CountFoldersAsync(selected));
             return;
         }
 
@@ -69,7 +69,7 @@ public partial class MainWindow
         var path = Path.Combine(panel.CurrentPath, item.Name);
         if (item.Entry.IsDirectory)
         {
-            Fire(ComputeFolderSizesAsync(panel, [item.Name]));
+            Fire(panel.CountFoldersAsync([item.Name]));
             return;
         }
 
@@ -88,29 +88,6 @@ public partial class MainWindow
         };
         page.EditRequested += file => Edit(file, returnTo);
         ShowPage(page);
-    }
-
-    private static async Task ComputeFolderSizesAsync(FilePanel panel, IReadOnlyList<string> names)
-    {
-        var directory = panel.CurrentPath;
-        var unreadable = 0;
-        foreach (var name in names)
-        {
-            var result = await Task.Run(() => DirectorySize.Compute(Path.Combine(directory, name)));
-            if (!string.Equals(panel.CurrentPath, directory, StringComparison.OrdinalIgnoreCase))
-            {
-                return; // the panel moved on; the totals belong to a listing it no longer shows
-            }
-
-            panel.State.FolderSizes[name] = result;
-            unreadable += result.Inaccessible;
-            panel.Refresh(); // the cursor stays put: the status line shows the folder's or the selection's totals
-        }
-
-        if (unreadable > 0)
-        {
-            panel.Message = $"{unreadable} folder(s) could not be read; the totals are partial.";
-        }
     }
 
     /// <summary>Ctrl+Q: quick view of the active panel's current file in the other panel.</summary>

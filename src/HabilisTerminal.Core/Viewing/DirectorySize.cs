@@ -5,7 +5,8 @@ public static class DirectorySize
 {
     public sealed record Result(long Bytes, int Files, int Folders, int Inaccessible);
 
-    public static Result Compute(string path, IProgress<long>? progress = null, CancellationToken cancellationToken = default)
+    /// <summary>Walks the tree; <paramref name="progress"/> gets the running totals after each folder.</summary>
+    public static Result Compute(string path, IProgress<Result>? progress = null, CancellationToken cancellationToken = default)
     {
         long bytes = 0;
         int files = 0, folders = 0, inaccessible = 0;
@@ -40,7 +41,7 @@ public static class DirectorySize
                 inaccessible++;
             }
 
-            progress?.Report(bytes);
+            progress?.Report(new Result(bytes, files, folders, inaccessible));
         }
 
         return new Result(bytes, files, folders, inaccessible);

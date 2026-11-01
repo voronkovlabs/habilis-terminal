@@ -296,7 +296,8 @@ F6 switches between viewer and editor, as in Far. One page at a time (no F12 scr
 - F3 on a directory computes its size in the background (cancellable, junctions not traversed);
   the cursor stays on it, the panel's status line shows the number of files and their size, and the size
   column shows the size. With folders selected F3 counts all of them; the status line then shows the
-  selection's files and size, the contents of the counted folders included.
+  selection's files and size, the contents of the counted folders included. While counting, the status line
+  shows "Counting <folder>…" with the running totals; moving the cursor or leaving the directory stops it.
 - Ctrl+Q shows the same control as quick view in the opposite panel.
 
 ### Editor (F4)

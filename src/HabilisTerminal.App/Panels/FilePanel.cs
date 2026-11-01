@@ -9,6 +9,7 @@ using HabilisTerminal.App.Input;
 using HabilisTerminal.App.Theming;
 using HabilisTerminal.Core.FileSystem;
 using HabilisTerminal.Core.Panels;
+using HabilisTerminal.Core.Viewing;
 
 namespace HabilisTerminal.App.Panels;
 
@@ -33,6 +34,7 @@ public sealed class FilePanel : Border
     private readonly TextBlock _quickSearchText = new();
     private readonly Grid _body = new();
     private CancellationTokenSource? _loading;
+    private FolderCount? _counting;
     private DirectoryWatcher? _watcher;
     private Border? _statusBorder;
     private bool _isActive;
@@ -331,6 +333,11 @@ public sealed class FilePanel : Border
 
     public void Refresh()
     {
+        if (_counting is { } counting && (counting.Path != State.Path || counting.CursorName != CursorName()))
+        {
+            counting.Cancel.Cancel(); // the cursor moved: Far stops counting too
+        }
+
         UpdateTitle();
         UpdateStatus();
         _list.Refresh();
@@ -679,9 +686,101 @@ public sealed class FilePanel : Border
         _path.Text = State.Path;
     }
 
+    /// <summary>
+    /// F3 on folders: counts their files and bytes one after another in the background; the status line shows the
+    /// running totals. Moving the cursor, leaving the directory or a new count stops it; folders already counted keep
+    /// their totals.
+    /// </summary>
+    public async Task CountFoldersAsync(IReadOnlyList<string> names)
+    {
+        _counting?.Cancel.Cancel();
+        var counting = new FolderCount(State.Path, CursorName(), new CancellationTokenSource());
+        _counting = counting;
+        var unreadable = 0;
+        try
+        {
+            foreach (var name in names)
+            {
+                counting.Name = name;
+                counting.Totals = new DirectorySize.Result(0, 0, 0, 0);
+                UpdateStatus();
+                var progress = new Progress<DirectorySize.Result>(totals =>
+                {
+                    // Reports queue up on the dispatcher; one from a cancelled count must not repaint.
+                    if (_counting == counting && !counting.Cancel.IsCancellationRequested)
+                    {
+                        counting.Totals = totals;
+                        UpdateStatus();
+                    }
+                });
+                var path = System.IO.Path.Combine(counting.Path, name);
+                var result = await Task.Run(() => DirectorySize.Compute(path, new Throttled(progress), counting.Cancel.Token), counting.Cancel.Token);
+                State.FolderSizes[name] = result;
+                unreadable += result.Inaccessible;
+                _list.Refresh();
+            }
+        }
+        catch (OperationCanceledException)
+        {
+        }
+        finally
+        {
+            counting.Cancel.Dispose();
+            if (_counting == counting)
+            {
+                _counting = null;
+                UpdateStatus();
+            }
+        }
+
+        if (unreadable > 0 && State.Path == counting.Path)
+        {
+            Message = $"{unreadable} folder(s) could not be read; the totals are partial.";
+        }
+    }
+
+    private string? CursorName() => State.Count > 0 ? State.Current.Name : null;
+
+    private sealed class FolderCount(string path, string? cursorName, CancellationTokenSource cancel)
+    {
+        public string Path { get; } = path;
+
+        public string? CursorName { get; } = cursorName;
+
+        public CancellationTokenSource Cancel { get; } = cancel;
+
+        public string Name { get; set; } = string.Empty;
+
+        public DirectorySize.Result Totals { get; set; } = new(0, 0, 0, 0);
+    }
+
+    /// <summary>Passes on at most ten reports a second: a tree of small folders reports thousands.</summary>
+    private sealed class Throttled(IProgress<DirectorySize.Result> inner) : IProgress<DirectorySize.Result>
+    {
+        private long _next;
+
+        public void Report(DirectorySize.Result value)
+        {
+            var now = Environment.TickCount64;
+            if (now >= _next)
+            {
+                _next = now + 100;
+                inner.Report(value);
+            }
+        }
+    }
+
     private void UpdateStatus()
     {
         var culture = CultureInfo.CurrentCulture;
+        if (_counting is { } counting)
+        {
+            _status.Foreground = PanelPalette.DescriptionForeground;
+            _status.Text = $"Counting {counting.Name}…";
+            _statusRight.Text = FormatTotals(counting.Totals.Files, counting.Totals.Bytes, culture);
+            return;
+        }
+
         var (items, files, bytes) = State.SummarizeSelection();
         if (items > 0)
         {

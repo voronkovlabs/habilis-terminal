@@ -192,4 +192,29 @@ public class ViewerDocumentTests
         Assert.Equal(2, result.Files);
         Assert.Equal(2, result.Folders);
     }
+
+    [Fact]
+    public void Directory_size_reports_running_totals_and_stops_when_cancelled()
+    {
+        using var sandbox = new TestSandbox();
+        for (var i = 0; i < 3; i++)
+        {
+            var folder = Directory.CreateDirectory(Path.Combine(sandbox.Path, "tree", $"d{i}")).FullName;
+            File.WriteAllBytes(Path.Combine(folder, "f.bin"), new byte[100]);
+        }
+
+        var reports = new List<DirectorySize.Result>();
+        var result = DirectorySize.Compute(Path.Combine(sandbox.Path, "tree"), new SyncProgress(reports.Add));
+        Assert.Equal(result, reports[^1]);
+        Assert.Equal(reports.Select(r => r.Files).Order(), reports.Select(r => r.Files));
+
+        using var cancel = new CancellationTokenSource();
+        Assert.Throws<OperationCanceledException>(() =>
+            DirectorySize.Compute(Path.Combine(sandbox.Path, "tree"), new SyncProgress(_ => cancel.Cancel()), cancel.Token));
+    }
+
+    private sealed class SyncProgress(Action<DirectorySize.Result> report) : IProgress<DirectorySize.Result>
+    {
+        public void Report(DirectorySize.Result value) => report(value);
+    }
 }
