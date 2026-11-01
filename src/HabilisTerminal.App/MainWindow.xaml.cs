@@ -48,6 +48,7 @@ public partial class MainWindow : Window
                 Fire(ShowTopMenuAsync(group));
             }
         };
+        _titleBar.FeedbackRequested += ShowFeedback;
         DockPanel.SetDock(_titleBar, Dock.Top);
         Root.Children.Insert(0, _titleBar);
 

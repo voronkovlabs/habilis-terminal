@@ -79,7 +79,8 @@ public sealed class TitleBar : DockPanel
         _maximize = CaptionButton(MaximizeGlyph, ToggleMaximize, isClose: false);
         _maximizeGlyph = (TextBlock)_maximize.Child;
         var minimize = CaptionButton(MinimizeGlyph, () => _window.WindowState = WindowState.Minimized, isClose: false);
-        foreach (var button in new[] { close, _maximize, minimize })
+        var feedback = FeedbackButton();
+        foreach (var button in new[] { close, _maximize, minimize, feedback })
         {
             SetDock(button, Dock.Right);
             Children.Add(button);
@@ -98,6 +99,9 @@ public sealed class TitleBar : DockPanel
 
     /// <summary>A menu header was clicked: the index of its group.</summary>
     public event Action<int>? MenuRequested;
+
+    /// <summary>The feedback icon left of the caption buttons was clicked.</summary>
+    public event Action? FeedbackRequested;
 
     /// <summary>Installs the chrome: no system caption, resizable edges, DWM shadow and rounded corners kept.</summary>
     public static void Install(Window window) =>
@@ -155,6 +159,31 @@ public sealed class TitleBar : DockPanel
         {
             e.Handled = true;
             click();
+        };
+        return button;
+    }
+
+    /// <summary>The feedback icon (codicon), with the caption buttons' hover.</summary>
+    private Border FeedbackButton()
+    {
+        var icon = new System.Windows.Shapes.Path
+        {
+            Data = Theming.Codicon.GeometryOf(Theming.Codicon.Feedback),
+            Width = 14,
+            Height = 14,
+            Stretch = Stretch.Uniform,
+            HorizontalAlignment = HorizontalAlignment.Center,
+            VerticalAlignment = VerticalAlignment.Center,
+        };
+        icon.SetResourceReference(System.Windows.Shapes.Shape.FillProperty, "Habi.TitleBarForeground");
+        var button = new Border { Width = 40, Background = Brushes.Transparent, Child = icon, ToolTip = "Send feedback" };
+        WindowChrome.SetIsHitTestVisibleInChrome(button, true);
+        button.MouseEnter += (_, _) => button.SetResourceReference(Border.BackgroundProperty, "Habi.Hover");
+        button.MouseLeave += (_, _) => button.Background = Brushes.Transparent;
+        button.MouseLeftButtonUp += (_, e) =>
+        {
+            e.Handled = true;
+            FeedbackRequested?.Invoke();
         };
         return button;
     }

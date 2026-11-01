@@ -38,5 +38,6 @@ internal static class Codicon
     public const string Disc = "";
     public const string Check = "";
     public const string ArrowUp = "";
+    public const string Feedback = "";
     public const string ArrowDown = "";
 }

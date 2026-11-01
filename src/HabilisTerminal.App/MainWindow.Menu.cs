@@ -59,6 +59,7 @@ public partial class MainWindow
                 new MenuCommand("File icon theme…", null, () => Fire(PickIconThemeAsync())),
                 MenuCommand.Separator,
                 new MenuCommand("Keyboard help", "F1", ShowHelp),
+                new MenuCommand("Send feedback…", null, ShowFeedback),
                 new MenuCommand("About Habilis Terminal", null, ShowAbout),
             ]),
             PanelMenu(RightMenu, _right),
@@ -274,6 +275,16 @@ public partial class MainWindow
             default:
                 FocusActivePanel();
                 break;
+        }
+    }
+
+    /// <summary>The feedback dialog (title bar icon, F9 > Options), issue #23.</summary>
+    private void ShowFeedback()
+    {
+        Reporting.ReportDialog.ShowFeedback(this);
+        if (!IsPageOpen)
+        {
+            FocusActivePanel();
         }
     }
 
