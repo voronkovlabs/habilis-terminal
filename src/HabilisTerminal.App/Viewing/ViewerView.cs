@@ -15,11 +15,13 @@ namespace HabilisTerminal.App.Viewing;
 public sealed class ViewerView : FrameworkElement
 {
     public const int HexBytesPerRow = 16;
-    private const double FontSize = 13;
+    private static double FontSize = 13;
+    private static int FontVersion;
     private const double Padding = 8;
     private const int TabSize = 8;
 
-    private static readonly Typeface Mono = new(new FontFamily("Cascadia Mono, Consolas"), FontStyles.Normal, FontWeights.Normal, FontStretches.Normal);
+    private static Typeface Mono = new(new FontFamily("Cascadia Mono, Consolas"), FontStyles.Normal, FontWeights.Normal, FontStretches.Normal);
+    private int _cellFontVersion;
     private ViewerDocument? _document;
     private Size _cell;
 
@@ -50,6 +52,14 @@ public sealed class ViewerView : FrameworkElement
 
     public bool Wrap { get; set; }
 
+    /// <summary>The <c>viewer.fontFamily</c> / <c>viewer.fontSize</c> settings (also used by quick view).</summary>
+    public static void SetFont(string family, double size)
+    {
+        Mono = new Typeface(new FontFamily(string.IsNullOrWhiteSpace(family) ? "Cascadia Mono, Consolas" : family + ", Consolas"), FontStyles.Normal, FontWeights.Normal, FontStretches.Normal);
+        FontSize = size;
+        FontVersion++;
+    }
+
     public bool Hex { get; set; }
 
     public int LeftColumn { get; private set; }
@@ -68,8 +78,9 @@ public sealed class ViewerView : FrameworkElement
     {
         get
         {
-            if (_cell.IsEmpty || _cell.Width == 0)
+            if (_cell.IsEmpty || _cell.Width == 0 || _cellFontVersion != FontVersion)
             {
+                _cellFontVersion = FontVersion;
                 var sample = new FormattedText("M", CultureInfo.InvariantCulture, FlowDirection.LeftToRight, Mono, FontSize, Brushes.White, VisualTreeHelper.GetDpi(this).PixelsPerDip);
                 _cell = new Size(sample.WidthIncludingTrailingWhitespace, Math.Ceiling(sample.Height));
             }

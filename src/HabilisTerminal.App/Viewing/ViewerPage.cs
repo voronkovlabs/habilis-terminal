@@ -31,8 +31,9 @@ public sealed class ViewerPage : DockPanel, IDisposable
     private readonly ViewerDocument? _document;
     private string _lastSearch = string.Empty;
 
-    public ViewerPage(string path)
+    public ViewerPage(string path, bool wrap = false)
     {
+        _view.Wrap = wrap;
         FilePath = path;
         Focusable = true;
         FocusVisualStyle = null;

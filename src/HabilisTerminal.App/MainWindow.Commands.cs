@@ -164,7 +164,19 @@ public partial class MainWindow
                 return true;
 
             case Key.F10 when modifiers == KeyModifiers.None:
-                Close();
+                ConfirmAndExit();
+                return true;
+
+            case Key.F9 when modifiers == KeyModifiers.None:
+                Fire(ShowTopMenuAsync());
+                return true;
+
+            case Key.F1 when modifiers == KeyModifiers.None:
+                ShowHelp();
+                return true;
+
+            case Key.F11 when modifiers == KeyModifiers.Alt:
+                Fire(ShowFileHistoryAsync());
                 return true;
 
             // Command line from panel focus, as in Far.

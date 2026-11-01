@@ -13,8 +13,8 @@ public partial class MainWindow
     private readonly OperationScheduler _scheduler = new();
     private OperationToasts? _toasts;
 
-    /// <summary>F8 target until settings exist (stage 10): <c>HABI_DELETE_TO_RECYCLE_BIN=0</c> deletes permanently.</summary>
-    private static bool DeleteToRecycleBin => Environment.GetEnvironmentVariable("HABI_DELETE_TO_RECYCLE_BIN") != "0";
+    /// <summary>F8 / Del target: the Recycle Bin unless <c>deleteToRecycleBin</c> is off.</summary>
+    private bool DeleteToRecycleBin => _settings.DeleteToRecycleBin;
 
     private OperationToasts Toasts => _toasts ??= new OperationToasts(this, Workspace);
 
@@ -70,7 +70,7 @@ public partial class MainWindow
         }
 
         var names = entries.Select(e => e.Name).ToArray();
-        if (!OperationDialogs.ConfirmDelete(this, names, permanent))
+        if (_settings.ConfirmDelete && !OperationDialogs.ConfirmDelete(this, names, permanent))
         {
             panel.Focus();
             return;

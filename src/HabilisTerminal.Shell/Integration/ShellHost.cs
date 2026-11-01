@@ -23,7 +23,9 @@ public sealed record ShellHostOptions(
     string ScriptPath,
     string? WorkingDirectory = null,
     string? InitCommand = null,
-    bool LoadProfile = true);
+    bool LoadProfile = true,
+    string? ExtraArguments = null,
+    bool Integration = true);
 
 /// <summary>
 /// pwsh in a pseudo console with Habilis Terminal shell integration (SPEC §7): tracks prompt state and the
@@ -129,10 +131,20 @@ public sealed class ShellHost : IDisposable
             script.AppendLine(_options.InitCommand);
         }
 
-        script.Append(". '").Append(_options.ScriptPath.Replace("'", "''", StringComparison.Ordinal)).Append('\'');
-        var encoded = Convert.ToBase64String(Encoding.Unicode.GetBytes(script.ToString()));
+        if (_options.Integration)
+        {
+            script.Append(". '").Append(_options.ScriptPath.Replace("'", "''", StringComparison.Ordinal)).Append('\'');
+        }
+
         var noProfile = _options.LoadProfile ? string.Empty : " -NoProfile";
-        return $"\"{_options.PwshPath}\" -NoLogo{noProfile} -NoExit -EncodedCommand {encoded}";
+        var extra = string.IsNullOrWhiteSpace(_options.ExtraArguments) ? string.Empty : " " + _options.ExtraArguments.Trim();
+        if (script.Length == 0)
+        {
+            return $"\"{_options.PwshPath}\" -NoLogo{noProfile}{extra}";
+        }
+
+        var encoded = Convert.ToBase64String(Encoding.Unicode.GetBytes(script.ToString()));
+        return $"\"{_options.PwshPath}\" -NoLogo{noProfile}{extra} -NoExit -EncodedCommand {encoded}";
     }
 
     private void OnOutput(string text)

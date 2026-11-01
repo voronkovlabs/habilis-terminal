@@ -56,6 +56,82 @@ public sealed class OperationToasts
         return card;
     }
 
+    /// <summary>
+    /// A message card (settings errors and the like) with optional action buttons; replaces an earlier notice with the
+    /// same <paramref name="key"/>. Returns an action that closes it.
+    /// </summary>
+    public Action Notify(string key, string title, string message, params (string Label, Action Run)[] actions)
+    {
+        foreach (var existing in _stack.Children.OfType<Border>().Where(b => Equals(b.Tag, key)).ToList())
+        {
+            _stack.Children.Remove(existing);
+        }
+
+        var layout = new StackPanel();
+        var heading = Card.Text(13, bold: true);
+        heading.Text = title;
+        var body = Card.Text(12, bold: false);
+        body.Text = message;
+        body.TextWrapping = TextWrapping.Wrap;
+        body.Margin = new Thickness(0, 4, 0, 8);
+        body.SetResourceReference(TextBlock.ForegroundProperty, "Habi.Description");
+        layout.Children.Add(heading);
+        layout.Children.Add(body);
+
+        var root = new Border
+        {
+            Tag = key,
+            Width = CardWidth,
+            CornerRadius = new CornerRadius(4),
+            BorderThickness = new Thickness(1),
+            Padding = new Thickness(14, 10, 14, 10),
+            Margin = new Thickness(16, 8, 16, 0),
+            Child = layout,
+            Effect = new DropShadowEffect { BlurRadius = 12, ShadowDepth = 3, Opacity = 0.4, Color = Colors.Black },
+        };
+        root.SetResourceReference(Border.BackgroundProperty, "Habi.WidgetBackground");
+        root.SetResourceReference(Border.BorderBrushProperty, "Habi.WidgetBorder");
+
+        void Close()
+        {
+            _stack.Children.Remove(root);
+            _popup.IsOpen = _stack.Children.Count > 0;
+        }
+
+        var buttons = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right };
+        foreach (var (label, run) in actions)
+        {
+            var button = new Button { Content = label, MinWidth = 64 };
+            button.Click += (_, _) =>
+            {
+                Close();
+                run();
+            };
+            buttons.Children.Add(button);
+        }
+
+        var dismiss = new Button { Content = "Close", MinWidth = 64 };
+        dismiss.Click += (_, _) => Close();
+        buttons.Children.Add(dismiss);
+        layout.Children.Add(buttons);
+
+        _stack.Children.Add(root);
+        _popup.IsOpen = _owner.IsActive;
+        Reposition();
+        return Close;
+    }
+
+    /// <summary>Closes the notice shown with <paramref name="key"/>, if any.</summary>
+    public void Dismiss(string key)
+    {
+        foreach (var existing in _stack.Children.OfType<Border>().Where(b => Equals(b.Tag, key)).ToList())
+        {
+            _stack.Children.Remove(existing);
+        }
+
+        _popup.IsOpen = _stack.Children.Count > 0 && _owner.IsActive;
+    }
+
     private void Reposition()
     {
         _stack.UpdateLayout();
@@ -160,7 +236,7 @@ public sealed class OperationToasts
 
         public void Close() => Closed?.Invoke();
 
-        private static TextBlock Text(double size, bool bold)
+        internal static TextBlock Text(double size, bool bold)
         {
             var block = new TextBlock { FontFamily = new FontFamily("Segoe UI"), FontSize = size, FontWeight = bold ? FontWeights.SemiBold : FontWeights.Normal };
             block.SetResourceReference(TextBlock.ForegroundProperty, "Habi.Foreground");

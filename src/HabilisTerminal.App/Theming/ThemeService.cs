@@ -6,15 +6,16 @@ using Microsoft.Terminal.Wpf;
 namespace HabilisTerminal.App.Theming;
 
 /// <summary>
-/// Chooses the theme (SPEC §10): the built-in Dark / Light Modern (or high contrast) by the Windows mode, tinted
-/// with the Windows accent colour; reloads when Windows settings change.
-/// Until settings exist (stage 10), <c>HABI_THEME</c> selects a built-in theme name or a VS Code theme file and
-/// <c>HABI_USE_ACCENT=0</c> turns the accent off.
+/// Chooses the theme (SPEC §10): "auto" picks the built-in Dark / Light Modern (or high contrast) by the Windows
+/// mode; otherwise a built-in theme name, a VS Code theme file in the themes folder, or a path. Tinted with the Windows
+/// accent colour unless turned off; reloads when Windows settings or the theme file change.
 /// </summary>
 public sealed class ThemeService : IDisposable
 {
     private FileSystemWatcher? _fileWatcher;
     private System.Windows.Threading.DispatcherTimer? _fileReload;
+    private string _requested = "auto";
+    private bool _useAccent = true;
 
     public event Action<ColorTheme>? Changed;
 
@@ -22,18 +23,36 @@ public sealed class ThemeService : IDisposable
 
     public string? LastError { get; private set; }
 
+    /// <summary>Folder searched for user theme files.</summary>
+    public string? ThemesDirectory { get; set; }
+
     public void Dispose() => _fileWatcher?.Dispose();
+
+    /// <summary>Applies the <c>theme</c> and <c>useAccentColor</c> settings; reloads only when they changed.</summary>
+    public void Configure(string requested, bool useAccent, bool force = false)
+    {
+        if (!force && requested == _requested && useAccent == _useAccent)
+        {
+            return;
+        }
+
+        _requested = requested;
+        _useAccent = useAccent;
+        Reload();
+    }
 
     public void Reload()
     {
         LastError = null;
         ColorTheme theme;
-        var requested = Environment.GetEnvironmentVariable("HABI_THEME");
+        var file = ThemeFile(_requested);
         try
         {
-            theme = string.IsNullOrWhiteSpace(requested)
-                ? ThemeLoader.LoadBuiltIn(WindowsAppearance.BuiltInThemeFor(SystemParameters.HighContrast))
-                : File.Exists(requested) ? ThemeLoader.LoadFile(requested) : ThemeLoader.LoadBuiltIn(requested);
+            theme = file is not null ? ThemeLoader.LoadFile(file)
+                : BuiltInName(_requested) is { } builtIn ? ThemeLoader.LoadBuiltIn(builtIn)
+                : string.IsNullOrWhiteSpace(_requested) || _requested.Equals("auto", StringComparison.OrdinalIgnoreCase)
+                    ? ThemeLoader.LoadBuiltIn(WindowsAppearance.BuiltInThemeFor(SystemParameters.HighContrast))
+                    : throw new ThemeLoadException($"Theme '{_requested}' was not found.");
         }
         catch (ThemeLoadException ex)
         {
@@ -42,15 +61,61 @@ public sealed class ThemeService : IDisposable
             theme = ThemeLoader.LoadBuiltIn(WindowsAppearance.BuiltInThemeFor(SystemParameters.HighContrast));
         }
 
-        if (Environment.GetEnvironmentVariable("HABI_USE_ACCENT") != "0" && WindowsAppearance.AccentColor is { } accent)
+        if (_useAccent && WindowsAppearance.AccentColor is { } accent)
         {
             theme = WindowsAppearance.ApplyAccent(theme, accent);
         }
 
         Current = theme;
         PanelPalette.Apply(theme);
-        WatchThemeFile(requested);
+        WatchThemeFile(file);
         Changed?.Invoke(theme);
+    }
+
+    private static string? BuiltInName(string requested)
+    {
+        var name = requested.EndsWith(".json", StringComparison.OrdinalIgnoreCase) ? requested : requested + ".json";
+        return ThemeLoader.BuiltInThemes.FirstOrDefault(t => string.Equals(t, name, StringComparison.OrdinalIgnoreCase));
+    }
+
+    private string? ThemeFile(string requested)
+    {
+        if (string.IsNullOrWhiteSpace(requested) || requested.Equals("auto", StringComparison.OrdinalIgnoreCase))
+        {
+            return null;
+        }
+
+        if (Path.IsPathRooted(requested))
+        {
+            return File.Exists(requested) ? requested : null;
+        }
+
+        if (ThemesDirectory is { } directory)
+        {
+            foreach (var candidate in new[] { requested, requested + ".json" })
+            {
+                var path = Path.Combine(directory, candidate);
+                if (File.Exists(path))
+                {
+                    return path;
+                }
+            }
+        }
+
+        return null;
+    }
+
+    /// <summary>Theme names offered by the Settings page: "auto", the built-in themes and files in the themes folder.</summary>
+    public IReadOnlyList<string> AvailableThemes()
+    {
+        var names = new List<string> { "auto" };
+        names.AddRange(ThemeLoader.BuiltInThemes.Select(t => Path.GetFileNameWithoutExtension(t)));
+        if (ThemesDirectory is { } directory && Directory.Exists(directory))
+        {
+            names.AddRange(Directory.EnumerateFiles(directory, "*.json").Select(Path.GetFileNameWithoutExtension).OfType<string>());
+        }
+
+        return names.Distinct(StringComparer.OrdinalIgnoreCase).ToList();
     }
 
     /// <summary>A theme file chosen by path is reloaded when it is saved (SPEC §10: live theme changes).</summary>

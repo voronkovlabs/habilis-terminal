@@ -23,9 +23,6 @@ namespace HabilisTerminal.App;
 [System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1001", Justification = "Disposed when the window closes.")]
 public partial class MainWindow : Window
 {
-    private const string TerminalFontFamily = "Cascadia Mono";
-    private const int TerminalFontSize = 11;
-
     private readonly ThemeService _themes = new();
     private readonly FolderHistory _history = new();
     private readonly Dictionary<string, string> _lastPathPerDrive = new(StringComparer.OrdinalIgnoreCase);
@@ -41,8 +38,10 @@ public partial class MainWindow : Window
     {
         InitializeComponent();
 
+        var state = App.State?.Load() ?? new Core.Settings.AppState();
+        RestoreWindowPlacement(state);
         _themes.Changed += OnThemeChanged;
-        _themes.Reload();
+        ApplySettings(_settings);
 
         _active = _left;
         _left.IsActive = true;
@@ -58,8 +57,10 @@ public partial class MainWindow : Window
             panel.GotKeyboardFocus += (_, _) => OnPanelFocused(panel);
         }
 
+        RestoreLayout(state);
+
         var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
-        var pwsh = PwshLocator.Find();
+        var pwsh = !string.IsNullOrWhiteSpace(_settings.ShellPath) && File.Exists(_settings.ShellPath) ? _settings.ShellPath : PwshLocator.Find();
         if (pwsh is null)
         {
             MessageBox.Show(
@@ -69,10 +70,15 @@ public partial class MainWindow : Window
             return;
         }
 
-        // Development hook: PowerShell code run before the integration script in test sessions, e.g. loading
-        // a prompt theme without touching the user's profile. Replaced by settings in stage 10.
-        var initCommand = Environment.GetEnvironmentVariable("HABI_SHELL_INIT");
-        var host = new ShellHost(new ShellHostOptions(pwsh, ShellScripts.IntegrationScriptPath, home, initCommand));
+        var leftStart = StartPath(state.Left, home);
+        var rightStart = StartPath(state.Right, home);
+        var host = new ShellHost(new ShellHostOptions(
+            pwsh,
+            ShellScripts.IntegrationScriptPath,
+            _active == _right ? rightStart : leftStart,
+            NullIfEmpty(_settings.ShellInitCommand),
+            ExtraArguments: NullIfEmpty(_settings.ShellArgs),
+            Integration: _settings.ShellIntegration));
         host.Exited += _ => Dispatcher.BeginInvoke(Close);
         host.DirectoryChanged += path => Dispatcher.BeginInvoke(() => OnShellDirectoryChanged(path));
         host.RequestCompleted += (_, op, status) => Dispatcher.BeginInvoke(() => OnShellRequestCompleted(op, status));
@@ -81,18 +87,46 @@ public partial class MainWindow : Window
         Loaded += async (_, _) =>
         {
             OnLoaded();
-            await _left.NavigateAsync(home);
-            await _right.NavigateAsync(home);
+            ShowSettingsErrors();
+            ShowThemeError();
+            if (App.Settings is { } settings)
+            {
+                settings.Changed += OnSettingsFileChanged;
+                settings.Watch();
+            }
+
+            StartStateTimer();
+            await _left.NavigateAsync(leftStart);
+            await _right.NavigateAsync(rightStart);
         };
         DpiChanged += (_, _) => UpdateCellSize();
         PreviewTextInput += OnPreviewTextInput;
+        Closing += (_, e) =>
+        {
+            // Unsaved edits are never lost silently, whatever closes the window (F10, Alt+F4, the close button).
+            if (PageHost.Content is Editing.EditorPage editor && !editor.ConfirmLeave())
+            {
+                e.Cancel = true;
+                return;
+            }
+
+            SaveState();
+        };
         Closed += (_, _) =>
         {
+            _stateTimer?.Stop();
+            if (App.Settings is { } settings)
+            {
+                settings.Changed -= OnSettingsFileChanged;
+            }
+
             _keyHook?.Dispose();
             _shell?.Dispose();
             _themes.Dispose();
         };
     }
+
+    private static string? NullIfEmpty(string value) => string.IsNullOrWhiteSpace(value) ? null : value;
 
     private bool AnyPanelVisible => Workspace.LeftVisible || Workspace.RightVisible;
 
@@ -150,7 +184,7 @@ public partial class MainWindow : Window
     private void ApplyTerminalTheme(Themes.ColorTheme theme)
     {
         var background = theme.GetOpaque("terminal.background");
-        Terminal.SetTheme(ThemeService.ToTerminalTheme(theme), TerminalFontFamily, TerminalFontSize, Color.FromRgb(background.R, background.G, background.B));
+        Terminal.SetTheme(ThemeService.ToTerminalTheme(theme), TerminalFontFamily, (short)TerminalFontSize, Color.FromRgb(background.R, background.G, background.B));
     }
 
     private void UpdateTitleBar()

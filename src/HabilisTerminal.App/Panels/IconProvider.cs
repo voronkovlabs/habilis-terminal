@@ -31,13 +31,20 @@ internal static class IconProvider
     /// <summary>A system icon finished loading: repaint the panels.</summary>
     public static event Action? SystemIconLoaded;
 
-    public static string ThemeName => _theme.Name;
+    public static string ThemeId { get; private set; } = FileIconTheme.Seti;
 
-    /// <summary>Switches the icon theme (Seti / Material); the caller repaints.</summary>
-    public static void SetTheme(string name)
+    /// <summary>Switches the icon theme (Seti / Material); the caller repaints. Returns false when nothing changed.</summary>
+    public static bool SetTheme(string id)
     {
-        _theme = FileIconTheme.LoadBuiltIn(name);
+        if (string.Equals(id, ThemeId, StringComparison.OrdinalIgnoreCase) || !FileIconTheme.BuiltInThemes.Contains(id))
+        {
+            return false;
+        }
+
+        _theme = FileIconTheme.LoadBuiltIn(id);
+        ThemeId = id;
         ThemeDrawings.Clear();
+        return true;
     }
 
     /// <summary>Colours depend on light / dark: drop cached drawings after a colour theme change.</summary>
@@ -71,11 +78,7 @@ internal static class IconProvider
         dc.Pop();
     }
 
-    private static FileIconTheme LoadTheme()
-    {
-        var requested = Environment.GetEnvironmentVariable("HABI_ICON_THEME");
-        return FileIconTheme.LoadBuiltIn(FileIconTheme.BuiltInThemes.Contains(requested) ? requested! : FileIconTheme.Seti);
-    }
+    private static FileIconTheme LoadTheme() => FileIconTheme.LoadBuiltIn(FileIconTheme.Seti);
 
     private static Drawing ThemeDrawing(IconDefinition definition)
     {

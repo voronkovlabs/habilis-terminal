@@ -20,7 +20,14 @@ public partial class MainWindow
         Dispatcher.BeginInvoke(() =>
         {
             SetFocus(new System.Windows.Interop.WindowInteropHelper(this).Handle);
-            page.Focus();
+            if (page is IPage content)
+            {
+                content.FocusContent();
+            }
+            else
+            {
+                page.Focus();
+            }
         }, System.Windows.Threading.DispatcherPriority.Input);
     }
 
@@ -61,7 +68,8 @@ public partial class MainWindow
 
     private void OpenViewer(string path, FilePanel returnTo)
     {
-        var page = new ViewerPage(path);
+        var page = new ViewerPage(path, _settings.ViewerWrap);
+        RememberFile(path, edited: false);
         page.CloseRequested += () =>
         {
             ClosePage();
@@ -98,9 +106,6 @@ public partial class MainWindow
         other.QuickViewSource = _active;
     }
 
-    /// <summary>Files larger than this ask before opening in the editor (SPEC §9).</summary>
-    private const long LargeFileBytes = 50L * 1024 * 1024;
-
     /// <summary>F4 from the panel.</summary>
     private void Edit(FilePanel panel)
     {
@@ -117,7 +122,8 @@ public partial class MainWindow
     /// Text files open in the built-in editor; binary files go to the system editor (shell "edit", else "open");
     /// very large text files ask first (SPEC §9).
     /// </summary>
-    private void Edit(string path, FilePanel returnTo)
+    /// <param name="followFile">Esc puts the panel cursor on the file (moving the panel to its folder); off for settings.json.</param>
+    private void Edit(string path, FilePanel returnTo, bool followFile = true)
     {
         try
         {
@@ -134,7 +140,7 @@ public partial class MainWindow
                 return;
             }
 
-            if (new FileInfo(path).Length > LargeFileBytes)
+            if (new FileInfo(path).Length > _settings.EditorLargeFileThresholdMB * 1024L * 1024)
             {
                 var body = new System.Windows.Controls.TextBlock { Text = $"'{Path.GetFileName(path)}' is large ({Panels.PanelColumns.FormatCompactSize(new FileInfo(path).Length, System.Globalization.CultureInfo.CurrentCulture)}). Editing loads it into memory." };
                 body.SetResourceReference(StyleProperty, "Habi.LabelStyle");
@@ -151,12 +157,23 @@ public partial class MainWindow
                 }
             }
 
-            var page = new Editing.EditorPage(this, Core.Editing.TextFile.Load(path), _themes.Current);
-            page.CloseRequested += () => ReturnToPanel(returnTo, path);
+            var page = new Editing.EditorPage(this, Core.Editing.TextFile.Load(path), _themes.Current, _settings);
+            RememberFile(path, edited: true);
+            page.CloseRequested += () =>
+            {
+                if (followFile)
+                {
+                    ReturnToPanel(returnTo, path);
+                }
+                else
+                {
+                    ClosePage();
+                }
+            };
             page.ShowInPanelRequested += file => ReturnToPanel(returnTo, file);
             page.ViewRequested += file => OpenViewer(file, returnTo);
             ShowPage(page);
-            Dispatcher.BeginInvoke(() => page.Focus(), System.Windows.Threading.DispatcherPriority.Input);
+            Dispatcher.BeginInvoke(page.FocusContent, System.Windows.Threading.DispatcherPriority.Input);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {

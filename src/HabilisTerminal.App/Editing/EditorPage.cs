@@ -7,6 +7,7 @@ using System.Windows.Media;
 using HabilisTerminal.App.Theming;
 using HabilisTerminal.App.Widgets;
 using HabilisTerminal.Core.Editing;
+using HabilisTerminal.Core.Settings;
 using HabilisTerminal.Core.Viewing;
 using HabilisTerminal.Themes;
 using ICSharpCode.AvalonEdit;
@@ -19,7 +20,7 @@ namespace HabilisTerminal.App.Editing;
 /// Ctrl+F7 replace, Shift+F8 encoding, F6 viewer, Ctrl+F10 back to the file in the panel, Esc / F10 close (asks when
 /// modified). Saving keeps encoding, BOM and line endings and writes atomically.
 /// </summary>
-public sealed class EditorPage : DockPanel
+public sealed class EditorPage : DockPanel, IPage
 {
     private readonly TextEditor _editor = new();
     private readonly TextBlock _title = new();
@@ -28,7 +29,7 @@ public sealed class EditorPage : DockPanel
     private TextFile _file;
     private string _lastSearch = string.Empty;
 
-    public EditorPage(Window owner, TextFile file, ColorTheme theme)
+    public EditorPage(Window owner, TextFile file, ColorTheme theme, AppSettings settings)
     {
         _owner = owner;
         _file = file;
@@ -54,16 +55,17 @@ public sealed class EditorPage : DockPanel
         DockPanel.SetDock(Header, Dock.Top);
         Children.Add(Header);
 
-        _editor.FontFamily = new FontFamily("Cascadia Mono, Consolas");
-        _editor.FontSize = 13;
+        _editor.FontFamily = new FontFamily(settings.EditorFontFamily + ", Consolas");
+        _editor.FontSize = settings.EditorFontSize;
+        _editor.Options.IndentationSize = settings.EditorTabSize;
         _editor.ShowLineNumbers = true;
         _editor.Options.HighlightCurrentLine = true;
         _editor.Options.EnableRectangularSelection = true;
-        _editor.Options.ConvertTabsToSpaces = false;
+        _editor.Options.ConvertTabsToSpaces = settings.EditorInsertSpaces;
         _editor.Text = file.Text;
         _editor.Document.UndoStack.ClearAll();
         _editor.Document.UndoStack.MarkAsOriginalFile();
-        _editor.SyntaxHighlighting = HighlightingManager.Instance.GetDefinitionByExtension(Path.GetExtension(file.Path));
+        _editor.SyntaxHighlighting = settings.EditorSyntaxHighlighting ? HighlightingManager.Instance.GetDefinitionByExtension(Path.GetExtension(file.Path)) : null;
         _editor.TextArea.Caret.PositionChanged += (_, _) => UpdateStatus();
         _editor.Document.UndoStack.PropertyChanged += (_, _) => UpdateStatus();
         _editor.PreviewKeyDown += OnEditorKeyDown;
@@ -87,7 +89,7 @@ public sealed class EditorPage : DockPanel
 
     private Border Header { get; }
 
-    public new bool Focus() => _editor.Focus();
+    public void FocusContent() => _editor.Focus();
 
     /// <summary>Editor colours from the theme (<c>editor.*</c>) and syntax colours from its <c>tokenColors</c>.</summary>
     public void ApplyTheme(ColorTheme theme)
@@ -263,8 +265,8 @@ public sealed class EditorPage : DockPanel
         e.Handled = handled;
     }
 
-    /// <summary>Esc with changes: Save / Don't save / Cancel.</summary>
-    private bool ConfirmLeave()
+    /// <summary>Esc with changes: Save / Don't save / Cancel. False means stay in the editor.</summary>
+    public bool ConfirmLeave()
     {
         if (!IsModified)
         {

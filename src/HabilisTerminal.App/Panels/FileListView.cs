@@ -15,19 +15,33 @@ namespace HabilisTerminal.App.Panels;
 /// </summary>
 public sealed class FileListView : FrameworkElement
 {
-    public const double RowHeight = 22;
     private const double HeaderHeight = 22;
-    private const double FontSize = 13;
     private const double IconWidth = 20;
     private const double CellPadding = 6;
     private const double SeparatorGrip = 4;
     private const int TextCacheLimit = 4096;
 
-    private static readonly Typeface UiTypeface = new(new FontFamily("Segoe UI"), FontStyles.Normal, FontWeights.Normal, FontStretches.Normal);
-    private static readonly Typeface UiTypefaceBold = new(new FontFamily("Segoe UI"), FontStyles.Normal, FontWeights.SemiBold, FontStretches.Normal);
+    private static Typeface UiTypeface = new(new FontFamily("Segoe UI"), FontStyles.Normal, FontWeights.Normal, FontStretches.Normal);
+    private static Typeface UiTypefaceBold = new(new FontFamily("Segoe UI"), FontStyles.Normal, FontWeights.SemiBold, FontStretches.Normal);
+    private static double FontSize = 13;
+    private static int FontVersion;
+    private int _renderedFontVersion;
     private static readonly Geometry LinkGeometry = Geometry.Parse("M9,15 L15,9 M11,9 L15,9 L15,13");
 
     private readonly Dictionary<(string Text, Brush Brush, bool Bold), FormattedText> _textCache = [];
+
+    public static double RowHeight { get; private set; } = 22;
+
+    /// <summary>The <c>panels.fontFamily</c> / <c>panels.fontSize</c> settings; rows grow with the font. Callers re-layout.</summary>
+    public static void SetFont(string family, double size)
+    {
+        var fontFamily = new FontFamily(string.IsNullOrWhiteSpace(family) ? "Segoe UI" : family);
+        UiTypeface = new Typeface(fontFamily, FontStyles.Normal, FontWeights.Normal, FontStretches.Normal);
+        UiTypefaceBold = new Typeface(fontFamily, FontStyles.Normal, FontWeights.SemiBold, FontStretches.Normal);
+        FontSize = size;
+        RowHeight = Math.Round(size * 22 / 13);
+        FontVersion++;
+    }
     private readonly Dictionary<(PanelViewMode Mode, ColumnKind Kind), double> _columnWidths = [];
     private PanelState? _state;
     private int _topIndex;
@@ -165,9 +179,10 @@ public sealed class FileListView : FrameworkElement
             return;
         }
 
-        if (_textCache.Count > TextCacheLimit)
+        if (_textCache.Count > TextCacheLimit || _renderedFontVersion != FontVersion)
         {
             _textCache.Clear();
+            _renderedFontVersion = FontVersion;
         }
 
         var pixelsPerDip = VisualTreeHelper.GetDpi(this).PixelsPerDip;
@@ -285,7 +300,7 @@ public sealed class FileListView : FrameworkElement
     }
 
     private double WidthOf(ColumnSpec column) =>
-        _state is not null && _columnWidths.TryGetValue((_state.ViewMode, column.Kind), out var width) ? width : column.DefaultWidth;
+        _state is not null && _columnWidths.TryGetValue((_state.ViewMode, column.Kind), out var width) ? width : Math.Round(column.DefaultWidth * FontSize / 13);
 
     /// <summary>Detail column layout from the right edge; the name column takes the rest.</summary>
     private List<(ColumnSpec Column, double X, double Width)> LayoutColumns(IReadOnlyList<ColumnSpec> details, double left, double width)

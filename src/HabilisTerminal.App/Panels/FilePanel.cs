@@ -321,6 +321,14 @@ public sealed class FilePanel : Border
     /// <summary>Ctrl+R: re-reads the directory, keeping cursor and selection.</summary>
     public Task<bool> ReloadAsync() => NavigateAsync(State.Path);
 
+    /// <summary>After a font or icon change: rows may have a new height.</summary>
+    public void InvalidatePanel()
+    {
+        _list.InvalidateMeasure();
+        _list.InvalidateVisual();
+        Refresh();
+    }
+
     public void Refresh()
     {
         UpdateTitle();
