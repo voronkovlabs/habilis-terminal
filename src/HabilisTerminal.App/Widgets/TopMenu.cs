@@ -78,6 +78,14 @@ public sealed class TopMenu
         _root.PreviewKeyDown += OnKeyDown;
         _root.PreviewTextInput += OnTextInput;
 
+        // Windows 11 draws the window's 1 px border over the top row of the title bar; the popup is a window of its own
+        // and covered it, so the selected header stuck out above the frame. Its top row is left out.
+        var edge = 1 / VisualTreeHelper.GetDpi(target).DpiScaleY;
+        if (Window.GetWindow(target) is { WindowState: not WindowState.Maximized } window && target.TranslatePoint(default, window).Y < edge)
+        {
+            _root.Clip = new RectangleGeometry(new Rect(0, edge, 100_000, 100_000));
+        }
+
         _popup = new Popup
         {
             Child = _root,
