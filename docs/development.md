@@ -50,6 +50,7 @@ dotnet test -c Release --no-build
 - **Order of processing.** WPF handles a key message in `HwndSource.ThreadFilterMessage` before `GlobalKeyHook` sees it in `ThreadPreprocessMessage`.
 - **Arrow keys.** An arrow that no element handles runs WPF directional navigation and is marked handled. `DirectionalNavigation="None"` does not stop it, so arrows are taken in the window's `PreviewKeyDown` (`MainWindow.OnPreviewArrowKey`).
 - **Keys typed into the terminal** never reach WPF key events, so the hook handles those. Layout keys typed in the terminal (Ctrl+U, Ctrl+P, Ctrl+F1 / Ctrl+F2) act only while the shell is at the prompt (`ShellState.Idle`).
+- **Popups opened from the terminal.** A WPF popup gets its keys through the main window. Win32 focus must leave the terminal first, or Esc and typing go to the shell. A plain `SetFocus` on the window does not work, because WPF hands focus straight back to the child window it remembers. `MainWindow.TakeFocusFromTerminal` focuses a WPF element instead.
 - **PSReadLine buffer.** Only PSReadLine knows what is in the buffer. Anything that depends on it, like Tab on an empty line, is decided in `Scripts/HabilisTerminal.ps1`, which reports back with `OSC 7731;habi;<message>`. Host-side switches are flag files in the channel directory (for example `tab-to-panel`).
 
 ## Releases
