@@ -20,6 +20,7 @@ public sealed class HelpPage : DockPanel, IPage
             ("Ctrl+U", "Swap panels"),
             ("Ctrl+Up / Ctrl+Down", "Terminal height"),
             ("Ctrl+Left / Ctrl+Right", "Single-panel width"),
+            ("Alt+F9", "Maximize / restore the window"),
         ]),
         ("Navigation",
         [

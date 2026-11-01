@@ -390,6 +390,21 @@ public partial class MainWindow : Window
         }, System.Windows.Threading.DispatcherPriority.Input);
     }
 
+    /// <summary>
+    /// Moves Win32 focus from the terminal back to the window, e.g. before a popup opens from the command line.
+    /// A plain SetFocus is not enough: WPF hands focus straight back to the child window it remembers, so a WPF
+    /// element takes it; the active panel when shown (already active, so nothing else changes), else the window.
+    /// </summary>
+    private void TakeFocusFromTerminal()
+    {
+        SetFocus(new WindowInteropHelper(this).Handle);
+        if (!(IsShown(_active) && _active.Focus()))
+        {
+            FocusManager.SetFocusedElement(this, this);
+            Keyboard.Focus(this);
+        }
+    }
+
     private void FocusTerminal()
     {
         var host = FindHwndHost(Terminal);

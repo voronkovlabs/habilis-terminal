@@ -130,7 +130,7 @@ public sealed class TitleBar : DockPanel
     [System.Runtime.InteropServices.DllImport("user32.dll")]
     private static extern int GetSystemMetrics(int index);
 
-    private void ToggleMaximize() =>
+    public void ToggleMaximize() =>
         _window.WindowState = _window.WindowState == WindowState.Maximized ? WindowState.Normal : WindowState.Maximized;
 
     private void UpdateMaximizeGlyph() =>

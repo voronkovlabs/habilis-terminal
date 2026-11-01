@@ -43,6 +43,11 @@ public partial class MainWindow
                 Close();
                 return true;
 
+            // Window-level, from any focus, as in Far.
+            case Key.F9 when modifiers == KeyModifiers.Alt:
+                _titleBar.ToggleMaximize();
+                return true;
+
             // Terminal-level clipboard; Ctrl+C / Ctrl+V go to the shell (SPEC §12).
             case Key.C when modifiers == (KeyModifiers.Control | KeyModifiers.Shift) && TerminalHasFocus:
                 CopyTerminalSelection();
@@ -79,12 +84,30 @@ public partial class MainWindow
     }
 
     /// <summary>
-    /// Far's panel layout keys also work from the command line. Only at the prompt: a running program (TUI, ssh)
+    /// Far's panel keys that also work from the command line. Only at the prompt: a running program (TUI, ssh)
     /// gets every key.
     /// </summary>
     private bool HandleLayoutKeyInTerminal(Key key, KeyModifiers modifiers)
     {
-        if (!TerminalHasFocus || !AnyPanelVisible || _shell?.Host.State != Shell.Integration.ShellState.Idle || modifiers != KeyModifiers.Control)
+        if (!TerminalHasFocus || _shell?.Host.State != Shell.Integration.ShellState.Idle)
+        {
+            return false;
+        }
+
+        switch (key)
+        {
+            case Key.P when modifiers == KeyModifiers.Control:
+                ToggleInactivePanel();
+                return true;
+            case Key.F1 when modifiers == KeyModifiers.Alt:
+                Fire(ShowDriveMenuAsync(_left));
+                return true;
+            case Key.F2 when modifiers == KeyModifiers.Alt:
+                Fire(ShowDriveMenuAsync(_right));
+                return true;
+        }
+
+        if (!AnyPanelVisible || modifiers != KeyModifiers.Control)
         {
             return false;
         }
@@ -93,9 +116,6 @@ public partial class MainWindow
         {
             case Key.U:
                 SwapPanels(focusPanel: false);
-                return true;
-            case Key.P:
-                ToggleInactivePanel();
                 return true;
             case Key.F1:
                 SetPanelVisibility(!Workspace.LeftVisible, Workspace.RightVisible);
@@ -370,11 +390,24 @@ public partial class MainWindow
         }
     }
 
-    /// <summary>Ctrl+P: hides the inactive panel, so the terminal takes its place beside the active one; again shows both.</summary>
+    /// <summary>
+    /// Ctrl+P: hides the inactive panel, so the terminal takes its place beside the active one; again shows both.
+    /// With no panel shown, brings back only the active one, in the shell's folder.
+    /// </summary>
     private void ToggleInactivePanel()
     {
         if (Workspace.LeftVisible && Workspace.RightVisible)
         {
+            SetPanelVisibility(_active == _left, _active == _right);
+        }
+        else if (!AnyPanelVisible)
+        {
+            if (_shell?.Host.CurrentDirectory is { Length: > 0 } shellPath &&
+                !string.Equals(shellPath, _active.CurrentPath, StringComparison.OrdinalIgnoreCase))
+            {
+                _ = _active.NavigateAsync(shellPath);
+            }
+
             SetPanelVisibility(_active == _left, _active == _right);
         }
         else
@@ -494,6 +527,7 @@ public partial class MainWindow
     private async Task ShowDriveMenuAsync(FilePanel panel)
     {
         var previouslyActive = _active;
+        var fromTerminal = TerminalHasFocus;
         var culture = CultureInfo.CurrentCulture;
         var currentRoot = Path.GetPathRoot(panel.CurrentPath) ?? string.Empty;
         var items = new List<QuickPickItem>();
@@ -540,6 +574,12 @@ public partial class MainWindow
             _ = FillDriveAsync(item, culture);
         }
 
+        if (fromTerminal)
+        {
+            // The popup gets its keys through the window, so Win32 focus must leave the terminal.
+            TakeFocusFromTerminal();
+        }
+
         var result = await QuickPick.ShowAsync(panel, items, new QuickPickOptions
         {
             Title = $"Change drive ({panel.Side.ToLowerInvariant()} panel)",
@@ -556,13 +596,27 @@ public partial class MainWindow
 
         if (target is null)
         {
-            // Cancelled: focus returns to the panel that was active (Far).
-            previouslyActive.Focus();
+            // Cancelled: the layout stays and focus returns where it was (Far).
+            if (fromTerminal || !IsShown(previouslyActive))
+            {
+                FocusTerminal();
+            }
+            else
+            {
+                previouslyActive.Focus();
+            }
+
             return;
         }
 
+        // A hidden panel comes back at the chosen place (Far).
         Activate(panel);
-        panel.Focus();
+        if (!IsShown(panel))
+        {
+            SetPanelVisibility(panel == _left || Workspace.LeftVisible, panel == _right || Workspace.RightVisible);
+        }
+
+        FocusActivePanel();
         await panel.NavigateAsync(target);
         SyncShellDirectory();
     }
