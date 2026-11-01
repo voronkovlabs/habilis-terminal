@@ -127,6 +127,48 @@ internal static class NativeFile
         }
     }
 
+    public const uint ReparseTagMountPoint = 0xA0000003;
+    public const uint ReparseTagSymlink = 0xA000000C;
+
+    /// <summary>The reparse tag of a link (junction, symlink, …), or 0 for ordinary items.</summary>
+    public static uint ReparseTag(string path)
+    {
+        var handle = FindFirstFile(LongPath.ToExtended(path.TrimEnd('\\')), out var data);
+        if (handle == new IntPtr(-1))
+        {
+            return 0;
+        }
+
+        FindClose(handle);
+        return (data.dwFileAttributes & (uint)FileAttributes.ReparsePoint) != 0 ? data.dwReserved0 : 0;
+    }
+
+    [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
+    private struct WIN32_FIND_DATA
+    {
+        public uint dwFileAttributes;
+        public System.Runtime.InteropServices.ComTypes.FILETIME ftCreationTime;
+        public System.Runtime.InteropServices.ComTypes.FILETIME ftLastAccessTime;
+        public System.Runtime.InteropServices.ComTypes.FILETIME ftLastWriteTime;
+        public uint nFileSizeHigh;
+        public uint nFileSizeLow;
+        public uint dwReserved0;
+        public uint dwReserved1;
+
+        [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 260)]
+        public string cFileName;
+
+        [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 14)]
+        public string cAlternateFileName;
+    }
+
+    [DllImport("kernel32.dll", SetLastError = true, CharSet = CharSet.Unicode)]
+    private static extern IntPtr FindFirstFile(string lpFileName, out WIN32_FIND_DATA lpFindFileData);
+
+    [DllImport("kernel32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool FindClose(IntPtr hFindFile);
+
     /// <summary>Turns NTFS compression on or off for a file or directory.</summary>
     public static void SetCompression(string path, bool compressed)
     {

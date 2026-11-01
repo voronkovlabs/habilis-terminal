@@ -82,7 +82,8 @@ public static class NameRules
 
     /// <summary>
     /// Far destination masks: <c>*.bak</c>, <c>new_*</c>, <c>*.*</c>, <c>?</c>. A mask with a dot maps name and
-    /// extension separately; without a dot it applies to the whole name.
+    /// extension separately; without a dot it applies to the whole name. <c>?</c> takes the next source character,
+    /// <c>*</c> the rest, other characters are inserted as they are.
     /// </summary>
     public static string ApplyRenameMask(string name, string mask)
     {
@@ -131,8 +132,8 @@ public static class NameRules
                     position++;
                     break;
                 default:
+                    // Literal characters are inserted; only ? walks through the source.
                     result.Append(c);
-                    position++;
                     break;
             }
         }

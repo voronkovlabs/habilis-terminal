@@ -74,8 +74,8 @@ public class WatcherAndUpdaterTests
     [Fact]
     public void Guard_blocks_paths_outside_the_allowed_area()
     {
+        // The test assembly restricts the guard to %TEMP%\habi-tests (TestSetup).
         using var sandbox = new TestSandbox();
-        using var scope = DestructiveOperationGuard.Restrict(sandbox.Contains);
 
         DestructiveOperationGuard.Check(Path.Combine(sandbox.Path, "inside.txt"));
         Assert.Throws<InvalidOperationException>(() => DestructiveOperationGuard.Check(@"C:\Windows\notepad.exe"));
