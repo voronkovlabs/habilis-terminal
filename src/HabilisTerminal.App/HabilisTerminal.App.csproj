@@ -16,6 +16,7 @@
     <ConptyRequiresARM64Host Condition="'$(RuntimeIdentifier)' == 'win-x64' Or '$(RuntimeIdentifier)' == 'win-arm64'">true</ConptyRequiresARM64Host>
   </PropertyGroup>
   <ItemGroup>
+    <PackageReference Include="AvalonEdit" />
     <PackageReference Include="CI.Microsoft.Terminal.Wpf" />
     <PackageReference Include="Microsoft.Windows.Console.ConPTY" />
   </ItemGroup>

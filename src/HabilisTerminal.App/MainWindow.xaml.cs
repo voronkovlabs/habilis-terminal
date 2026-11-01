@@ -135,6 +135,11 @@ public partial class MainWindow : Window
         IconProvider.OnColorThemeChanged();
         _left.ApplyTheme();
         _right.ApplyTheme();
+        if (PageHost?.Content is Editing.EditorPage editor)
+        {
+            editor.ApplyTheme(theme);
+        }
+
         if (IsLoaded)
         {
             ApplyTerminalTheme(theme);
