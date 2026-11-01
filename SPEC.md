@@ -76,6 +76,9 @@ There are exactly two focus targets: **panels** and **terminal**. No conditional
 - **Ctrl+Tab** toggles focus between panels and terminal (only while panels are visible).
 - A mouse click moves focus to what was clicked.
 - When panels are hidden, focus is always on the terminal. When panels are shown with Ctrl+O, focus moves to the panels.
+- Panel keys at the prompt (as in Far): while the shell waits at its prompt, **Ctrl+P, Ctrl+U, Ctrl+F1 / Ctrl+F2,
+  Alt+F1 / Alt+F2, Ctrl+L and Ctrl+Q** act on the panels even with the terminal focused (Ctrl+L then does not clear the
+  screen). A running program (TUI, ssh) gets every key; with no panels shown, Ctrl+L and Ctrl+Q go to the shell.
 - Focus is visible: the active panel uses `list.activeSelectionBackground`, the inactive one
   `list.inactiveSelectionBackground`; the terminal shows a blinking cursor when focused and a hollow one otherwise.
 

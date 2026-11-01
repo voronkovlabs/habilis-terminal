@@ -59,8 +59,8 @@ public sealed class HelpPage : DockPanel, IPage
             ("Shift+F12", "Selected first"),
             ("Ctrl+H", "Hidden and system files"),
             ("Ctrl+R", "Re-read"),
-            ("Ctrl+L", "Info panel in the other panel"),
-            ("Ctrl+Q", "Quick view in the other panel"),
+            ("Ctrl+L", "Info panel in the other panel (shows a hidden one; again hides it)"),
+            ("Ctrl+Q", "Quick view in the other panel (shows a hidden one; again hides it)"),
         ]),
         ("Command line",
         [
@@ -70,6 +70,7 @@ public sealed class HelpPage : DockPanel, IPage
             ("Ctrl+E / Ctrl+X", "Previous / next command"),
             ("Ctrl+Ins", "Copy names to the clipboard"),
             ("Ctrl+Alt+Ins", "Copy full names to the clipboard"),
+            ("Ctrl+P, Ctrl+U, Ctrl+L, Ctrl+Q", "Panel keys that also work at the prompt (not while a program runs)"),
         ]),
         ("Viewer (F3)",
         [
