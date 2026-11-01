@@ -42,6 +42,9 @@ public static class Program
                 failures.Add("the first crash became a comment; an open issue already had this signature");
             }
 
+            // GitHub's label-filtered issue list lags a moment behind a new issue (run 41334798440 missed it after
+            // about a second). A real repeat comes on a later app start; wait like one.
+            await Task.Delay(TimeSpan.FromSeconds(20));
             var again = await client.ReportCrashAsync(report with { Time = DateTimeOffset.Now }, masking);
             Console.WriteLine($"same crash again: {(again.IsComment ? "comment" : "issue")} #{again.Number} {again.Url}");
             if (!again.IsComment || again.Number != first.Number)
