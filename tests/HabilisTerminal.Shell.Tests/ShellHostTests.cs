@@ -41,7 +41,8 @@ public class ShellHostTests
         var target = shell.CreateDirectory("panel target");
         await shell.WaitIdleAsync();
         shell.Host.Write("\"BASE=$((Get-History).Count)\"\r");
-        await shell.WaitForTextAsync("BASE=");
+        // "BASE=" also appears in the echoed command line; wait for the number itself.
+        await TestShell.WaitUntilAsync(() => System.Text.RegularExpressions.Regex.IsMatch(shell.Text, "BASE=[0-9]"), "history baseline");
         await shell.WaitIdleAsync();
         var baseline = int.Parse(System.Text.RegularExpressions.Regex.Match(shell.Text, "BASE=(\\d+)").Groups[1].Value, System.Globalization.CultureInfo.InvariantCulture);
 
@@ -54,7 +55,7 @@ public class ShellHostTests
 
         shell.Host.Write("\r");
         await shell.WaitForTextAsync("typed-kept");
-        await TestShell.WaitUntilAsync(() => shell.Text.Contains("HISTORY=", StringComparison.Ordinal), "history count");
+        await TestShell.WaitUntilAsync(() => System.Text.RegularExpressions.Regex.IsMatch(shell.Text, "HISTORY=[0-9]"), "history count");
         await Task.Delay(300, TestContext.Current.CancellationToken);
         var count = System.Text.RegularExpressions.Regex.Match(shell.Text, "HISTORY=(\\d+)").Groups[1].Value;
         // Only the BASE command was added; the cd request left no trace.
