@@ -59,6 +59,7 @@ public sealed class FilePanel : Border
 
         _list.State = State;
         _list.ItemClicked += OnItemClicked;
+        _list.ContextMenuRequested += OnContextMenuRequested;
         _list.HeaderClicked += mode =>
         {
             State.ApplySortKey(mode);
@@ -134,6 +135,12 @@ public sealed class FilePanel : Border
 
     /// <summary>The cursor, selection or listing changed (the info panel follows).</summary>
     public event Action<FilePanel>? Changed;
+
+    /// <summary>
+    /// Right click, Shift+F10 or the Menu key (issue #41): show the shell context menu for these names in the current
+    /// folder (empty: the folder's background) at this point in physical screen pixels.
+    /// </summary>
+    public event Action<FilePanel, IReadOnlyList<string>, Point>? ShellMenuRequested;
 
     public string Side { get; }
 
@@ -527,6 +534,15 @@ public sealed class FilePanel : Border
                 State.ToggleCurrentAndMoveDown();
                 Refresh();
                 return true;
+            case Key.F10 when modifiers == KeyModifiers.Shift:
+            case Key.Apps when modifiers == KeyModifiers.None:
+                // The selection when there is one, else the item under the cursor; ".." means the folder itself.
+                RequestShellMenu(
+                    State.Selection.Count > 0 ? [.. State.Selection.Names]
+                    : State.Count == 0 || State.Current.IsParent ? []
+                    : [State.Current.Name],
+                    _list.CursorMenuPoint());
+                return true;
             case Key.Multiply when modifiers == KeyModifiers.None:
                 State.Selection.Invert(State.Entries);
                 Refresh();
@@ -702,12 +718,13 @@ public sealed class FilePanel : Border
         }
     }
 
-    private void OnItemClicked(int index, int clickCount, bool right)
+    private void OnItemClicked(int index, int clickCount)
     {
         Focus();
         State.SetCursor(index);
-        if (right)
+        if (Keyboard.Modifiers == ModifierKeys.Control)
         {
+            // Ctrl+click marks, as in Explorer: the right button opens the context menu (issue #41).
             if (!State.Current.IsParent)
             {
                 State.Selection.Toggle(State.Current.Name);
@@ -719,6 +736,36 @@ public sealed class FilePanel : Border
         }
 
         Refresh();
+    }
+
+    /// <summary>
+    /// Right click (issue #41): on a marked item the menu covers the whole selection, on another item only that item
+    /// (the cursor moves to it), on empty space or ".." the folder's background.
+    /// </summary>
+    private void OnContextMenuRequested(int index, Point screen)
+    {
+        Focus();
+        IReadOnlyList<string> names = [];
+        if (index >= 0)
+        {
+            State.SetCursor(index);
+            Refresh();
+            var item = State.Current;
+            if (!item.IsParent)
+            {
+                names = State.Selection.Contains(item.Name) ? [.. State.Selection.Names] : [item.Name];
+            }
+        }
+
+        RequestShellMenu(names, screen);
+    }
+
+    private void RequestShellMenu(IReadOnlyList<string> names, Point screen)
+    {
+        if (!string.IsNullOrEmpty(State.Path))
+        {
+            ShellMenuRequested?.Invoke(this, names, screen);
+        }
     }
 
     private void Move(int delta)

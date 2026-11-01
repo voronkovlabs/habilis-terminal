@@ -37,6 +37,7 @@ public sealed class HelpPage : DockPanel, IPage
         [
             ("Ins", "Toggle selection and move down"),
             ("Shift+arrows", "Select while moving"),
+            ("Ctrl+click", "Toggle selection"),
             ("Gray +  /  Gray −", "Select / deselect by mask"),
             ("Gray *", "Invert selection"),
         ]),
@@ -50,6 +51,7 @@ public sealed class HelpPage : DockPanel, IPage
             ("F8 / Del", "Delete (Recycle Bin by default)"),
             ("Shift+Del", "Delete permanently"),
             ("Ctrl+A", "Attributes"),
+            ("Right click, Shift+F10, Menu key", "Windows context menu"),
         ]),
         ("Panels",
         [

@@ -74,6 +74,7 @@ public partial class MainWindow : Window
         {
             panel.Navigated += OnPanelNavigated;
             panel.ExecuteRequested += OnPanelExecuteRequested;
+            panel.ShellMenuRequested += OnPanelShellMenuRequested;
             panel.Changed += OnPanelChanged;
             panel.GotKeyboardFocus += (_, _) => OnPanelFocused(panel);
         }
@@ -517,6 +518,33 @@ public partial class MainWindow : Window
 
         SyncShellDirectory();
         _shell.Host.Run("& " + ShellQuote.Quote(".\\" + item.Name));
+    }
+
+    /// <summary>
+    /// The shell context menu (issue #41). "Rename" goes to the panel's own Shift+F6 when it covers the same items:
+    /// the shell's rename verb needs an Explorer view to edit the name in place.
+    /// </summary>
+    private void OnPanelShellMenuRequested(FilePanel panel, IReadOnlyList<string> names, Point screen)
+    {
+        if (panel != _active)
+        {
+            Activate(panel);
+        }
+
+        var selection = panel.State.Selection;
+        var sameAsShiftF6 = names.Count > 0 && (selection.Count > 0
+            ? names.Count == selection.Count && names.All(selection.Contains)
+            : names.Count == 1 && names[0] == panel.State.Current.Name);
+        ShellContextMenu.Show(this, panel.State.Path, names, screen, verb =>
+        {
+            if (sameAsShiftF6 && string.Equals(verb, "rename", StringComparison.OrdinalIgnoreCase))
+            {
+                Fire(CopyOrMoveAsync(panel, move: true, inPlace: true));
+                return true;
+            }
+
+            return false;
+        });
     }
 
     /// <summary>Estimates the terminal cell size so the layout can snap to whole rows and columns.</summary>

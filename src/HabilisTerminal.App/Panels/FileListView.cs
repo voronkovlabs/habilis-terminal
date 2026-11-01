@@ -57,8 +57,11 @@ public sealed class FileListView : FrameworkElement
         SnapsToDevicePixels = true;
     }
 
-    /// <summary>Left or right click on an item: index, click count, right button.</summary>
-    public event Action<int, int, bool>? ItemClicked;
+    /// <summary>Left click on an item: index, click count.</summary>
+    public event Action<int, int>? ItemClicked;
+
+    /// <summary>Right click: the item index (-1 for empty space) and the click point in physical screen pixels.</summary>
+    public event Action<int, Point>? ContextMenuRequested;
 
     public event Action<SortMode>? HeaderClicked;
 
@@ -285,9 +288,14 @@ public sealed class FileListView : FrameworkElement
         }
 
         var index = HitTest(point);
-        if (index >= 0 && e.ChangedButton is MouseButton.Left or MouseButton.Right)
+        if (index >= 0 && e.ChangedButton == MouseButton.Left)
         {
-            ItemClicked?.Invoke(index, e.ClickCount, e.ChangedButton == MouseButton.Right);
+            ItemClicked?.Invoke(index, e.ClickCount);
+            e.Handled = true;
+        }
+        else if (e.ChangedButton == MouseButton.Right)
+        {
+            // The menu opens on button up, as in Explorer.
             e.Handled = true;
         }
     }
@@ -300,6 +308,31 @@ public sealed class FileListView : FrameworkElement
             _resizing = null;
             ReleaseMouseCapture();
         }
+
+        var point = e.GetPosition(this);
+        if (e.ChangedButton == MouseButton.Right && !(HasHeader && point.Y < HeaderHeight))
+        {
+            ContextMenuRequested?.Invoke(HitTest(point), PointToScreen(point));
+            e.Handled = true;
+        }
+    }
+
+    /// <summary>Where a keyboard-opened context menu goes: below the start of the cursor row, in physical screen pixels.</summary>
+    public Point CursorMenuPoint()
+    {
+        if (_state is null || !IsVisible)
+        {
+            return default;
+        }
+
+        EnsureCursorVisible();
+        var rows = RowsPerColumn;
+        var offset = Math.Max(0, _state.CursorIndex - _topIndex);
+        var column = ColumnCount == 1 ? 0 : Math.Min(ColumnCount - 1, offset / rows);
+        var row = ColumnCount == 1 ? Math.Min(rows - 1, offset) : offset % rows;
+        var x = (column * (ActualWidth / ColumnCount)) + (2 * CellPadding) + IconWidth;
+        var y = ListTop + ((row + 1) * RowHeight);
+        return PointToScreen(new Point(x, y));
     }
 
     protected override void OnMouseWheel(MouseWheelEventArgs e)

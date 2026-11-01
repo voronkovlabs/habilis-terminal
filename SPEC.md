@@ -107,6 +107,8 @@ Far Manager defaults unless noted.
 | Ctrl+PgUp | Parent directory |
 | Ctrl+\\ | Root of the drive |
 | Ins | Toggle selection and move down |
+| Ctrl+click | Toggle selection (the right button opens the context menu instead of selecting, unlike Far) |
+| Right click, Shift+F10, Menu key | Windows shell context menu (Explorer's): for the selection when the clicked item is marked (keys: when anything is marked), else for the item; on empty space or ".." for the folder itself. Its "Rename" runs Shift+F6 |
 | Gray + / Gray − / Gray * | Select by mask / deselect by mask / invert selection |
 | Alt+letter | Quick search |
 | Ctrl+Enter | Insert file name into the command line |
