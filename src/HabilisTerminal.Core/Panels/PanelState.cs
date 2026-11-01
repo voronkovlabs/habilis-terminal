@@ -53,6 +53,9 @@ public sealed class PanelState
 
     public Selection Selection { get; } = new();
 
+    /// <summary>Folder sizes computed with F3, shown in the size column until the directory changes.</summary>
+    public Dictionary<string, long> FolderSizes { get; } = new(StringComparer.OrdinalIgnoreCase);
+
     public SortOptions Sort { get; private set; } = new();
 
     /// <summary>Shift+F12: selected entries go first.</summary>
@@ -98,6 +101,7 @@ public sealed class PanelState
         else
         {
             Selection.Clear();
+            FolderSizes.Clear();
         }
 
         Rebuild();

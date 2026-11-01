@@ -17,10 +17,13 @@ namespace HabilisTerminal.App.Panels;
 /// Loads directories in the background (first batch at once, the rest after), follows changes through
 /// <see cref="DirectoryWatcher"/>, and handles the panel's own keys (SPEC §5).
 /// </summary>
+[System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1001", Justification = "Panels live as long as the window; the quick view releases its file when hidden.")]
 public sealed class FilePanel : Border
 {
     private readonly FileListView _list = new();
     private readonly InfoPanelView _info = new();
+    private readonly QuickView _quickView = new() { Visibility = Visibility.Collapsed };
+    private FilePanel? _quickViewSource;
     private readonly TextBlock _title = new();
     private readonly TextBlock _path = new();
     private readonly TextBlock _message = new();
@@ -96,6 +99,7 @@ public sealed class FilePanel : Border
 
         _body.Children.Add(_list);
         _body.Children.Add(_info);
+        _body.Children.Add(_quickView);
         _body.Children.Add(_quickSearch);
 
         var layout = new DockPanel { LastChildFill = true };
@@ -152,6 +156,45 @@ public sealed class FilePanel : Border
         }
     }
 
+    /// <summary>Shows Ctrl+Q quick view of <paramref name="value"/>'s current file instead of the list; null returns to the list.</summary>
+    public FilePanel? QuickViewSource
+    {
+        get => _quickViewSource;
+        set
+        {
+            _quickViewSource = value;
+            _quickView.Visibility = value is null ? Visibility.Collapsed : Visibility.Visible;
+            _list.Visibility = value is null && InfoSource is null ? Visibility.Visible : Visibility.Collapsed;
+            if (value is null)
+            {
+                _quickView.Dispose();
+            }
+            else
+            {
+                UpdateQuickView();
+            }
+        }
+    }
+
+    /// <summary>Follows the source panel's cursor.</summary>
+    public void UpdateQuickView()
+    {
+        if (_quickViewSource is not { } source || source.State.Count == 0)
+        {
+            return;
+        }
+
+        var item = source.State.Current;
+        if (item.IsParent)
+        {
+            _quickView.Show(null, false, null);
+            return;
+        }
+
+        var path = System.IO.Path.Combine(source.CurrentPath, item.Name);
+        _quickView.Show(path, item.Entry.IsDirectory, source.State.FolderSizes.TryGetValue(item.Name, out var size) ? size : null);
+    }
+
     public bool IsActive
     {
         get => _isActive;
@@ -192,6 +235,7 @@ public sealed class FilePanel : Border
 
         _list.ApplyTheme();
         _info.InvalidateVisual();
+        _quickView.ApplyTheme();
         UpdateStatus();
         UpdateFocusVisuals();
     }

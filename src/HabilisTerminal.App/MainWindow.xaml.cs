@@ -363,6 +363,11 @@ public partial class MainWindow : Window
         {
             Other(panel).RefreshInfo();
         }
+
+        if (Other(panel).QuickViewSource == panel)
+        {
+            Other(panel).UpdateQuickView();
+        }
     }
 
     /// <summary>Enter on a file: run it through PSReadLine, so it lands in history like in Far.</summary>

@@ -23,11 +23,11 @@ public partial class MainWindow
         Trace($"key {modifiers}+{key} focusedPanel={FocusedPanel()?.Side ?? "-"} wpfLeft={_left.IsKeyboardFocused} wpfRight={_right.IsKeyboardFocused} win32={GetFocus():X}");
         switch (key)
         {
-            case Key.O when modifiers == KeyModifiers.Control:
+            case Key.O when modifiers == KeyModifiers.Control && !IsPageOpen:
                 TogglePanels();
                 return true;
 
-            case Key.Tab when modifiers == KeyModifiers.Control && AnyPanelVisible:
+            case Key.Tab when modifiers == KeyModifiers.Control && AnyPanelVisible && !IsPageOpen:
                 if (PanelHasFocus)
                 {
                     FocusTerminal();
@@ -42,6 +42,12 @@ public partial class MainWindow
             case Key.F4 when modifiers == KeyModifiers.Alt:
                 Close();
                 return true;
+        }
+
+        // A full-window page (viewer, editor, settings) handles its own keys.
+        if (IsPageOpen)
+        {
+            return false;
         }
 
         if (FocusedPanel() is not { } panel)
@@ -107,6 +113,14 @@ public partial class MainWindow
 
             case Key.L when modifiers == KeyModifiers.Control:
                 ToggleInfoPanel();
+                return true;
+
+            case Key.Q when modifiers == KeyModifiers.Control:
+                ToggleQuickView();
+                return true;
+
+            case Key.F3 when modifiers == KeyModifiers.None:
+                View(panel);
                 return true;
 
             case Key.Add when modifiers == KeyModifiers.None:
@@ -287,6 +301,7 @@ public partial class MainWindow
     private void ToggleInfoPanel()
     {
         var other = Other(_active);
+        other.QuickViewSource = null;
         other.InfoSource = other.InfoSource is null ? _active : null;
         _active.InfoSource = null;
     }

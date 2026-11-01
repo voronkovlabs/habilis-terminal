@@ -53,11 +53,13 @@ public static class PanelColumns
         _ => [],
     };
 
-    public static string FormatCell(ColumnKind kind, PanelItem item, CultureInfo culture)
+    public static string FormatCell(ColumnKind kind, PanelItem item, CultureInfo culture, long? folderSize = null)
     {
         var entry = item.Entry;
         return kind switch
         {
+            ColumnKind.Size when folderSize is { } size => size.ToString("N0", culture),
+            ColumnKind.CompactSize when folderSize is { } size => FormatCompactSize(size, culture),
             ColumnKind.Size or ColumnKind.CompactSize when item.IsParent => "Up",
             ColumnKind.Size or ColumnKind.CompactSize when entry.IsDirectory => entry.IsReparsePoint ? "Link" : "Folder",
             ColumnKind.Size => entry.Length.ToString("N0", culture),
