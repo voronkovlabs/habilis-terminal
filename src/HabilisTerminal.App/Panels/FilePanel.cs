@@ -548,7 +548,11 @@ public sealed partial class FilePanel : Border
 
                 return true;
             case Key.Oem5 when modifiers == KeyModifiers.Control: // Ctrl+\
-                _ = NavigateAsync(System.IO.Path.GetPathRoot(State.Path) ?? State.Path);
+                if (!IsPlugin)
+                {
+                    _ = NavigateAsync(System.IO.Path.GetPathRoot(State.Path) ?? State.Path);
+                }
+
                 return true;
             case Key.Insert when modifiers == KeyModifiers.None:
                 State.ToggleCurrentAndMoveDown();
@@ -788,6 +792,12 @@ public sealed partial class FilePanel : Border
 
     private void RequestShellMenu(IReadOnlyList<string> names, Point screen)
     {
+        if (IsPlugin)
+        {
+            Message = "The Windows context menu is not available in a plugin panel.";
+            return;
+        }
+
         if (!string.IsNullOrEmpty(State.Path))
         {
             ShellMenuRequested?.Invoke(this, names, screen);
@@ -813,6 +823,12 @@ public sealed partial class FilePanel : Border
             return;
         }
 
+        if (IsPlugin)
+        {
+            _ = PluginOpenAsync(item);
+            return;
+        }
+
         if (item.IsParent)
         {
             GoToParent();
@@ -829,6 +845,12 @@ public sealed partial class FilePanel : Border
 
     private void GoToParent()
     {
+        if (IsPlugin)
+        {
+            _ = PluginUpAsync();
+            return;
+        }
+
         var trimmed = State.Path.TrimEnd('\\');
         if (System.IO.Path.GetDirectoryName(trimmed) is { } parent && State.HasParent)
         {

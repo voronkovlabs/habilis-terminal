@@ -535,7 +535,8 @@ public partial class MainWindow : IPluginWindow
             var folder = Path.Combine(Path.GetTempPath(), Core.Settings.AppPaths.ProductFolder, "plugin-views");
             Directory.CreateDirectory(folder);
             var name = string.Concat(title.Select(c => Path.GetInvalidFileNameChars().Contains(c) ? '_' : c));
-            var file = Path.Combine(folder, (name.Length == 0 ? "view" : name[..Math.Min(name.Length, 80)]) + ".txt");
+            name = name.Length == 0 ? "view" : name[..Math.Min(name.Length, 80)];
+            var file = Path.Combine(folder, Path.HasExtension(name) ? name : name + ".txt");
             File.WriteAllText(file, text);
             OpenViewer(file, _active);
         }).Task;
