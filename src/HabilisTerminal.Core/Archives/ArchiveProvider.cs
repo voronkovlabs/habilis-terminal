@@ -6,10 +6,12 @@ namespace HabilisTerminal.Core.Archives;
 
 /// <summary>
 /// An archive shown as a folder in a panel (issue #51), as Far's arclite: Enter / Ctrl+PgDn goes in, ".." at the top
-/// goes back out to the file, F5 copies out, F3 views through a temporary copy. An archive inside the archive opens
-/// the same way from a temporary copy. Location reads like a path: <c>C:\data\a.zip\docs</c>.
+/// goes back out to the file, F5 / F6 copy or move out, F3 views through a temporary copy. An archive inside the
+/// archive opens the same way from a temporary copy. Formats 7-Zip writes (zip, 7z, tar...) also take F5 / F6 in, F8
+/// and F7: each change writes an updated copy next to the archive and then replaces it. Location reads like a path:
+/// <c>C:\data\a.zip\docs</c>.
 /// </summary>
-public sealed class ArchiveProvider : IPanelProvider, IGetFiles
+public sealed class ArchiveProvider : IPanelProvider, IGetFiles, IPutFiles, IDeleteEntries, IMakeFolder
 {
     private static readonly IReadOnlyList<PanelLayout> ArchiveLayouts =
         [new PanelLayout("Archive", [PanelColumn.Size, PanelColumn.Modified])];
@@ -51,7 +53,10 @@ public sealed class ArchiveProvider : IPanelProvider, IGetFiles
         }
     }
 
-    public bool CanMove => false;
+    public bool CanMove => CanWrite;
+
+    /// <summary>The archive can be changed: its format writes and it is not inside another archive.</summary>
+    public bool CanWrite => _levels.Count == 1 && Top.Archive.Format.CanWrite;
 
     private Level Top => _levels.Peek();
 
@@ -148,7 +153,7 @@ public sealed class ArchiveProvider : IPanelProvider, IGetFiles
         var copy = Path.Combine(folder, entry.Name);
         var archive = Top.Archive;
         var failures = await Task.Run(() => archive.Extract(new Dictionary<uint, string> { [item.Index] = copy }, _ => { }, _ => { }, () => _askPassword(entry.Name), cancellationToken), cancellationToken);
-        var nested = failures.Count == 0 && File.Exists(copy) ? _library.Open(copy, anyFormat: false, () => _askPassword(entry.Name)) : null;
+        var nested = failures.Count == 0 && File.Exists(copy) ? await OpenOnPoolAsync(copy, anyFormat: false, () => _askPassword(entry.Name)) : null;
         if (nested is null)
         {
             DeleteQuietly(folder);
@@ -165,23 +170,23 @@ public sealed class ArchiveProvider : IPanelProvider, IGetFiles
         return true;
     }
 
-    public Task<bool> GoUpAsync(CancellationToken cancellationToken)
+    public async Task<bool> GoUpAsync(CancellationToken cancellationToken)
     {
         if (_folder.Length > 0)
         {
             _folder = ArchiveTree.Parent(_folder);
-            return Task.FromResult(true);
+            return true;
         }
 
         if (_levels.Count > 1)
         {
             var nested = _levels.Pop();
-            nested.Dispose();
             _folder = nested.OuterFolder;
-            return Task.FromResult(true);
+            await Task.Run(nested.Dispose, CancellationToken.None);
+            return true;
         }
 
-        return Task.FromResult(false);
+        return false;
     }
 
     public async Task<OperationOutcome> GetFilesAsync(TransferRequest request, IOperationProgress progress, CancellationToken cancellationToken)
@@ -270,17 +275,251 @@ public sealed class ArchiveProvider : IPanelProvider, IGetFiles
         }
 
         var failed = files.Count(failures.ContainsKey);
+        if (request.Move && failed == 0 && skipped == 0)
+        {
+            // F6: the copies are complete, so the originals leave the archive.
+            await DeleteAsync(request.Entries, progress, cancellationToken);
+        }
+
         return new OperationOutcome(files.Count - failed, skipped, failed, failures.Count > 0 ? failures.Values.First() : null);
     }
 
-    public ValueTask DisposeAsync()
+    public async Task<OperationOutcome> PutFilesAsync(IReadOnlyList<string> localPaths, Func<string, Task<OverwriteChoice>> askOverwrite, IOperationProgress progress, CancellationToken cancellationToken)
     {
-        while (_levels.Count > 0)
+        EnsureWritable();
+        var tree = Top.Tree;
+        var add = new List<NewArchiveItem>();
+        foreach (var local in localPaths)
         {
-            _levels.Pop().Dispose();
+            var path = ArchiveTree.Combine(_folder, Path.GetFileName(Path.TrimEndingDirectorySeparator(local)));
+            if (Directory.Exists(local))
+            {
+                add.Add(FolderItem(path, new DirectoryInfo(local)));
+                var options = new EnumerationOptions { RecurseSubdirectories = true, AttributesToSkip = 0 };
+                foreach (var info in new DirectoryInfo(local).EnumerateFileSystemInfos("*", options))
+                {
+                    var inner = ArchiveTree.Combine(path, Path.GetRelativePath(local, info.FullName));
+                    add.Add(info is DirectoryInfo folder ? FolderItem(inner, folder) : FileItem(inner, (FileInfo)info));
+                }
+            }
+            else
+            {
+                add.Add(FileItem(path, new FileInfo(local)));
+            }
         }
 
-        return ValueTask.CompletedTask;
+        // Existing files are replaced when the user agrees; existing folders simply stay.
+        var removed = new HashSet<uint>();
+        var skipped = 0;
+        var answer = OverwriteChoice.Overwrite;
+        foreach (var item in add.ToList())
+        {
+            if (tree.Find(item.Path) is not { } existing)
+            {
+                continue;
+            }
+
+            if (item.IsFolder || existing.IsFolder)
+            {
+                if (item.IsFolder && existing.IsFolder && existing.Item is not null)
+                {
+                    add.Remove(item);
+                }
+
+                continue;
+            }
+
+            if (answer is not (OverwriteChoice.OverwriteAll or OverwriteChoice.SkipAll))
+            {
+                answer = await askOverwrite(item.Path);
+            }
+
+            if (answer == OverwriteChoice.Cancel)
+            {
+                return new OperationOutcome(0, 0, 0, "Cancelled.");
+            }
+
+            if (answer is OverwriteChoice.Skip or OverwriteChoice.SkipAll)
+            {
+                add.Remove(item);
+                skipped++;
+            }
+            else
+            {
+                removed.Add(existing.Item!.Index);
+            }
+        }
+
+        var files = add.Where(i => !i.IsFolder).ToList();
+        progress.SetTotals(files.Count, files.Sum(i => i.Size));
+        await RewriteAsync(removed, add, progress, cancellationToken);
+        return new OperationOutcome(files.Count, skipped, 0);
+    }
+
+    public async Task<OperationOutcome> DeleteAsync(IReadOnlyList<PanelEntry> entries, IOperationProgress progress, CancellationToken cancellationToken)
+    {
+        EnsureWritable();
+        var tree = Top.Tree;
+        var removed = new HashSet<uint>();
+        foreach (var entry in entries)
+        {
+            var path = ArchiveTree.Combine(_folder, entry.Name);
+            if (tree.Find(path)?.Item is { } item)
+            {
+                removed.Add(item.Index);
+            }
+
+            if (entry.IsFolder)
+            {
+                removed.UnionWith(tree.ItemsUnder(path).Select(i => i.Index));
+            }
+        }
+
+        await RewriteAsync(removed, [], progress, cancellationToken);
+        return new OperationOutcome(entries.Count, 0, 0);
+    }
+
+    public async Task MakeFolderAsync(string name, CancellationToken cancellationToken)
+    {
+        EnsureWritable();
+        if (name.Length == 0 || name.IndexOfAny(Path.GetInvalidFileNameChars()) >= 0)
+        {
+            throw new PluginException($"'{name}' is not a valid folder name.");
+        }
+
+        var path = ArchiveTree.Combine(_folder, name);
+        if (Top.Tree.Find(path) is not null)
+        {
+            throw new PluginException($"'{name}' already exists.");
+        }
+
+        await RewriteAsync(new HashSet<uint>(), [new NewArchiveItem(path, null, 0, DateTime.UtcNow, FileAttributes.Directory)], NoProgress.Instance, cancellationToken);
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        var levels = _levels.ToList();
+        _levels.Clear();
+        await Task.Run(() => levels.ForEach(level => level.Dispose()));
+    }
+
+    // 7z.dll objects have no COM proxies, so they are created and used on thread-pool (MTA) threads only: an object
+    // created on the UI thread (STA) could not be called from the pool, where extraction and updates run.
+
+    private Task<SevenZipArchive?> OpenOnPoolAsync(string path, bool anyFormat, Func<string?> password) =>
+        Task.Run(() => _library.Open(path, anyFormat, password));
+
+    private void EnsureWritable()
+    {
+        if (!CanWrite)
+        {
+            throw new PluginException(_levels.Count > 1
+                ? "An archive inside another archive cannot be changed; copy it out first."
+                : $"{Top.Archive.Format.Name} archives cannot be changed.");
+        }
+    }
+
+    private static NewArchiveItem FileItem(string path, FileInfo info) =>
+        new(path, info.FullName, info.Length, info.LastWriteTimeUtc, info.Attributes);
+
+    private static NewArchiveItem FolderItem(string path, DirectoryInfo info) =>
+        new(path, null, 0, info.LastWriteTimeUtc, info.Attributes);
+
+    /// <summary>
+    /// Writes the archive without <paramref name="removed"/> and with <paramref name="add"/> to a temporary file in its
+    /// folder, then replaces the archive with it and reopens it. On failure or cancel the archive stays as it was.
+    /// </summary>
+    private async Task RewriteAsync(HashSet<uint> removed, IReadOnlyList<NewArchiveItem> add, IOperationProgress progress, CancellationToken cancellationToken)
+    {
+        var level = Top;
+        var archive = level.Archive;
+        var original = archive.FilePath;
+        var keep = archive.Items.Where(i => !removed.Contains(i.Index)).Select(i => i.Index).ToList();
+        var temporary = Path.Combine(Path.GetDirectoryName(original)!, $"~{Path.GetFileName(original)}.{Guid.NewGuid().ToString("N")[..8]}.tmp");
+        var started = 0;
+        try
+        {
+            await Task.Run(
+                () => archive.Update(
+                    temporary,
+                    keep,
+                    add,
+                    progress.AddBytes,
+                    path =>
+                    {
+                        if (started++ > 0)
+                        {
+                            progress.CompleteItem();
+                        }
+
+                        progress.Begin(path);
+                    },
+                    cancellationToken),
+                cancellationToken);
+        }
+        catch (Exception ex) when (ex is not OutOfMemoryException)
+        {
+            // Any failure (7-Zip, a file to add, an interop error) leaves the archive as it was and no partial copy.
+            TryDelete(temporary);
+            if (ex is OperationCanceledException or PluginException)
+            {
+                throw;
+            }
+
+            throw new PluginException(ex.Message, ex);
+        }
+
+        if (started > 0)
+        {
+            progress.CompleteItem();
+        }
+
+        var password = archive.Password;
+        var replaced = await Task.Run(() =>
+        {
+            archive.Dispose();
+            try
+            {
+                System.IO.File.Move(temporary, original, overwrite: true);
+                return null;
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                TryDelete(temporary);
+                return ex;
+            }
+        });
+        await ReopenAsync(level, original, password);
+        if (replaced is not null)
+        {
+            throw new PluginException($"Cannot replace {Path.GetFileName(original)}: {replaced.Message}", replaced);
+        }
+    }
+
+    /// <summary>Opens the archive again after a change, in place of <paramref name="level"/>; the folder stays if it still exists.</summary>
+    private async Task ReopenAsync(Level level, string path, string? password)
+    {
+        _levels.Pop();
+        var archive = await OpenOnPoolAsync(path, anyFormat: true, () => password ?? _askPassword(Path.GetFileName(path)))
+            ?? throw new PluginException($"{Path.GetFileName(path)} cannot be opened after the change.");
+        var reopened = new Level(archive, level.DisplayPath, level.OuterFolder, level.TempFolder);
+        _levels.Push(reopened);
+        while (_folder.Length > 0 && !reopened.Tree.IsFolder(_folder))
+        {
+            _folder = ArchiveTree.Parent(_folder);
+        }
+    }
+
+    private static void TryDelete(string file)
+    {
+        try
+        {
+            System.IO.File.Delete(file);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            // A temporary file; left behind.
+        }
     }
 
     private static void DeleteQuietly(string folder)
@@ -292,6 +531,27 @@ public sealed class ArchiveProvider : IPanelProvider, IGetFiles
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
             // A temporary folder; left for the system to clean.
+        }
+    }
+
+    private sealed class NoProgress : IOperationProgress
+    {
+        public static NoProgress Instance { get; } = new();
+
+        public void SetTotals(long? items, long? bytes)
+        {
+        }
+
+        public void Begin(string item)
+        {
+        }
+
+        public void AddBytes(long bytes)
+        {
+        }
+
+        public void CompleteItem()
+        {
         }
     }
 

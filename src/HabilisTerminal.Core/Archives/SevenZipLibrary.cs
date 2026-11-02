@@ -2,8 +2,8 @@ using System.Runtime.InteropServices;
 
 namespace HabilisTerminal.Core.Archives;
 
-/// <summary>One archive format 7z.dll can read: its name, handler class id and usual extensions.</summary>
-public sealed record ArchiveFormat(string Name, Guid ClassId, IReadOnlyList<string> Extensions);
+/// <summary>One archive format 7z.dll can read: its name, handler class id, usual extensions and whether it writes.</summary>
+public sealed record ArchiveFormat(string Name, Guid ClassId, IReadOnlyList<string> Extensions, bool CanWrite = false);
 
 /// <summary>
 /// 7z.dll (7-Zip, LGPL), loaded once from the application folder (issue #51). Lists the formats it reads and opens
@@ -153,6 +153,7 @@ public sealed class SevenZipLibrary
             string? name = null;
             byte[]? classId = null;
             string? extensions = null;
+            var canWrite = false;
             if (getProperty(i, SevenZipIds.HandlerName, value.Pointer) == SevenZipIds.S_OK)
             {
                 name = value.AsString();
@@ -171,9 +172,15 @@ public sealed class SevenZipLibrary
             }
 
             value.Clear();
+            if (getProperty(i, SevenZipIds.HandlerUpdate, value.Pointer) == SevenZipIds.S_OK)
+            {
+                canWrite = value.AsBool();
+            }
+
+            value.Clear();
             if (name is not null && classId is { Length: 16 })
             {
-                formats.Add(new ArchiveFormat(name, new Guid(classId), (extensions ?? string.Empty).Split(' ', StringSplitOptions.RemoveEmptyEntries)));
+                formats.Add(new ArchiveFormat(name, new Guid(classId), (extensions ?? string.Empty).Split(' ', StringSplitOptions.RemoveEmptyEntries), canWrite));
             }
         }
 

@@ -315,7 +315,11 @@ As Far's arclite, on 7-Zip's `7z.dll` (26.04, shipped next to `habi.exe` per arc
 - **F3 / Enter** on a file views it from a temporary copy; **F5** copies files and folders out (times kept, overwrite
   asked); an archive inside an archive (e.g. `.tar` in `.zip`) opens in place from a temporary copy.
 - Encrypted archives ask for the password once per archive.
-- Not yet: writing into archives (F5 into, F8, F7, Shift+F1 add) and multi-volume archives.
+- **Writing** where 7-Zip writes the format (zip, 7z, tar, wim...): F5 / F6 into the archive (overwrite asked),
+  F6 out (moves), F8, F7. Each change writes an updated copy `~<name>.<id>.tmp` next to the archive and then replaces
+  it; on failure or cancel the archive stays as it was. An archive inside another archive is read-only.
+- 7z.dll objects are created and called on thread-pool threads only (they have no COM proxies for the UI thread).
+- Not yet (issue #63): Shift+F1 pack into a new archive, Shift+F2 extract, Shift+F3 test, multi-volume archives.
 
 ## 9. Viewer (F3) and editor (F4)
 

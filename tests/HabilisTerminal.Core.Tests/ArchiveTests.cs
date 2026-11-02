@@ -127,6 +127,81 @@ public class ArchiveTests
         Assert.Null(ArchiveProvider.TryOpenLocation(Path.Combine(sandbox.Path, "missing.zip", "x"), _ => null));
     }
 
+    [Fact]
+    public async Task F5_into_a_zip_adds_files_and_folders_and_replaces_a_file_when_allowed()
+    {
+        using var sandbox = new TestSandbox();
+        var zip = MakeZip(sandbox, "a.zip", ("readme.txt", "old"), ("docs/notes.txt", "n"));
+        var local = Directory.CreateDirectory(Path.Combine(sandbox.Path, "local")).FullName;
+        File.WriteAllText(Path.Combine(local, "readme.txt"), "new readme");
+        Directory.CreateDirectory(Path.Combine(local, "pics", "empty"));
+        File.WriteAllText(Path.Combine(local, "pics", "cat.txt"), "meow");
+        await using var provider = Open(zip);
+        Assert.True(provider.CanWrite);
+
+        var asked = new List<string>();
+        var outcome = await provider.PutFilesAsync(
+            [Path.Combine(local, "readme.txt"), Path.Combine(local, "pics")],
+            name => { asked.Add(name); return Task.FromResult(OverwriteChoice.Overwrite); },
+            new CountingProgress(),
+            CancellationToken.None);
+
+        Assert.Equal(new OperationOutcome(2, 0, 0), outcome);
+        Assert.Equal(["readme.txt"], asked);
+        Assert.Equal(["docs/", "pics/", "readme.txt"], await Names(provider));
+        await provider.EnterAsync(new PanelEntry("pics", IsFolder: true), CancellationToken.None);
+        Assert.Equal(["cat.txt", "empty/"], await Names(provider));
+        await provider.GoUpAsync(CancellationToken.None);
+
+        // The zip itself was rewritten: another reader sees the same, and the replaced file's new content.
+        using var check = ZipFile.OpenRead(zip);
+        Assert.Equal("new readme", new StreamReader(check.GetEntry("readme.txt")!.Open()).ReadToEnd());
+        Assert.Equal("n", new StreamReader(check.GetEntry("docs/notes.txt")!.Open()).ReadToEnd());
+        Assert.Equal(1, check.Entries.Count(e => e.FullName == "readme.txt"));
+        Assert.Empty(Directory.GetFiles(sandbox.Path, "~*.tmp"));
+    }
+
+    [Fact]
+    public async Task F8_F7_and_F6_change_a_tar_and_an_archive_inside_another_stays_read_only()
+    {
+        using var sandbox = new TestSandbox();
+        var tar = Path.Combine(sandbox.Path, "a.tar");
+        await using (var stream = File.Create(tar))
+        await using (var writer = new TarWriter(stream))
+        {
+            foreach (var (name, text) in new[] { ("keep.txt", "k"), ("old/one.txt", "1"), ("old/two.txt", "2"), ("move.txt", "m") })
+            {
+                await writer.WriteEntryAsync(new PaxTarEntry(TarEntryType.RegularFile, name) { DataStream = new MemoryStream(System.Text.Encoding.UTF8.GetBytes(text)) });
+            }
+        }
+
+        await using var provider = Open(tar);
+        await provider.DeleteAsync([new PanelEntry("old", IsFolder: true)], new CountingProgress(), CancellationToken.None);
+        Assert.Equal(["keep.txt", "move.txt"], await Names(provider));
+
+        await provider.MakeFolderAsync("new", CancellationToken.None);
+        await Assert.ThrowsAsync<PluginException>(() => provider.MakeFolderAsync("new", CancellationToken.None));
+        Assert.Equal(["keep.txt", "move.txt", "new/"], await Names(provider));
+
+        var target = Directory.CreateDirectory(Path.Combine(sandbox.Path, "out")).FullName;
+        var outcome = await provider.GetFilesAsync(new TransferRequest([new PanelEntry("move.txt")], target, move: true, _ => Task.FromResult(OverwriteChoice.Overwrite)), new CountingProgress(), CancellationToken.None);
+        Assert.Equal(new OperationOutcome(1, 0, 0), outcome);
+        Assert.Equal("m", File.ReadAllText(Path.Combine(target, "move.txt")));
+        Assert.Equal(["keep.txt", "new/"], await Names(provider));
+
+        // A tar inside a zip opens, but changing it would mean rewriting the outer archive too.
+        var zip = Path.Combine(sandbox.Path, "outer.zip");
+        using (var archive = ZipFile.Open(zip, ZipArchiveMode.Create))
+        {
+            archive.CreateEntryFromFile(tar, "a.tar");
+        }
+
+        await using var outer = Open(zip);
+        await outer.EnterAsync(new PanelEntry("a.tar"), CancellationToken.None);
+        Assert.False(outer.CanWrite);
+        await Assert.ThrowsAsync<PluginException>(() => outer.MakeFolderAsync("x", CancellationToken.None));
+    }
+
     private static ArchiveProvider Open(string path) =>
         ArchiveProvider.TryOpen(path, anyFormat: false, _ => null) ?? throw new InvalidOperationException($"{path} did not open.");
 

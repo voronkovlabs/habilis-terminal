@@ -5,7 +5,13 @@ namespace HabilisTerminal.Core.Archives;
 /// <summary>One item of an archive as 7-Zip lists it; <see cref="Path"/> uses '\' and has no leading separator.</summary>
 public sealed record ArchiveItem(uint Index, string Path, bool IsFolder, long Size, DateTime? ModifiedUtc, bool Encrypted);
 
-/// <summary>An open archive: its items and extraction. Not thread-safe; one operation at a time.</summary>
+/// <summary>A file or folder to add to an archive: its path inside and the local file (null for a folder).</summary>
+public sealed record NewArchiveItem(string Path, string? SourceFile, long Size, DateTime ModifiedUtc, FileAttributes Attributes)
+{
+    public bool IsFolder => SourceFile is null;
+}
+
+/// <summary>An open archive: its items, extraction and updated copies. Not thread-safe; one operation at a time.</summary>
 public sealed class SevenZipArchive : IDisposable
 {
     private readonly IInArchive _archive;
@@ -54,6 +60,32 @@ public sealed class SevenZipArchive : IDisposable
         }
 
         return callback.Failures;
+    }
+
+    /// <summary>The password given while opening or extracting, for reopening an updated copy.</summary>
+    public string? Password => _password;
+
+    /// <summary>
+    /// Writes an updated copy of the archive to <paramref name="outputPath"/> (a new file): the items at
+    /// <paramref name="keep"/> unchanged, then <paramref name="add"/>. The caller replaces the original with it.
+    /// </summary>
+    /// <exception cref="IOException">The format cannot write, a file to add cannot be read, or 7-Zip failed.</exception>
+    /// <exception cref="OperationCanceledException">Cancelled; the caller deletes the partial copy.</exception>
+    public void Update(string outputPath, IReadOnlyList<uint> keep, IReadOnlyList<NewArchiveItem> add, Action<long> bytesRead, Action<string> itemStarted, CancellationToken cancellationToken)
+    {
+        if (!Format.CanWrite || _archive is not IOutArchive writer)
+        {
+            throw new IOException($"{Format.Name} archives cannot be changed.");
+        }
+
+        using var output = new OutStream(new FileStream(outputPath, FileMode.CreateNew, FileAccess.ReadWrite, FileShare.None, 64 * 1024), _ => { });
+        using var callback = new UpdateCallback(keep, add, bytesRead, itemStarted, cancellationToken);
+        var result = writer.UpdateItems(output, (uint)(keep.Count + add.Count), callback);
+        cancellationToken.ThrowIfCancellationRequested();
+        if (result != SevenZipIds.S_OK)
+        {
+            throw new IOException(callback.Error ?? $"7-Zip could not write {System.IO.Path.GetFileName(FilePath)} (0x{result:X8}).");
+        }
     }
 
     private List<ArchiveItem> ReadItems()
@@ -223,6 +255,134 @@ public sealed class SevenZipArchive : IDisposable
             }
 
             _currentPath = null;
+        }
+    }
+
+    [ComVisible(true)]
+    private sealed class UpdateCallback(
+        IReadOnlyList<uint> keep,
+        IReadOnlyList<NewArchiveItem> add,
+        Action<long> bytesRead,
+        Action<string> itemStarted,
+        CancellationToken cancellationToken) : IArchiveUpdateCallback, IDisposable
+    {
+        private readonly List<SourceStream> _opened = [];
+
+        /// <summary>Why a file to add could not be read.</summary>
+        public string? Error { get; private set; }
+
+        public int SetTotal(ulong total) => SevenZipIds.S_OK;
+
+        public int SetCompleted(IntPtr completeValue) => cancellationToken.IsCancellationRequested ? SevenZipIds.E_ABORT : SevenZipIds.S_OK;
+
+        public int GetUpdateItemInfo(uint index, IntPtr newData, IntPtr newProperties, IntPtr indexInArchive)
+        {
+            var kept = index < keep.Count;
+            if (newData != IntPtr.Zero)
+            {
+                Marshal.WriteInt32(newData, kept ? 0 : 1);
+            }
+
+            if (newProperties != IntPtr.Zero)
+            {
+                Marshal.WriteInt32(newProperties, kept ? 0 : 1);
+            }
+
+            if (indexInArchive != IntPtr.Zero)
+            {
+                Marshal.WriteInt32(indexInArchive, kept ? (int)keep[(int)index] : -1);
+            }
+
+            return SevenZipIds.S_OK;
+        }
+
+        public int GetProperty(uint index, uint propId, IntPtr value)
+        {
+            if (propId == SevenZipIds.IsAnti)
+            {
+                PropVariant.WriteBool(value, false);
+                return SevenZipIds.S_OK;
+            }
+
+            if (index < keep.Count)
+            {
+                return SevenZipIds.S_OK;
+            }
+
+            var item = add[(int)index - keep.Count];
+            switch (propId)
+            {
+                case SevenZipIds.Path:
+                    PropVariant.WriteString(value, item.Path);
+                    break;
+                case SevenZipIds.IsDir:
+                    PropVariant.WriteBool(value, item.IsFolder);
+                    break;
+                case SevenZipIds.Size:
+                    PropVariant.WriteUInt64(value, item.IsFolder ? 0 : (ulong)item.Size);
+                    break;
+                case SevenZipIds.Attrib:
+                    PropVariant.WriteUInt32(value, (uint)item.Attributes);
+                    break;
+                case SevenZipIds.MTime or SevenZipIds.CTime or SevenZipIds.ATime:
+                    PropVariant.WriteFileTime(value, item.ModifiedUtc);
+                    break;
+            }
+
+            return SevenZipIds.S_OK;
+        }
+
+        public int GetStream(uint index, out ISequentialInStream? inStream)
+        {
+            inStream = null;
+            if (cancellationToken.IsCancellationRequested)
+            {
+                return SevenZipIds.E_ABORT;
+            }
+
+            if (index < keep.Count || add[(int)index - keep.Count] is not { SourceFile: { } file } item)
+            {
+                return SevenZipIds.S_OK;
+            }
+
+            itemStarted(item.Path);
+            try
+            {
+                // Opened here so that a missing or locked file fails now, with its name.
+                using (new FileStream(file, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete))
+                {
+                }
+
+                var stream = new SourceStream(file, bytesRead);
+                lock (_opened)
+                {
+                    _opened.Add(stream);
+                }
+
+                inStream = stream;
+                return SevenZipIds.S_OK;
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                Error = $"{file}: {ex.Message}";
+                return SevenZipIds.E_FAIL;
+            }
+        }
+
+        public int SetOperationResult(int operationResult) => SevenZipIds.S_OK;
+
+        /// <summary>Closes the files 7-Zip did not read to the end (a failed or cancelled update).</summary>
+        public void Dispose()
+        {
+            lock (_opened)
+            {
+                foreach (var stream in _opened)
+                {
+                    stream.Dispose();
+                }
+
+                _opened.Clear();
+            }
         }
     }
 }

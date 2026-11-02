@@ -81,6 +81,58 @@ internal interface IInArchive
     int GetArchiveProperty(uint propId, IntPtr value);
 }
 
+// Writing (stage 2 of issue #51): the handler that opened an archive also writes its updated copy.
+
+[ComImport, Guid("23170F69-40C1-278A-0000-000300010000"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+internal interface ISequentialInStream
+{
+    [PreserveSig]
+    int Read(IntPtr data, uint size, IntPtr processedSize);
+}
+
+[ComImport, Guid("23170F69-40C1-278A-0000-000300040000"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+internal interface IOutStream
+{
+    [PreserveSig]
+    int Write(IntPtr data, uint size, IntPtr processedSize);
+
+    [PreserveSig]
+    int Seek(long offset, uint seekOrigin, IntPtr newPosition);
+
+    [PreserveSig]
+    int SetSize(ulong newSize);
+}
+
+/// <summary>Extends IProgress (SetTotal, SetCompleted), declared here in vtable order.</summary>
+[ComImport, Guid("23170F69-40C1-278A-0000-000600800000"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+internal interface IArchiveUpdateCallback
+{
+    [PreserveSig]
+    int SetTotal(ulong total);
+
+    [PreserveSig]
+    int SetCompleted(IntPtr completeValue);
+
+    [PreserveSig]
+    int GetUpdateItemInfo(uint index, IntPtr newData, IntPtr newProperties, IntPtr indexInArchive);
+
+    [PreserveSig]
+    int GetProperty(uint index, uint propId, IntPtr value);
+
+    [PreserveSig]
+    int GetStream(uint index, out ISequentialInStream? inStream);
+
+    [PreserveSig]
+    int SetOperationResult(int operationResult);
+}
+
+[ComImport, Guid("23170F69-40C1-278A-0000-000600A00000"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+internal interface IOutArchive
+{
+    [PreserveSig]
+    int UpdateItems(IOutStream outStream, uint count, IArchiveUpdateCallback callback);
+}
+
 /// <summary>Property ids (kpid*) and handler property ids from 7-Zip's PropID.h and IArchive.h.</summary>
 internal static class SevenZipIds
 {
@@ -89,12 +141,16 @@ internal static class SevenZipIds
     public const uint Size = 7;
     public const uint PackSize = 8;
     public const uint Attrib = 9;
+    public const uint CTime = 10;
+    public const uint ATime = 11;
     public const uint MTime = 12;
     public const uint Encrypted = 15;
+    public const uint IsAnti = 21;
 
     public const uint HandlerName = 0;
     public const uint HandlerClassId = 1;
     public const uint HandlerExtension = 2;
+    public const uint HandlerUpdate = 4;
 
     public const int S_OK = 0;
     public const int S_FALSE = 1;
@@ -191,6 +247,38 @@ internal sealed class PropVariant : IDisposable
 
     public void Clear() => _ = PropVariantClear(Pointer);
 
+    // Writers for values 7-Zip asks for; it owns and clears what is written (BSTRs included).
+
+    public static void WriteString(IntPtr target, string value)
+    {
+        Marshal.WriteInt16(target, (short)VtBstr);
+        Marshal.WriteIntPtr(target, 8, Marshal.StringToBSTR(value));
+    }
+
+    public static void WriteBool(IntPtr target, bool value)
+    {
+        Marshal.WriteInt16(target, (short)VtBool);
+        Marshal.WriteInt16(target, 8, value ? (short)-1 : (short)0);
+    }
+
+    public static void WriteUInt32(IntPtr target, uint value)
+    {
+        Marshal.WriteInt16(target, (short)VtUi4);
+        Marshal.WriteInt32(target, 8, (int)value);
+    }
+
+    public static void WriteUInt64(IntPtr target, ulong value)
+    {
+        Marshal.WriteInt16(target, (short)VtUi8);
+        Marshal.WriteInt64(target, 8, (long)value);
+    }
+
+    public static void WriteFileTime(IntPtr target, DateTime utc)
+    {
+        Marshal.WriteInt16(target, (short)VtFileTime);
+        Marshal.WriteInt64(target, 8, utc.ToFileTimeUtc());
+    }
+
     public void Dispose()
     {
         Clear();
@@ -203,7 +291,7 @@ internal sealed class PropVariant : IDisposable
 
 /// <summary>A file stream as 7-Zip's IInStream.</summary>
 [ComVisible(true)]
-internal sealed class InStream(Stream stream) : IInStream, IDisposable
+internal sealed class InStream(Stream stream, Action<long>? bytesRead = null) : IInStream, ISequentialInStream, IDisposable
 {
     private byte[] _buffer = new byte[64 * 1024];
 
@@ -234,6 +322,7 @@ internal sealed class InStream(Stream stream) : IInStream, IDisposable
                 Marshal.WriteInt32(processedSize, total);
             }
 
+            bytesRead?.Invoke(total);
             return SevenZipIds.S_OK;
         }
         catch (IOException)
@@ -263,9 +352,96 @@ internal sealed class InStream(Stream stream) : IInStream, IDisposable
     public void Dispose() => stream.Dispose();
 }
 
-/// <summary>Writes extracted bytes to a file, counting them for the progress.</summary>
+/// <summary>
+/// A file added to an archive. Parallel compressors keep several open and release them in no fixed order, so the file
+/// closes once read to the end; a seek (zip re-reads a file it stores uncompressed) opens it again.
+/// </summary>
 [ComVisible(true)]
-internal sealed class OutStream(Stream stream, Action<long> written) : ISequentialOutStream, IDisposable
+internal sealed class SourceStream(string path, Action<long> bytesRead) : IInStream, ISequentialInStream, IDisposable
+{
+    private InStream? _open;
+    private long _position;
+
+    public int Read(IntPtr data, uint size, IntPtr processedSize)
+    {
+        var processed = Marshal.AllocCoTaskMem(sizeof(int));
+        try
+        {
+            Marshal.WriteInt32(processed, 0);
+            var result = Open()?.Read(data, size, processed) ?? SevenZipIds.E_FAIL;
+            var count = Marshal.ReadInt32(processed);
+            _position += count;
+            if (processedSize != IntPtr.Zero)
+            {
+                Marshal.WriteInt32(processedSize, count);
+            }
+
+            if (result == SevenZipIds.S_OK && count < size)
+            {
+                Dispose();
+            }
+
+            return result;
+        }
+        finally
+        {
+            Marshal.FreeCoTaskMem(processed);
+        }
+    }
+
+    public int Seek(long offset, uint seekOrigin, IntPtr newPosition)
+    {
+        var position = Marshal.AllocCoTaskMem(sizeof(long));
+        try
+        {
+            var result = Open()?.Seek(offset, seekOrigin, position) ?? SevenZipIds.E_FAIL;
+            if (result == SevenZipIds.S_OK)
+            {
+                _position = Marshal.ReadInt64(position);
+                if (newPosition != IntPtr.Zero)
+                {
+                    Marshal.WriteInt64(newPosition, _position);
+                }
+            }
+
+            return result;
+        }
+        finally
+        {
+            Marshal.FreeCoTaskMem(position);
+        }
+    }
+
+    public void Dispose()
+    {
+        _open?.Dispose();
+        _open = null;
+    }
+
+    private InStream? Open()
+    {
+        if (_open is not null)
+        {
+            return _open;
+        }
+
+        try
+        {
+            var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete, 64 * 1024);
+            stream.Position = Math.Min(_position, stream.Length);
+            _open = new InStream(stream, bytesRead);
+            return _open;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return null;
+        }
+    }
+}
+
+/// <summary>Writes extracted bytes to a file, counting them for the progress; seekable for writing archives.</summary>
+[ComVisible(true)]
+internal sealed class OutStream(Stream stream, Action<long> written) : ISequentialOutStream, IOutStream, IDisposable
 {
     private byte[] _buffer = new byte[64 * 1024];
 
@@ -286,6 +462,37 @@ internal sealed class OutStream(Stream stream, Action<long> written) : ISequenti
             }
 
             written(size);
+            return SevenZipIds.S_OK;
+        }
+        catch (IOException)
+        {
+            return SevenZipIds.E_FAIL;
+        }
+    }
+
+    public int Seek(long offset, uint seekOrigin, IntPtr newPosition)
+    {
+        try
+        {
+            var position = stream.Seek(offset, (SeekOrigin)seekOrigin);
+            if (newPosition != IntPtr.Zero)
+            {
+                Marshal.WriteInt64(newPosition, position);
+            }
+
+            return SevenZipIds.S_OK;
+        }
+        catch (Exception ex) when (ex is IOException or ArgumentException)
+        {
+            return SevenZipIds.E_FAIL;
+        }
+    }
+
+    public int SetSize(ulong newSize)
+    {
+        try
+        {
+            stream.SetLength((long)newSize);
             return SevenZipIds.S_OK;
         }
         catch (IOException)
