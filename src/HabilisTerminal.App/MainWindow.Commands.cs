@@ -70,6 +70,12 @@ public partial class MainWindow
             return HandleLayoutKeyInTerminal(key, modifiers);
         }
 
+        // Plugin panels and F11 first: a plugin's command key takes precedence over the host's key (issue #49).
+        if (!panel.IsQuickSearchActive && HandlePluginKey(panel, key, modifiers))
+        {
+            return true;
+        }
+
         // Quick search sees its keys first (Backspace, Esc, Ctrl+Enter...). A typed character is left unhandled, so it
         // arrives as text input and appends (OnPreviewTextInput); no key binding may take it meanwhile (issue #39).
         if (panel.IsQuickSearchActive)
@@ -574,7 +580,7 @@ public partial class MainWindow
         panel.Focus();
         if (result?.Item?.Tag is string target)
         {
-            await panel.NavigateAsync(target);
+            await NavigateOrOpenAsync(panel, target);
         }
     }
 
@@ -609,6 +615,22 @@ public partial class MainWindow
 
         var places = DriveCatalog.Places().ToList();
         places.Add(("Other panel", Other(panel).CurrentPath));
+
+        // Plugins' drive-menu items (issue #49), after the drives.
+        var pluginGroup = true;
+        foreach (var (plugin, entry) in _plugins.DriveMenuItems())
+        {
+            items.Add(new QuickPickItem
+            {
+                Label = entry.Title,
+                Description = plugin.Name,
+                Group = pluginGroup ? "Plugins" : null,
+                Icon = Codicon.Folder,
+                Tag = (plugin, entry),
+            });
+            pluginGroup = false;
+        }
+
         var first = true;
         foreach (var (name, path) in places)
         {
@@ -642,6 +664,17 @@ public partial class MainWindow
             OnDelete = item => DisconnectOrEject(item),
         });
 
+        if (result?.Item?.Tag is ValueTuple<Core.Plugins.LoadedPlugin, HabilisTerminal.Plugins.PluginMenuItem> pluginItem)
+        {
+            if (!IsShown(panel))
+            {
+                SetPanelVisibility(panel == _left || Workspace.LeftVisible, panel == _right || Workspace.RightVisible);
+            }
+
+            await OpenPluginAsync(panel, pluginItem.Item1, pluginItem.Item2.Open);
+            return;
+        }
+
         string? target = result?.Item?.Tag switch
         {
             DriveSummary drive => _lastPathPerDrive.TryGetValue(drive.Root, out var last) && Directory.Exists(last) ? last : drive.Root,
@@ -673,7 +706,7 @@ public partial class MainWindow
         Activate(panel);
 
         FocusActivePanel();
-        await panel.NavigateAsync(target);
+        await NavigateOrOpenAsync(panel, target);
         SyncShellDirectory();
     }
 

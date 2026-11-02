@@ -2,6 +2,7 @@
   <Folder Name="/src/">
     <Project Path="src/HabilisTerminal.App/HabilisTerminal.App.csproj" />
     <Project Path="src/HabilisTerminal.Core/HabilisTerminal.Core.csproj" />
+    <Project Path="src/HabilisTerminal.Plugins.Sdk/HabilisTerminal.Plugins.Sdk.csproj" />
     <Project Path="src/HabilisTerminal.Shell/HabilisTerminal.Shell.csproj" />
     <Project Path="src/HabilisTerminal.Themes/HabilisTerminal.Themes.csproj" />
   </Folder>

@@ -17,9 +17,12 @@ public enum ColumnKind
     Attributes,
     CompactSize,
     ModifiedShort,
+
+    /// <summary>A plugin panel's own column (issue #49); <see cref="ColumnSpec.Key"/> names it.</summary>
+    Custom,
 }
 
-public sealed record ColumnSpec(ColumnKind Kind, string Title, double DefaultWidth, bool AlignRight, SortMode? SortMode);
+public sealed record ColumnSpec(ColumnKind Kind, string Title, double DefaultWidth, bool AlignRight, SortMode? SortMode, string? Key = null);
 
 /// <summary>Columns per view mode and how cells are formatted (SPEC §6).</summary>
 public static class PanelColumns
@@ -43,6 +46,20 @@ public static class PanelColumns
         PanelViewMode.Medium => 2,
         _ => 1,
     };
+
+    /// <summary>Name columns of a panel: one for a plugin panel (issue #49), else by view mode.</summary>
+    public static int NameColumnCount(PanelState state) => state.Extension is null ? NameColumnCount(state.ViewMode) : 1;
+
+    /// <summary>Detail columns of a panel: a plugin panel's layout (issue #49), else by view mode.</summary>
+    public static IReadOnlyList<ColumnSpec> DetailColumns(PanelState state) =>
+        state.Extension is { } extension
+            ? extension.Columns.Select(c => c.Key switch
+            {
+                "size" => Size with { Title = c.Title },
+                "modified" => Modified with { Title = c.Title },
+                _ => new ColumnSpec(ColumnKind.Custom, c.Title, c.Width, c.AlignRight, null, c.Key),
+            }).ToArray()
+            : DetailColumns(state.ViewMode);
 
     /// <summary>Columns after the name: for table modes, and after each name column in Medium.</summary>
     public static IReadOnlyList<ColumnSpec> DetailColumns(PanelViewMode mode) => mode switch

@@ -47,6 +47,14 @@ internal static class PanelPalette
 
     public static Brush WidgetBorder { get; private set; } = null!;         // widget.border
 
+    private static Brush[] s_tones = [];
+
+    /// <summary>
+    /// A plugin row tone (the SDK's RowTone: 1 Accent, 2 Good, 3 Warning, 4 Bad, 5 Dim) as a theme brush; null for
+    /// normal rows (issue #49).
+    /// </summary>
+    public static Brush? Tone(int tone) => tone > 0 && tone < s_tones.Length ? s_tones[tone] : null;
+
     public static bool IsLight { get; private set; }
 
     public static void Apply(ColorTheme theme)
@@ -82,6 +90,15 @@ internal static class PanelPalette
         InputBackground = Freeze(Opaque("input.background"));
         WidgetBackground = Freeze(Opaque("quickInput.background"));
         WidgetBorder = Freeze(Opaque("widget.border"));
+        s_tones =
+        [
+            Foreground,
+            Freeze(Opaque("list.highlightForeground")),
+            Freeze(Opaque("terminal.ansiGreen")),
+            Freeze(Opaque("terminal.ansiYellow")),
+            ErrorForeground,
+            DescriptionForeground,
+        ];
 
         if (Application.Current is { } application)
         {

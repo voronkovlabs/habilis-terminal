@@ -2,4 +2,7 @@
   <ItemGroup>
     <InternalsVisibleTo Include="HabilisTerminal.Core.Tests" />
   </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\HabilisTerminal.Plugins.Sdk\HabilisTerminal.Plugins.Sdk.csproj" />
+  </ItemGroup>
 </Project>

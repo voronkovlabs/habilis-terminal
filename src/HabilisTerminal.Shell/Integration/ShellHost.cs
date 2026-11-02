@@ -72,6 +72,33 @@ public sealed class ShellHost : IDisposable
     public event Action? FocusPanelRequested;
 
     /// <summary>
+    /// Enter on a command line starting with one of <see cref="AddressPrefixes"/> and a colon: the line, which the
+    /// shell did not run (plugin addresses, issue #49). Background thread.
+    /// </summary>
+    public event Action<string>? AddressEntered;
+
+    /// <summary>
+    /// Plugin prefixes ("s3", "sqs"): Enter on "s3:..." is reported through <see cref="AddressEntered"/> instead of
+    /// running. Kept as a file in the channel, which the integration script reads when Enter is pressed.
+    /// </summary>
+    public IReadOnlyList<string> AddressPrefixes
+    {
+        set
+        {
+            var file = Path.Combine(ChannelDirectory, "prefixes");
+            try
+            {
+                Directory.CreateDirectory(ChannelDirectory);
+                File.WriteAllLines(file, value);
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                // Without the file Enter simply runs the line.
+            }
+        }
+    }
+
+    /// <summary>
     /// One panel shown: Tab on an empty command line asks to focus the panel instead of completing. Kept as a flag
     /// file in the channel, which the integration script checks when Tab is pressed.
     /// </summary>
@@ -240,6 +267,18 @@ public sealed class ShellHost : IDisposable
 
             case ShellEvent.Message { Name: "focus-panel" }:
                 FocusPanelRequested?.Invoke();
+                break;
+
+            case ShellEvent.Message { Name: "open-address" } open when open.Arguments.Count == 1:
+                try
+                {
+                    AddressEntered?.Invoke(System.Text.Encoding.UTF8.GetString(Convert.FromBase64String(open.Arguments[0])));
+                }
+                catch (FormatException)
+                {
+                    // A garbled message: nothing to open.
+                }
+
                 break;
 
             case ShellEvent.Message { Name: "restore-pending" }:

@@ -6,6 +6,7 @@ using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Threading;
 using HabilisTerminal.App.Input;
+using HabilisTerminal.App.Plugins;
 using HabilisTerminal.App.Theming;
 using HabilisTerminal.Core.FileSystem;
 using HabilisTerminal.Core.Panels;
@@ -19,7 +20,7 @@ namespace HabilisTerminal.App.Panels;
 /// <see cref="DirectoryWatcher"/>, and handles the panel's own keys (SPEC §5).
 /// </summary>
 [System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1001", Justification = "Panels live as long as the window; the quick view releases its file when hidden.")]
-public sealed class FilePanel : Border
+public sealed partial class FilePanel : Border
 {
     private readonly FileListView _list = new();
     private readonly InfoPanelView _info = new();
@@ -60,6 +61,11 @@ public sealed class FilePanel : Border
         _list.State = State;
         _list.ItemClicked += OnItemClicked;
         _list.ContextMenuRequested += OnContextMenuRequested;
+        _list.CustomHeaderClicked += key =>
+        {
+            State.ApplyCustomSortKey(key);
+            Refresh();
+        };
         _list.HeaderClicked += mode =>
         {
             State.ApplySortKey(mode);
@@ -213,6 +219,12 @@ public sealed class FilePanel : Border
             return;
         }
 
+        if (source.IsPlugin)
+        {
+            _quickView.Show(null, false, null);
+            return;
+        }
+
         var item = source.State.Current;
         if (item.IsParent)
         {
@@ -299,6 +311,9 @@ public sealed class FilePanel : Border
             return false;
         }
 
+        // A folder replaces a plugin panel (Alt+F1, history, the shell's cd).
+        ClosePlugin();
+
         var samePath = string.Equals(path, State.Path, StringComparison.OrdinalIgnoreCase);
         if (!samePath)
         {
@@ -360,6 +375,11 @@ public sealed class FilePanel : Border
     /// <summary>Ctrl+R: re-reads the directory and counts its folder sizes again.</summary>
     public Task<bool> RefreshAsync()
     {
+        if (IsPlugin)
+        {
+            return ListPluginAsync();
+        }
+
         if (State.Path.Length > 0)
         {
             FolderSizes.Invalidate(State.Path);
@@ -374,7 +394,7 @@ public sealed class FilePanel : Border
     /// </summary>
     public void RequestFolderSizes()
     {
-        var auto = AutoFolderSizes && FolderSizeWorker.IsAutoCountable(State.Path);
+        var auto = !IsPlugin && AutoFolderSizes && FolderSizeWorker.IsAutoCountable(State.Path);
         if (auto != _autoSizing)
         {
             _autoSizing = auto;
@@ -558,6 +578,12 @@ public sealed class FilePanel : Border
                 State.SetSelectedFirst(!State.SelectedFirst);
                 Refresh();
                 return true;
+        }
+
+        if (IsPlugin && modifiers == KeyModifiers.Control && key is >= Key.D1 and <= Key.D9)
+        {
+            SetPluginLayout(key - Key.D1);
+            return true;
         }
 
         if (modifiers == KeyModifiers.Control && ViewModeFor(key) is { } mode)
@@ -849,6 +875,13 @@ public sealed class FilePanel : Border
 
     private void UpdateTitle()
     {
+        if (Provider is { } provider)
+        {
+            _title.Text = PluginManager.Guard(Plugin!, () => provider.Title, Plugin!.Name).ToUpperInvariant();
+            _path.Text = State.Path;
+            return;
+        }
+
         var name = State.Path.Length == 0 ? Side : System.IO.Path.GetFileName(State.Path.TrimEnd('\\'));
         _title.Text = (string.IsNullOrEmpty(name) ? State.Path : name).ToUpperInvariant();
         _path.Text = State.Path;

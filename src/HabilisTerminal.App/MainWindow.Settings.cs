@@ -256,7 +256,7 @@ public partial class MainWindow
 
     private static PanelSnapshot Snapshot(FilePanel panel, bool visible) => new()
     {
-        Path = panel.CurrentPath,
+        Path = panel.LocalPath, // a plugin panel reopens on its local folder
         ViewMode = panel.State.ViewMode,
         Sort = panel.State.Sort.Mode,
         SortDescending = panel.State.Sort.Descending,

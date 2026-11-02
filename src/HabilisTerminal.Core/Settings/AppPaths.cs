@@ -21,6 +21,12 @@ public sealed record AppPaths(string SettingsDirectory, string StateDirectory, b
     /// <summary>Crash reports waiting to be offered on the next start.</summary>
     public string CrashDirectory => Path.Combine(StateDirectory, "crashes");
 
+    /// <summary>The user's plugins, one folder each (docs/plugins.md §3); next to the executable when portable.</summary>
+    public string PluginsDirectory => Path.Combine(StateDirectory, "plugins");
+
+    /// <summary>Plugin settings, one JSON file per plugin id.</summary>
+    public string PluginSettingsDirectory => Path.Combine(SettingsDirectory, "plugin-settings");
+
     public static AppPaths Resolve(string executableDirectory) => Resolve(
         executableDirectory,
         Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),

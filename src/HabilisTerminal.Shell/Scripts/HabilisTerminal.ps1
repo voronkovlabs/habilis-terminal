@@ -20,6 +20,7 @@ $global:__Habi = [pscustomobject]@{
     CommandRan       = $false
     Restore          = $null
     TabFunction      = (Get-PSReadLineKeyHandler -Chord Tab | Select-Object -First 1).Function
+    EnterFunction    = (Get-PSReadLineKeyHandler -Chord Enter | Select-Object -First 1).Function
 }
 
 function global:__HabiOsc([string] $Payload) {
@@ -117,6 +118,36 @@ Set-PSReadLineKeyHandler -Chord F24 -BriefDescription HabilisTerminalRequest -De
     }
 
     [Console]::Write((__HabiOsc "7731;habi;ack;$($request.id);$status"))
+}
+
+# Plugin addresses (issue #49): Enter on a line starting with a plugin prefix and a colon ("s3:...", "sqs:...")
+# opens the plugin panel instead of running the line, as Far's command-line prefixes do. Habilis Terminal keeps the
+# prefixes, one per line, in the 'prefixes' file of the channel. Other lines run as before.
+Set-PSReadLineKeyHandler -Chord Enter -BriefDescription HabilisTerminalEnter -Description 'Run the line, or open a plugin address' -ScriptBlock {
+    param($key, $arg)
+    $state = $global:__Habi
+    $line = $null
+    $cursor = $null
+    [Microsoft.PowerShell.PSConsoleReadLine]::GetBufferState([ref] $line, [ref] $cursor)
+    $prefixes = Join-Path $state.Channel 'prefixes'
+    if ($line -match '^\s*([A-Za-z][A-Za-z0-9]*):\S' -and (Test-Path -LiteralPath $prefixes)) {
+        $prefix = $Matches[1]
+        if (@(Get-Content -LiteralPath $prefixes -Encoding utf8) -contains $prefix) {
+            [Microsoft.PowerShell.PSConsoleReadLine]::AddToHistory($line)
+            [Microsoft.PowerShell.PSConsoleReadLine]::RevertLine()
+            $encoded = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($line.Trim()))
+            [Console]::Write((__HabiOsc "7731;habi;open-address;$encoded"))
+            return
+        }
+    }
+
+    # Whatever Enter did before (AcceptLine by default, ValidateAndAcceptLine in some profiles).
+    $function = $state.EnterFunction
+    if (-not $function -or -not [Microsoft.PowerShell.PSConsoleReadLine].GetMethod($function)) {
+        $function = 'AcceptLine'
+    }
+
+    [Microsoft.PowerShell.PSConsoleReadLine]::$function($key, $arg)
 }
 
 # One panel shown (Ctrl+P): Tab on an empty command line returns focus to the panel, as Tab switches panels in

@@ -1,0 +1,158 @@
+using System.Globalization;
+using System.Text.Json.Nodes;
+using HabilisTerminal.Core.FileSystem;
+using HabilisTerminal.Core.Panels;
+using HabilisTerminal.Core.Plugins;
+using HabilisTerminal.Plugins;
+
+namespace HabilisTerminal.Core.Tests;
+
+/// <summary>A plugin class in this assembly, loaded from a copy of it by <see cref="PluginTests"/>.</summary>
+public sealed class SamplePlugin : Plugin
+{
+    public override IEnumerable<string> Prefixes => ["sample"];
+}
+
+public class PluginTests
+{
+    private const string Valid = """{ "id": "test.sample", "name": "Sample", "version": "1.0.0", "assembly": "Sample.dll", "sdk": "1.0" }""";
+
+    [Fact]
+    public void Manifest_reads_all_fields()
+    {
+        var manifest = PluginManifest.Parse(Valid);
+        Assert.Equal(("test.sample", "Sample", "1.0.0", "Sample.dll", "1.0"), (manifest.Id, manifest.Name, manifest.Version, manifest.Assembly, manifest.Sdk));
+    }
+
+    [Theory]
+    [InlineData("""{ "name": "x", "version": "1", "assembly": "a.dll", "sdk": "1.0" }""", "\"id\"")]
+    [InlineData("""{ "id": "bad id!", "name": "x", "version": "1", "assembly": "a.dll", "sdk": "1.0" }""", "may contain only")]
+    [InlineData("""{ "id": "a", "name": "x", "version": "1", "assembly": "..\\a.dll", "sdk": "1.0" }""", "file name")]
+    [InlineData("""{ "id": "a", "name": "x", "version": "1", "assembly": "a.dll", "sdk": "2.0" }""", "needs SDK 2.0")]
+    [InlineData("""{ "id": "a", "name": "x", "version": "1", "assembly": "a.dll", "sdk": "1.9" }""", "needs SDK 1.9")]
+    [InlineData("not json", "not valid JSON")]
+    public void Manifest_errors_say_what_is_wrong(string json, string expected)
+    {
+        var error = Assert.Throws<InvalidDataException>(() => PluginManifest.Parse(json));
+        Assert.Contains(expected, error.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Discover_finds_folders_with_a_manifest_and_the_first_root_wins()
+    {
+        using var sandbox = new TestSandbox();
+        var first = Path.Combine(sandbox.Path, "first");
+        var second = Path.Combine(sandbox.Path, "second");
+        WriteManifest(Path.Combine(first, "a"));
+        WriteManifest(Path.Combine(second, "a"));
+        WriteManifest(Path.Combine(second, "b"));
+        Directory.CreateDirectory(Path.Combine(second, "no-manifest"));
+
+        var found = PluginLoader.Discover([first, second, Path.Combine(sandbox.Path, "missing")]);
+
+        Assert.Equal([Path.Combine(first, "a"), Path.Combine(second, "b")], found);
+    }
+
+    [Fact]
+    public void Load_reports_a_missing_assembly_instead_of_throwing()
+    {
+        using var sandbox = new TestSandbox();
+        var folder = Path.Combine(sandbox.Path, "a");
+        WriteManifest(folder);
+
+        var loaded = PluginLoader.Load(folder);
+
+        Assert.Null(loaded.Instance);
+        Assert.Contains("Sample.dll is missing", loaded.Error, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Load_creates_the_plugin_in_its_own_load_context_with_the_shared_sdk()
+    {
+        // A loaded assembly stays locked for the process lifetime (as plugins stay loaded in the app), so this copy
+        // lives under the test root rather than in a sandbox deleted at the end of the test.
+        var folder = Path.Combine(TestSandbox.RootPath, "plugin-load-" + Guid.NewGuid().ToString("N"), "sample");
+        Directory.CreateDirectory(folder);
+        var testAssembly = typeof(SamplePlugin).Assembly.Location;
+        var name = Path.GetFileName(testAssembly);
+        File.Copy(testAssembly, Path.Combine(folder, name));
+        File.Copy(Path.ChangeExtension(testAssembly, ".deps.json"), Path.Combine(folder, Path.ChangeExtension(name, ".deps.json")));
+        File.WriteAllText(Path.Combine(folder, PluginManifest.FileName), $$"""{ "id": "test.sample", "name": "Sample", "version": "1.0.0", "assembly": "{{name}}", "sdk": "1.0" }""");
+
+        var loaded = PluginLoader.Load(folder);
+
+        Assert.Null(loaded.Error);
+        var plugin = Assert.IsAssignableFrom<Plugin>(loaded.Instance);
+        Assert.Equal(["sample"], plugin.Prefixes);
+        Assert.NotSame(typeof(SamplePlugin), plugin.GetType()); // a separate copy of the assembly
+        Assert.Same(typeof(Plugin).Assembly, plugin.GetType().BaseType!.Assembly); // the host's SDK
+    }
+
+    [Fact]
+    public void Settings_round_trip_and_a_broken_file_reads_as_empty()
+    {
+        using var sandbox = new TestSandbox();
+        var store = new PluginSettingsStore(sandbox.Path, "test.sample");
+        Assert.Empty(store.Load());
+
+        store.Save(new JsonObject { ["profile"] = "dev", ["timeout"] = 30 });
+        var loaded = store.Load();
+        Assert.Equal("dev", (string?)loaded["profile"]);
+        Assert.Equal(30, (int?)loaded["timeout"]);
+
+        File.WriteAllText(store.FilePath, "{ broken");
+        Assert.Empty(store.Load());
+    }
+
+    [Fact]
+    public void Plugin_panels_sort_groups_first_then_by_a_custom_column()
+    {
+        var day = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+        FileEntry Row(string name) => new(name, FileAttributes.Normal, 0, day, day, day);
+        var cost = new Dictionary<string, (int Group, double? Cost)>
+        {
+            ["done-cheap"] = (1, 1.5),
+            ["done-dear"] = (1, 9.0),
+            ["running"] = (0, 3.0),
+            ["done-unknown"] = (1, null),
+        };
+        var extension = new PanelExtension
+        {
+            Group = e => cost[e.Name].Group,
+            Cell = (e, key) => cost[e.Name].Cost is { } value ? (value.ToString(CultureInfo.InvariantCulture), value) : null,
+        };
+        var state = new PanelState { Culture = CultureInfo.InvariantCulture };
+        state.SetListing("sm:dev/eu-west-1", [Row("done-dear"), Row("running"), Row("done-unknown"), Row("done-cheap")], hasParent: true);
+        state.SetExtension(extension);
+
+        // Name order inside each group; the running job first.
+        Assert.Equal(["..", "running", "done-cheap", "done-dear", "done-unknown"], Names(state));
+
+        state.ApplyCustomSortKey("cost");
+        Assert.Equal(["..", "running", "done-cheap", "done-dear", "done-unknown"], Names(state));
+
+        state.ApplyCustomSortKey("cost"); // again: descending; missing values stay last
+        Assert.Equal(["..", "running", "done-dear", "done-cheap", "done-unknown"], Names(state));
+
+        state.ApplySortKey(SortMode.Name); // a built-in key drops the custom sort
+        Assert.Null(extension.SortKey);
+        Assert.Equal(["..", "running", "done-cheap", "done-dear", "done-unknown"], Names(state));
+    }
+
+    [Fact]
+    public void Custom_values_of_mixed_types_compare_without_throwing()
+    {
+        Assert.True(PanelExtension.CompareValues(1, 2.5) < 0);
+        Assert.True(PanelExtension.CompareValues(TimeSpan.FromMinutes(1), TimeSpan.FromHours(1)) < 0);
+        Assert.True(PanelExtension.CompareValues("a", 3) > 0); // text after number, by text
+        Assert.True(PanelExtension.CompareValues(null, 3) > 0);
+    }
+
+    private static string[] Names(PanelState state) => Enumerable.Range(0, state.Count).Select(i => state.ItemAt(i).Name).ToArray();
+
+    private static void WriteManifest(string folder)
+    {
+        Directory.CreateDirectory(folder);
+        File.WriteAllText(Path.Combine(folder, PluginManifest.FileName), Valid);
+    }
+}

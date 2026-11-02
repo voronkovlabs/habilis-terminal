@@ -79,6 +79,7 @@ public partial class MainWindow : Window
             panel.GotKeyboardFocus += (_, _) => OnPanelFocused(panel);
         }
 
+        LoadPlugins();
         RestoreLayout(state);
 
         var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
@@ -104,6 +105,8 @@ public partial class MainWindow : Window
             }
         });
         host.RequestCompleted += (_, op, status) => Dispatcher.BeginInvoke(() => OnShellRequestCompleted(op, status));
+        host.AddressEntered += address => Dispatcher.BeginInvoke(() => OnPluginAddress(address));
+        host.AddressPrefixes = _plugins.Prefixes();
         _shell = new ShellConnection(host);
         UpdateTabToPanel(); // the layout was restored before the shell existed
 
@@ -452,17 +455,18 @@ public partial class MainWindow : Window
 
     private void SyncShellDirectory()
     {
-        if (_shell is { } shell && _active.CurrentPath.Length > 0 &&
-            !string.Equals(shell.Host.CurrentDirectory, _active.CurrentPath, StringComparison.OrdinalIgnoreCase))
+        // A plugin panel keeps the shell in the folder it was opened from (issue #49).
+        if (_shell is { } shell && _active.LocalPath.Length > 0 &&
+            !string.Equals(shell.Host.CurrentDirectory, _active.LocalPath, StringComparison.OrdinalIgnoreCase))
         {
-            shell.Host.ChangeDirectory(_active.CurrentPath);
+            shell.Host.ChangeDirectory(_active.LocalPath);
         }
     }
 
     /// <summary><c>cd</c> in the shell moves the active panel; the inactive one never follows.</summary>
     private void OnShellDirectoryChanged(string path)
     {
-        if (!string.Equals(path, _active.CurrentPath, StringComparison.OrdinalIgnoreCase))
+        if (!string.Equals(path, _active.LocalPath, StringComparison.OrdinalIgnoreCase))
         {
             _ = _active.NavigateAsync(path);
         }

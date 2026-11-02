@@ -98,6 +98,29 @@ public sealed class PanelState
 
     public PanelViewMode ViewMode { get; set; } = PanelViewMode.Medium;
 
+    /// <summary>Columns, groups, tones and custom sorting of a plugin panel (issue #49); null for a folder.</summary>
+    public PanelExtension? Extension { get; private set; }
+
+    /// <summary>Attaches or removes a plugin panel's extension and re-sorts.</summary>
+    public void SetExtension(PanelExtension? extension)
+    {
+        Extension = extension;
+        RebuildKeepingCursor();
+    }
+
+    /// <summary>Sorts a plugin panel by a custom column; the active one again reverses the direction (Far).</summary>
+    public void ApplyCustomSortKey(string key)
+    {
+        if (Extension is not { } extension)
+        {
+            return;
+        }
+
+        extension.SortDescending = extension.SortKey == key && !extension.SortDescending;
+        extension.SortKey = key;
+        RebuildKeepingCursor();
+    }
+
     public CultureInfo Culture { get; set; } = CultureInfo.CurrentCulture;
 
     /// <summary>The listing as read (enumeration order, hidden entries included).</summary>
@@ -117,14 +140,15 @@ public sealed class PanelState
     /// Shows a (new or refreshed) listing. The cursor stays on <paramref name="focusName"/> when given and present,
     /// otherwise on the previous name, otherwise at the same index. Selection is kept for names that still exist.
     /// </summary>
-    public void SetListing(string path, IReadOnlyList<FileEntry> rawEntries, string? focusName = null)
+    /// <param name="hasParent">Whether ".." is shown; null: from the path (a plugin panel always has one, to go up or leave).</param>
+    public void SetListing(string path, IReadOnlyList<FileEntry> rawEntries, string? focusName = null, bool? hasParent = null)
     {
         var samePath = string.Equals(path, Path, StringComparison.OrdinalIgnoreCase);
         var previousName = Count > 0 ? Current.Name : null;
         var previousIndex = CursorIndex;
 
         Path = path;
-        HasParent = System.IO.Path.GetDirectoryName(path.TrimEnd('\\')) is not null && !IsUncRoot(path);
+        HasParent = hasParent ?? (System.IO.Path.GetDirectoryName(path.TrimEnd('\\')) is not null && !IsUncRoot(path));
         _raw = rawEntries as FileEntry[] ?? rawEntries.ToArray();
         if (samePath)
         {
@@ -151,8 +175,16 @@ public sealed class PanelState
     }
 
     /// <summary>Far: pressing the active sort key again reverses the direction.</summary>
-    public void ApplySortKey(SortMode mode) =>
-        SetSort(Sort.Mode == mode ? Sort with { Descending = !Sort.Descending } : Sort with { Mode = mode, Descending = false });
+    public void ApplySortKey(SortMode mode)
+    {
+        var customSort = Extension is { SortKey: not null };
+        if (customSort)
+        {
+            Extension!.SortKey = null;
+        }
+
+        SetSort(Sort.Mode == mode && !customSort ? Sort with { Descending = !Sort.Descending } : Sort with { Mode = mode, Descending = false });
+    }
 
     public void SetSelectedFirst(bool value)
     {
@@ -276,6 +308,6 @@ public sealed class PanelState
             sorted = [.. sorted.Where(e => Selection.Contains(e.Name)), .. sorted.Where(e => !Selection.Contains(e.Name))];
         }
 
-        _items = sorted;
+        _items = Extension is { } extension ? extension.Order(sorted) : sorted;
     }
 }

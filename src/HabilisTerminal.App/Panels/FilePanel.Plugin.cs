@@ -1,0 +1,314 @@
+using System.IO;
+using HabilisTerminal.App.Plugins;
+using HabilisTerminal.Core.FileSystem;
+using HabilisTerminal.Core.Panels;
+using HabilisTerminal.Core.Plugins;
+using HabilisTerminal.Plugins;
+
+namespace HabilisTerminal.App.Panels;
+
+/// <summary>
+/// A plugin panel in place of the folder listing (docs/plugins.md §5, issue #49). The provider's entries become
+/// <see cref="FileEntry"/> rows, so drawing, selection, sorting and quick search stay the panel's own; custom columns,
+/// groups and tones come through a <see cref="PanelExtension"/>.
+/// </summary>
+public sealed partial class FilePanel
+{
+    private PluginSession? _session;
+
+    /// <summary>The plugin location changed (folder history).</summary>
+    public event Action<FilePanel, string>? PluginLocationChanged;
+
+    /// <summary>Enter on a plugin entry that is not a folder: the window views it.</summary>
+    public event Action<FilePanel, PanelEntry>? PluginEntryActivated;
+
+    /// <summary>The panel shows a plugin rather than a folder.</summary>
+    public bool IsPlugin => _session is not null;
+
+    internal LoadedPlugin? Plugin => _session?.Plugin;
+
+    internal IPanelProvider? Provider => _session?.Provider;
+
+    /// <summary>The local folder the panel returns to when it leaves the plugin; the current folder otherwise.</summary>
+    public string LocalPath => _session?.ReturnPath ?? State.Path;
+
+    /// <summary>The plugin entry of a row, or null (".." or a folder listing).</summary>
+    public PanelEntry? EntryOf(PanelItem item) =>
+        _session is { } session && !item.IsParent && session.Entries.TryGetValue(RowKey(item.Entry), out var entry) ? entry : null;
+
+    /// <summary>The marked plugin entries, or the entry under the cursor when nothing is marked.</summary>
+    public IReadOnlyList<PanelEntry> TargetPluginEntries()
+    {
+        if (_session is not { } session)
+        {
+            return [];
+        }
+
+        return State.TargetEntries().Select(e => session.Entries.TryGetValue(RowKey(e), out var entry) ? entry : null).OfType<PanelEntry>().ToList();
+    }
+
+    /// <summary>Shows a plugin panel; false (and the folder listing back) when its first listing fails.</summary>
+    internal async Task<bool> OpenPluginAsync(LoadedPlugin plugin, IPanelProvider provider)
+    {
+        var returnPath = LocalPath;
+        ClosePlugin();
+        _watcher?.Dispose();
+        _watcher = null;
+        SizeWorker.Cancel(this);
+        _session = new PluginSession(plugin, provider, returnPath);
+        State.SetExtension(_session.Extension);
+        _session.ApplyLayout(0, provider);
+        if (await ListPluginAsync(focusName: null, opening: true))
+        {
+            return true;
+        }
+
+        var error = Message;
+        await LeavePluginAsync();
+        Message = error;
+        return false;
+    }
+
+    /// <summary>Lists the provider's current location; the previous listing stays on failure.</summary>
+    internal async Task<bool> ListPluginAsync(string? focusName = null, bool opening = false)
+    {
+        if (_session is not { } session)
+        {
+            return false;
+        }
+
+        _loading?.Cancel();
+        var loading = new CancellationTokenSource();
+        _loading = loading;
+        var token = loading.Token;
+        var location = session.Provider.Location;
+        var samePath = !opening && string.Equals(location, State.Path, StringComparison.Ordinal);
+        var entries = new Dictionary<(string, bool), PanelEntry>();
+        var rows = new List<FileEntry>();
+        var shownFirst = false;
+        Message = null;
+        CloseQuickSearch();
+        try
+        {
+            await foreach (var batch in session.Provider.ListAsync(token).WithCancellation(token))
+            {
+                foreach (var entry in batch)
+                {
+                    var row = ToRow(entry);
+                    if (entries.TryAdd(RowKey(row), entry))
+                    {
+                        rows.Add(row);
+                    }
+                }
+
+                // A large listing shows its first batch at once (a refresh keeps the old listing until it is complete).
+                if (!shownFirst && !samePath && _session == session)
+                {
+                    shownFirst = true;
+                    session.Entries = new Dictionary<(string, bool), PanelEntry>(entries);
+                    State.SetListing(location, rows.ToArray(), focusName, hasParent: true);
+                    Refresh();
+                    Message = "Loading…";
+                }
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            return false;
+        }
+        catch (Exception ex) when (ex is not OutOfMemoryException)
+        {
+            if (_session == session)
+            {
+                Message = PluginManager.Describe(session.Plugin, ex);
+            }
+
+            return false;
+        }
+
+        if (token.IsCancellationRequested || _session != session)
+        {
+            return false;
+        }
+
+        session.Entries = entries;
+        Message = null;
+        State.SetListing(location, rows, focusName, hasParent: true);
+        Refresh();
+        if (!samePath)
+        {
+            PluginLocationChanged?.Invoke(this, location);
+        }
+
+        return true;
+    }
+
+    /// <summary>Ctrl+1, Ctrl+2...: the provider's layouts.</summary>
+    private bool SetPluginLayout(int index)
+    {
+        if (_session is not { } session || index >= session.Provider.Layouts.Count)
+        {
+            return false;
+        }
+
+        session.ApplyLayout(index, session.Provider);
+        State.SetExtension(session.Extension);
+        InvalidatePanel();
+        return true;
+    }
+
+    private async Task PluginOpenAsync(PanelItem item)
+    {
+        if (_session is not { } session)
+        {
+            return;
+        }
+
+        if (item.IsParent)
+        {
+            await PluginUpAsync();
+            return;
+        }
+
+        if (EntryOf(item) is not { } entry)
+        {
+            return;
+        }
+
+        try
+        {
+            if (await session.Provider.EnterAsync(entry, CancellationToken.None))
+            {
+                await ListPluginAsync();
+            }
+            else if (_session == session)
+            {
+                PluginEntryActivated?.Invoke(this, entry);
+            }
+        }
+        catch (Exception ex) when (ex is not OutOfMemoryException)
+        {
+            Message = PluginManager.Describe(session.Plugin, ex);
+        }
+    }
+
+    /// <summary>".." and Ctrl+PgUp: up one level, or out of the plugin at its top (Far).</summary>
+    private async Task PluginUpAsync()
+    {
+        if (_session is not { } session)
+        {
+            return;
+        }
+
+        var previous = session.Provider.Location;
+        try
+        {
+            if (await session.Provider.GoUpAsync(CancellationToken.None))
+            {
+                await ListPluginAsync(LastSegment(previous));
+                return;
+            }
+        }
+        catch (Exception ex) when (ex is not OutOfMemoryException)
+        {
+            Message = PluginManager.Describe(session.Plugin, ex);
+            return;
+        }
+
+        await LeavePluginAsync();
+    }
+
+    /// <summary>Back to the folder the panel showed before the plugin.</summary>
+    internal async Task LeavePluginAsync()
+    {
+        if (_session is not { } session)
+        {
+            return;
+        }
+
+        var returnPath = session.ReturnPath;
+        ClosePlugin();
+        if (!await NavigateAsync(returnPath))
+        {
+            await NavigateAsync(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile));
+        }
+    }
+
+    /// <summary>Drops the plugin (the provider is disposed in the background); the caller shows a folder next.</summary>
+    private void ClosePlugin()
+    {
+        if (_session is not { } session)
+        {
+            return;
+        }
+
+        _session = null;
+        _loading?.Cancel();
+        State.SetExtension(null);
+        _ = DisposeQuietlyAsync(session.Provider);
+    }
+
+    private static async Task DisposeQuietlyAsync(IPanelProvider provider)
+    {
+        try
+        {
+            await provider.DisposeAsync();
+        }
+        catch (Exception ex) when (ex is not OutOfMemoryException)
+        {
+            System.Diagnostics.Trace.WriteLine($"Plugin provider dispose failed: {ex}");
+        }
+    }
+
+    /// <summary>The last segment of a plugin location ("s3://b/x/y/" → "y"), to keep the cursor on it after going up.</summary>
+    private static string? LastSegment(string location)
+    {
+        var trimmed = location.TrimEnd('/', '\\');
+        var cut = trimmed.LastIndexOfAny(['/', '\\', ':']);
+        return cut >= 0 && cut < trimmed.Length - 1 ? trimmed[(cut + 1)..] : null;
+    }
+
+    private static (string, bool) RowKey(FileEntry entry) => (entry.Name, entry.IsDirectory);
+
+    private static FileEntry ToRow(PanelEntry entry)
+    {
+        var modified = entry.Modified is { } time ? (time.Kind == DateTimeKind.Local ? time.ToUniversalTime() : DateTime.SpecifyKind(time, DateTimeKind.Utc)) : DateTime.MinValue;
+        return new FileEntry(entry.Name, entry.IsFolder ? FileAttributes.Directory : FileAttributes.Normal, entry.Size ?? 0, modified, modified, modified);
+    }
+
+    /// <summary>One open plugin panel: the plugin, its provider, the entries by row and the panel extension.</summary>
+    private sealed class PluginSession
+    {
+        public PluginSession(LoadedPlugin plugin, IPanelProvider provider, string returnPath)
+        {
+            Plugin = plugin;
+            Provider = provider;
+            ReturnPath = returnPath;
+            Extension = new PanelExtension
+            {
+                Cell = (row, key) => Entries.TryGetValue(RowKey(row), out var entry) && entry.Cells is { } cells && cells.TryGetValue(key, out var cell)
+                    ? (cell.Text, cell.SortValue ?? cell.Text)
+                    : null,
+                Group = row => Entries.TryGetValue(RowKey(row), out var entry) ? entry.Group : 0,
+                Tone = row => Entries.TryGetValue(RowKey(row), out var entry) ? (int)entry.Tone : 0,
+            };
+        }
+
+        public LoadedPlugin Plugin { get; }
+
+        public IPanelProvider Provider { get; }
+
+        public string ReturnPath { get; }
+
+        public PanelExtension Extension { get; }
+
+        public Dictionary<(string, bool), PanelEntry> Entries { get; set; } = [];
+
+        public void ApplyLayout(int index, IPanelProvider provider)
+        {
+            var layouts = PluginManager.Guard(Plugin, () => provider.Layouts, []);
+            var layout = layouts.Count == 0 ? null : layouts[Math.Clamp(index, 0, layouts.Count - 1)];
+            Extension.Columns = layout?.Columns.Select(c => new ExtensionColumn(c.Key, c.Title, c.Width, c.AlignRight)).ToArray() ?? [];
+        }
+    }
+}

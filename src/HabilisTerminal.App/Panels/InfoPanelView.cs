@@ -27,6 +27,23 @@ public sealed class InfoPanelView : FrameworkElement
         var state = source.State;
         var lines = new List<(string Label, string Value, bool Heading)>();
 
+        if (source.Provider is { } provider)
+        {
+            // A plugin panel: the plugin's own summary (issue #49), then the location and counts.
+            lines.Add((source.Plugin!.Name, string.Empty, true));
+            foreach (var line in Plugins.PluginManager.Guard(source.Plugin!, () => provider.Info, []))
+            {
+                lines.Add((line.Label, line.Value, false));
+            }
+
+            lines.Add((string.Empty, string.Empty, false));
+            lines.Add(("Location", state.Path, false));
+            lines.Add(("Entries", state.Entries.Count.ToString("N0", culture), false));
+            lines.Add(("Selected", state.Selection.Count.ToString("N0", culture), false));
+            DrawLines(dc, lines);
+            return;
+        }
+
         lines.Add(("Drive", string.Empty, true));
         try
         {
@@ -72,6 +89,11 @@ public sealed class InfoPanelView : FrameworkElement
             lines.Add(("Size", PanelColumns.FormatCompactSize(selectedBytes, culture), false));
         }
 
+        DrawLines(dc, lines);
+    }
+
+    private void DrawLines(DrawingContext dc, List<(string Label, string Value, bool Heading)> lines)
+    {
         var pixelsPerDip = VisualTreeHelper.GetDpi(this).PixelsPerDip;
         var y = 12.0;
         foreach (var (label, value, heading) in lines)

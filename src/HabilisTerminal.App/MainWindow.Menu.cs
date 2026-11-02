@@ -49,6 +49,9 @@ public partial class MainWindow
                 new MenuCommand("Panels on / off", "Ctrl+O", TogglePanels),
                 Command("Inactive panel on / off", "Ctrl+P", Key.P, KeyModifiers.Control),
                 new MenuCommand("Compare folders", null, CompareFolders),
+                MenuCommand.Separator,
+                new MenuCommand("Plugins", "F11", () => Fire(ShowPluginMenuAsync())),
+                new MenuCommand("Plugin panel commands…", null, () => Fire(ShowPluginCommandsAsync(_active))),
             ]),
             new("Options",
             [
@@ -57,6 +60,7 @@ public partial class MainWindow
                 MenuCommand.Separator,
                 new MenuCommand("Color theme…", null, () => Fire(PickThemeAsync())),
                 new MenuCommand("File icon theme…", null, () => Fire(PickIconThemeAsync())),
+                new MenuCommand("Plugins…", "Alt+Shift+F9", () => Fire(ShowPluginsConfigurationAsync())),
                 MenuCommand.Separator,
                 new MenuCommand("Keyboard help", "F1", ShowHelp),
                 new MenuCommand("Send feedback…", null, ShowFeedback),
@@ -118,7 +122,7 @@ public partial class MainWindow
         FocusActivePanel();
         Dispatcher.BeginInvoke(() =>
         {
-            if (!HandleWindowKey(panel, key, modifiers))
+            if (!HandlePluginKey(panel, key, modifiers) && !HandleWindowKey(panel, key, modifiers))
             {
                 panel.HandleKey(key, modifiers);
             }

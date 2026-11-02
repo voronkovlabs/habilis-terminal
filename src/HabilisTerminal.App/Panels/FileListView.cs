@@ -42,7 +42,7 @@ public sealed class FileListView : FrameworkElement
         RowHeight = Math.Round(size * 22 / 13);
         FontVersion++;
     }
-    private readonly Dictionary<(PanelViewMode Mode, ColumnKind Kind), double> _columnWidths = [];
+    private readonly Dictionary<(string Mode, string Column), double> _columnWidths = [];
     private PanelState? _state;
     private int _topIndex;
     private int _hoverIndex = -1;
@@ -64,6 +64,9 @@ public sealed class FileListView : FrameworkElement
     public event Action<int, Point>? ContextMenuRequested;
 
     public event Action<SortMode>? HeaderClicked;
+
+    /// <summary>A click on a plugin panel's own column header: its key (issue #49).</summary>
+    public event Action<string>? CustomHeaderClicked;
 
     /// <summary>The visible rows changed (scroll, resize, view mode): first index and count. Raised while rendering.</summary>
     public event Action<int, int>? VisibleRangeChanged;
@@ -93,7 +96,7 @@ public sealed class FileListView : FrameworkElement
 
     public int RowsPerColumn => Math.Max(1, (int)Math.Floor((ActualHeight - ListTop) / RowHeight));
 
-    public int ColumnCount => _state is null ? 1 : PanelColumns.NameColumnCount(_state.ViewMode);
+    public int ColumnCount => _state is null ? 1 : PanelColumns.NameColumnCount(_state);
 
     /// <summary>Items visible at once (PgUp / PgDn step).</summary>
     public int PageSize => RowsPerColumn * ColumnCount;
@@ -102,7 +105,7 @@ public sealed class FileListView : FrameworkElement
 
     /// <summary>Table modes, and name-column modes with detail columns (Medium, issue #40); Brief has none.</summary>
     private bool HasHeader =>
-        _state is not null && (ColumnCount == 1 || PanelColumns.DetailColumns(_state.ViewMode).Count > 0);
+        _state is not null && (ColumnCount == 1 || PanelColumns.DetailColumns(_state).Count > 0);
 
     /// <summary>Drops cached text (it holds brushes of the previous theme) and repaints.</summary>
     public void ApplyTheme()
@@ -203,7 +206,7 @@ public sealed class FileListView : FrameworkElement
         var pixelsPerDip = VisualTreeHelper.GetDpi(this).PixelsPerDip;
         var columns = ColumnCount;
         var rows = RowsPerColumn;
-        var details = PanelColumns.DetailColumns(_state.ViewMode);
+        var details = PanelColumns.DetailColumns(_state);
         var columnWidth = ActualWidth / columns;
 
         if (HasHeader)
@@ -246,7 +249,7 @@ public sealed class FileListView : FrameworkElement
         {
             // Dragging the left edge of a detail column: moving left widens it.
             var width = Math.Max(24, resizing.StartWidth + (resizing.StartX - point.X));
-            _columnWidths[(_state.ViewMode, resizing.Column.Kind)] = width;
+            _columnWidths[WidthKey(resizing.Column)] = width;
             InvalidateVisual();
             return;
         }
@@ -277,6 +280,10 @@ public sealed class FileListView : FrameworkElement
             {
                 _resizing = (column, point.X, WidthOf(column));
                 CaptureMouse();
+            }
+            else if (e.ChangedButton == MouseButton.Left && HeaderColumnAt(point.X) is { Kind: ColumnKind.Custom, Key: { } key })
+            {
+                CustomHeaderClicked?.Invoke(key);
             }
             else if (e.ChangedButton == MouseButton.Left && HeaderColumnAt(point.X)?.SortMode is { } sortMode)
             {
@@ -350,8 +357,12 @@ public sealed class FileListView : FrameworkElement
         e.Handled = true;
     }
 
+    /// <summary>Widths are kept per view mode, and per column key in plugin panels (issue #49).</summary>
+    private (string Mode, string Column) WidthKey(ColumnSpec column) =>
+        (_state?.Extension is null ? _state?.ViewMode.ToString() ?? string.Empty : "plugin", column.Key ?? column.Kind.ToString());
+
     private double WidthOf(ColumnSpec column) =>
-        _state is not null && _columnWidths.TryGetValue((_state.ViewMode, column.Kind), out var width) ? width : Math.Round(column.DefaultWidth * FontSize / 13);
+        _state is not null && _columnWidths.TryGetValue(WidthKey(column), out var width) ? width : Math.Round(column.DefaultWidth * FontSize / 13);
 
     /// <summary>Detail column layout from the right edge; the name column takes the rest.</summary>
     private List<(ColumnSpec Column, double X, double Width)> LayoutColumns(IReadOnlyList<ColumnSpec> details, double left, double width)
@@ -377,7 +388,7 @@ public sealed class FileListView : FrameworkElement
         }
 
         // The grip on the left edge of each detail column resizes that column (in every name column alike).
-        foreach (var (column, columnX, _) in HeaderLayout(PanelColumns.DetailColumns(_state.ViewMode)))
+        foreach (var (column, columnX, _) in HeaderLayout(PanelColumns.DetailColumns(_state)))
         {
             if (column.Kind != ColumnKind.Name && Math.Abs(x - columnX) <= SeparatorGrip)
             {
@@ -391,7 +402,7 @@ public sealed class FileListView : FrameworkElement
     private ColumnSpec? HeaderColumnAt(double x) =>
         _state is null
             ? null
-            : HeaderLayout(PanelColumns.DetailColumns(_state.ViewMode)).FirstOrDefault(c => x >= c.X && x < c.X + c.Width).Column;
+            : HeaderLayout(PanelColumns.DetailColumns(_state)).FirstOrDefault(c => x >= c.X && x < c.X + c.Width).Column;
 
     /// <summary>Header cells over every name column: one set in table modes, Name | Size twice in Medium.</summary>
     private IEnumerable<(ColumnSpec Column, double X, double Width)> HeaderLayout(IReadOnlyList<ColumnSpec> details)
@@ -409,9 +420,13 @@ public sealed class FileListView : FrameworkElement
         foreach (var (column, x, width) in HeaderLayout(details))
         {
             var title = column.Title;
-            if (column.SortMode == sort.Mode && !(column.Kind == ColumnKind.Time))
+            var customSort = _state.Extension?.SortKey;
+            var sorted = customSort is not null
+                ? column.Key == customSort
+                : column.SortMode == sort.Mode && column.Kind != ColumnKind.Time;
+            if (sorted)
             {
-                title += sort.Descending ? " ↓" : " ↑";
+                title += (customSort is not null ? _state.Extension!.SortDescending : sort.Descending) ? " ↓" : " ↑";
             }
 
             var left = column.Kind == ColumnKind.Name ? x + CellPadding + IconWidth : x + CellPadding;
@@ -443,9 +458,12 @@ public sealed class FileListView : FrameworkElement
             dc.DrawRectangle(PanelPalette.HoverBackground, null, cell);
         }
 
+        // A plugin row may carry a tone (issue #49): it colours the row unless it is marked or under the cursor.
+        var tone = !item.IsParent && state.Extension is { } extension ? PanelPalette.Tone(extension.Tone(item.Entry)) : null;
+        var cursorFocused = isCursor && IsActivePanel && HasPanelFocus;
         var foreground = isMarked ? PanelPalette.MarkedForeground
-            : isCursor && IsActivePanel && HasPanelFocus ? PanelPalette.ActiveSelectionForeground
-            : PanelPalette.Foreground;
+            : cursorFocused ? PanelPalette.ActiveSelectionForeground
+            : tone ?? PanelPalette.Foreground;
         var dimmed = !item.IsParent && (item.Entry.IsHidden || item.Entry.IsSystem);
         if (dimmed)
         {
@@ -467,12 +485,14 @@ public sealed class FileListView : FrameworkElement
             else
             {
                 var folderSize = item.Entry.IsDirectory && !item.IsParent ? state.FolderSizeOf(item.Name) : null;
-                var text = PanelColumns.FormatCell(column.Kind, item, state.Culture, folderSize, AutoSizedFolders);
+                var text = column.Kind == ColumnKind.Custom
+                    ? (item.IsParent ? string.Empty : state.Extension?.Cell(item.Entry, column.Key!)?.Text ?? string.Empty)
+                    : PanelColumns.FormatCell(column.Kind, item, state.Culture, folderSize, AutoSizedFolders);
                 // On the focused cursor row the details use the selection colour, like the name: the description
                 // colour can match the selection background (the Far theme's teal, issue #42).
                 var brush = isMarked ? PanelPalette.MarkedForeground
-                    : isCursor && IsActivePanel && HasPanelFocus ? PanelPalette.ActiveSelectionForeground
-                    : PanelPalette.DescriptionForeground;
+                    : cursorFocused ? PanelPalette.ActiveSelectionForeground
+                    : tone ?? PanelPalette.DescriptionForeground;
 
                 // A running total is dimmed until the folder is fully counted.
                 var counting = folderSize is { IsFinal: false } && column.Kind is ColumnKind.Size or ColumnKind.CompactSize;

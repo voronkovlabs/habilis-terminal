@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <!-- Contracts only: no Windows or WPF dependency, so plugins stay UI-framework free (docs/plugins.md). -->
+    <TargetFramework>net10.0</TargetFramework>
+    <RootNamespace>HabilisTerminal.Plugins</RootNamespace>
+    <Version>1.0.0</Version>
+    <IsPackable>true</IsPackable>
+    <PackageId>HabilisTerminal.Plugins.Sdk</PackageId>
+    <Description>SDK for Habilis Terminal plugins: plugin entry points, plugin panels, operations and host services.</Description>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+  </PropertyGroup>
+  <ItemGroup>
+    <None Include="README.md" Pack="true" PackagePath="\" />
+  </ItemGroup>
+</Project>
