@@ -1,0 +1,20 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <Description>Habilis Terminal plugin: Amazon SageMaker training jobs with status, duration and estimated cost (read-only).</Description>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="HabilisTerminal.Plugins.Sdk" PrivateAssets="all" ExcludeAssets="runtime" />
+    <PackageReference Include="AWSSDK.SageMaker" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\Habilis.Aws.Common\Habilis.Aws.Common.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <!-- The built-in price table; a prices.json the user puts next to the assembly replaces it, so it is not copied there. -->
+    <None Remove="prices.json" />
+    <EmbeddedResource Include="prices.json" LogicalName="Habilis.Aws.SageMaker.prices.json" />
+  </ItemGroup>
+  <ItemGroup>
+    <InternalsVisibleTo Include="Habilis.Aws.SageMaker.Tests" />
+  </ItemGroup>
+</Project>

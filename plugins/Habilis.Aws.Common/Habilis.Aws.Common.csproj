@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <Description>Shared AWS helpers of the Habilis Terminal AWS plugins: profiles, credentials, regions, errors.</Description>
+  </PropertyGroup>
+  <ItemGroup>
+    <!-- Compile against the SDK; the host provides it at run time, so it is never copied next to a plugin. -->
+    <PackageReference Include="HabilisTerminal.Plugins.Sdk" PrivateAssets="all" ExcludeAssets="runtime" />
+    <PackageReference Include="AWSSDK.Core" />
+    <!-- Loaded by AWSSDK.Core for role and SSO profiles. -->
+    <PackageReference Include="AWSSDK.SecurityToken" />
+    <PackageReference Include="AWSSDK.SSO" />
+    <PackageReference Include="AWSSDK.SSOOIDC" />
+  </ItemGroup>
+  <ItemGroup>
+    <InternalsVisibleTo Include="Habilis.Aws.Tests" />
+  </ItemGroup>
+</Project>

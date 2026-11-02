@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <Description>Habilis Terminal plugin: Amazon S3 buckets, folders and objects; parallel multipart download and upload, delete, make folder.</Description>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="HabilisTerminal.Plugins.Sdk" PrivateAssets="all" ExcludeAssets="runtime" />
+    <PackageReference Include="AWSSDK.S3" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\Habilis.Aws.Common\Habilis.Aws.Common.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <InternalsVisibleTo Include="Habilis.Aws.S3.Tests" />
+  </ItemGroup>
+</Project>

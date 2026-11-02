@@ -102,6 +102,7 @@ public partial class MainWindow : IPluginWindow
 
         var items = entries.Select(e => new QuickPickItem { Label = e.Item.Title, Description = e.Plugin.Name, Tag = e, Icon = Theming.Codicon.Folder }).ToList();
         var result = await QuickPick.ShowAsync(panel, items, new QuickPickOptions { Title = "Plugins", Placeholder = "Filter" });
+        panel.Focus(); // Esc keeps the panel focused, as the drive menu does
         if (result?.Item?.Tag is ValueTuple<LoadedPlugin, PluginMenuItem> chosen)
         {
             await OpenPluginAsync(panel, chosen.Item1, chosen.Item2.Open);
@@ -125,6 +126,7 @@ public partial class MainWindow : IPluginWindow
         }
 
         var result = await QuickPick.ShowAsync(panel, items, new QuickPickOptions { Title = "Plugins", Placeholder = "Filter plugins" });
+        panel.Focus();
         if (result?.Item?.Tag is LoadedPlugin { Instance: { } instance } chosen && PluginManager.Guard(chosen, () => instance.HasConfiguration, false))
         {
             try
@@ -225,6 +227,7 @@ public partial class MainWindow : IPluginWindow
         var items = PluginManager.Guard(panel.Plugin!, () => commands.Commands, [])
             .Select(c => new QuickPickItem { Label = c.Title, Detail = c.Key ?? string.Empty, Tag = c }).ToList();
         var result = await QuickPick.ShowAsync(panel, items, new QuickPickOptions { Title = $"{panel.Plugin!.Name} commands", Placeholder = "Filter commands" });
+        panel.Focus();
         if (result?.Item?.Tag is PanelCommand command)
         {
             await RunPluginCommandAsync(panel, command);
@@ -478,6 +481,7 @@ public partial class MainWindow : IPluginWindow
         };
         items.AddRange(keys.Select(k => new QuickPickItem { Label = k.Title, Tag = k }));
         var result = await QuickPick.ShowAsync(panel, items, new QuickPickOptions { Title = "Sort by", Placeholder = "Filter sort keys" });
+        panel.Focus();
         switch (result?.Item?.Tag)
         {
             case Core.FileSystem.SortMode mode:

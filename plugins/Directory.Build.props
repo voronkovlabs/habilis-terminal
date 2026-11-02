@@ -1,0 +1,21 @@
+<Project>
+  <!--
+    The plugins are built as an outside vendor would build them: this file does not import the app's build settings,
+    and the SDK comes only as the HabilisTerminal.Plugins.Sdk package from the local feed (nuget.config).
+  -->
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <AnalysisLevel>latest-recommended</AnalysisLevel>
+    <Authors>Habilis Terminal plugins</Authors>
+    <Version>1.0.0</Version>
+    <IsPackable>false</IsPackable>
+    <!-- Plugin assemblies are loaded by the host with their .deps.json; dependencies are copied next to them. -->
+    <EnableDynamicLoading>true</EnableDynamicLoading>
+    <!-- Restore into the repository, so a re-packed SDK (same version while it is developed) never mixes with the global cache. -->
+    <RestorePackagesPath>$(MSBuildThisFileDirectory)../artifacts/packages</RestorePackagesPath>
+  </PropertyGroup>
+</Project>

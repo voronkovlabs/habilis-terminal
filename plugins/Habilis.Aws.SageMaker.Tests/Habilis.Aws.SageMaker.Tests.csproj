@@ -1,0 +1,19 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <EnableDynamicLoading>false</EnableDynamicLoading>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="HabilisTerminal.Plugins.Sdk" />
+    <PackageReference Include="xunit.v3" />
+  </ItemGroup>
+  <ItemGroup>
+    <Using Include="Xunit" />
+    <!-- The shared test host (scripted dialogs, in-memory settings, recorded progress). -->
+    <Compile Include="..\Habilis.Aws.Tests\FakeHost.cs" Link="FakeHost.cs" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\Habilis.Aws.Common\Habilis.Aws.Common.csproj" />
+    <ProjectReference Include="..\Habilis.Aws.SageMaker\Habilis.Aws.SageMaker.csproj" />
+  </ItemGroup>
+</Project>

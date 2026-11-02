@@ -145,6 +145,12 @@ public class ShellHostTests
         shell.Host.AddressPrefixes = ["demo", "sqs"];
         await shell.WaitIdleAsync();
 
+        // A bare prefix opens the plugin's default location.
+        shell.Host.Write("sqs:\r");
+        await TestShell.WaitUntilAsync(() => addresses.Count == 1, "open-address message for a bare prefix");
+        Assert.True(addresses.TryDequeue(out var bare));
+        Assert.Equal("sqs:", bare);
+
         shell.Host.Write("sqs:prod/eu-west-1\r");
         await TestShell.WaitUntilAsync(() => addresses.Count == 1, "open-address message");
         Assert.True(addresses.TryPeek(out var address));

@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <Description>Habilis Terminal plugin: Amazon SQS queues with message counts; purge selected queues.</Description>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="HabilisTerminal.Plugins.Sdk" PrivateAssets="all" ExcludeAssets="runtime" />
+    <PackageReference Include="AWSSDK.SQS" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\Habilis.Aws.Common\Habilis.Aws.Common.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <InternalsVisibleTo Include="Habilis.Aws.Tests" />
+  </ItemGroup>
+</Project>

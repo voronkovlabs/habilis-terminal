@@ -1,0 +1,7 @@
+{
+  "id": "aws.sqs",
+  "name": "SQS Queues",
+  "version": "1.0.0",
+  "assembly": "Habilis.Aws.Sqs.dll",
+  "sdk": "1.0"
+}

@@ -1,0 +1,9 @@
+[*.cs]
+# Test names use underscores for readability.
+dotnet_diagnostic.CA1707.severity = none
+
+# Fakes complete synchronously; tests do not need the test cancellation token.
+dotnet_diagnostic.xUnit1051.severity = suggestion
+
+# Helpers take the interface they exercise.
+dotnet_diagnostic.CA1859.severity = suggestion

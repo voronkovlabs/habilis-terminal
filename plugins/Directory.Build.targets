@@ -1,0 +1,6 @@
+<Project>
+  <!-- Every plugin ships its plugin.json next to its assembly. -->
+  <ItemGroup Condition="Exists('$(MSBuildProjectDirectory)\plugin.json')">
+    <None Include="plugin.json" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+  </ItemGroup>
+</Project>

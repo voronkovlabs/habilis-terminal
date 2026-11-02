@@ -130,7 +130,8 @@ Set-PSReadLineKeyHandler -Chord Enter -BriefDescription HabilisTerminalEnter -De
     $cursor = $null
     [Microsoft.PowerShell.PSConsoleReadLine]::GetBufferState([ref] $line, [ref] $cursor)
     $prefixes = Join-Path $state.Channel 'prefixes'
-    if ($line -match '^\s*([A-Za-z][A-Za-z0-9]*):\S' -and (Test-Path -LiteralPath $prefixes)) {
+    # "sqs:" alone counts too (the plugin's default location).
+    if ($line -match '^\s*([A-Za-z][A-Za-z0-9]*):(\S|\s*$)' -and (Test-Path -LiteralPath $prefixes)) {
         $prefix = $Matches[1]
         if (@(Get-Content -LiteralPath $prefixes -Encoding utf8) -contains $prefix) {
             [Microsoft.PowerShell.PSConsoleReadLine]::AddToHistory($line)

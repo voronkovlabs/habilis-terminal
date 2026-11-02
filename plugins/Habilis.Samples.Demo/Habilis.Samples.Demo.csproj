@@ -1,0 +1,8 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <Description>A sample Habilis Terminal plugin without network access: an in-memory tree that shows every plugin panel feature.</Description>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="HabilisTerminal.Plugins.Sdk" PrivateAssets="all" ExcludeAssets="runtime" />
+  </ItemGroup>
+</Project>

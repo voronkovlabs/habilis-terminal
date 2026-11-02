@@ -1,0 +1,7 @@
+{
+  "id": "aws.sagemaker",
+  "name": "SageMaker Training Jobs",
+  "version": "1.0.0",
+  "assembly": "Habilis.Aws.SageMaker.dll",
+  "sdk": "1.0"
+}
