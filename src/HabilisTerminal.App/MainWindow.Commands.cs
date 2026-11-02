@@ -299,13 +299,15 @@ public partial class MainWindow
                 _shell?.Host.SendKey(Win32InputSequence.VkSpace, ' ', Win32InputSequence.LeftCtrl);
                 return true;
 
-            // Clipboard.
+            // Clipboard; Ctrl+C / Ctrl+Alt+C as well (issue #54): with a panel focused they never reach the shell.
             case Key.Insert when modifiers == KeyModifiers.Control:
+            case Key.C when modifiers == KeyModifiers.Control:
                 CopyNames(panel, fullPaths: false);
                 return true;
 
             case Key.Insert when modifiers == (KeyModifiers.Control | KeyModifiers.Alt):
             case Key.Insert when modifiers == (KeyModifiers.Alt | KeyModifiers.Shift):
+            case Key.C when modifiers == (KeyModifiers.Control | KeyModifiers.Alt):
                 CopyNames(panel, fullPaths: true);
                 return true;
 

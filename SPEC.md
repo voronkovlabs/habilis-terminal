@@ -103,7 +103,7 @@ Far Manager defaults unless noted.
 |---|---|
 | Up/Down, PgUp/PgDn, Home/End, Left/Right | Move cursor (Left/Right: the neighbouring column in multi-column modes, Home/End in one-column modes; never another panel) |
 | Tab | Switch active panel. With one panel shown (Ctrl+P) the terminal stands in for the other panel: Tab moves focus to it, and Tab on an empty command line moves back (otherwise Tab completes) |
-| Enter | Open directory / run file through the shell (§7) |
+| Enter | Open directory; run a program or script (`PATHEXT`, `.ps1`) through the shell (§7); open any other file in its associated program (issue #52) |
 | Ctrl+PgUp | Parent directory |
 | Ctrl+\\ | Root of the drive |
 | Ins | Toggle selection and move down |
@@ -114,8 +114,8 @@ Far Manager defaults unless noted.
 | Ctrl+Enter | Insert file name into the command line |
 | Ctrl+[ / Ctrl+] | Insert left / right panel path into the command line |
 | Ctrl+F | Insert full file name into the command line |
-| Ctrl+Ins | Copy names to the clipboard |
-| Ctrl+Alt+Ins / Alt+Shift+Ins | Copy full names (paths) to the clipboard |
+| Ctrl+Ins, Ctrl+C | Copy names to the clipboard (the item under the cursor, or the selection; Ctrl+C only with a panel focused, issue #54) |
+| Ctrl+Alt+Ins / Alt+Shift+Ins / Ctrl+Alt+C | Copy full names (paths) to the clipboard |
 | Ctrl+E / Ctrl+X | Previous / next command in the shell history (sent to PSReadLine) |
 | Ctrl+Space | Completion in the command line (PSReadLine `MenuComplete`) |
 | Alt+F1 / Alt+F2 | Drive menu for the left / right panel |
@@ -357,8 +357,8 @@ F6 switches between viewer and editor, as in Far. One page at a time (no F12 scr
 - Support the **VS Code file icon theme format** (`iconDefinitions`, `fileExtensions`, `fileNames`, `folderNames`,
   `languageIds`, light variants). `languageIds` resolve through a bundled language → extensions table taken from
   VS Code built-in extensions.
-- Bundled sets: **Seti** (default, the VS Code default look; from `seti-ui`, MIT) and **Material Icon Theme** (MIT;
-  icons from Material Design Icons and Material Symbols, Apache 2.0).
+- Bundled sets: **Material Icon Theme** (default since issue #50; MIT; icons from Material Design Icons and Material
+  Symbols, Apache 2.0) and **Seti** (the VS Code default look; from `seti-ui`, MIT).
 - **Codicons** (code MIT, content CC BY 4.0) for all UI glyphs.
 - A build-time tool converts SVG and font glyphs to WPF `Geometry` resources; no runtime SVG dependency.
 - `.exe`, `.ico`, `.lnk` icons come from the system, lazily, for visible rows only.

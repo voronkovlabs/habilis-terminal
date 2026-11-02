@@ -12,7 +12,7 @@ using HabilisTerminal.Themes;
 namespace HabilisTerminal.App.Panels;
 
 /// <summary>
-/// File icons for the panels (SPEC §10): VS Code icon theme vectors (Seti by default, Material on request), a generic
+/// File icons for the panels (SPEC §10): VS Code icon theme vectors (Material by default, issue #50; Seti on request), a generic
 /// folder when the theme has none, and the system's own icons for <c>.exe</c>, <c>.ico</c> and <c>.lnk</c>, loaded
 /// lazily for visible rows only.
 /// </summary>
@@ -31,7 +31,7 @@ internal static class IconProvider
     /// <summary>A system icon finished loading: repaint the panels.</summary>
     public static event Action? SystemIconLoaded;
 
-    public static string ThemeId { get; private set; } = FileIconTheme.Seti;
+    public static string ThemeId { get; private set; } = FileIconTheme.Material;
 
     /// <summary>Switches the icon theme (Seti / Material); the caller repaints. Returns false when nothing changed.</summary>
     public static bool SetTheme(string id)
@@ -78,7 +78,7 @@ internal static class IconProvider
         dc.Pop();
     }
 
-    private static FileIconTheme LoadTheme() => FileIconTheme.LoadBuiltIn(FileIconTheme.Seti);
+    private static FileIconTheme LoadTheme() => FileIconTheme.LoadBuiltIn(FileIconTheme.Material);
 
     private static Drawing ThemeDrawing(IconDefinition definition)
     {

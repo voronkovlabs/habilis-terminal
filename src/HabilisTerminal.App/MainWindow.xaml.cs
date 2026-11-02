@@ -507,22 +507,66 @@ public partial class MainWindow : Window
         }
     }
 
-    /// <summary>Enter on a file: run it through PSReadLine, so it lands in history like in Far.</summary>
+    /// <summary>
+    /// Enter on a file: a program or script runs through PSReadLine, so it lands in history like in Far; any other
+    /// file opens in its associated program (issue #52).
+    /// </summary>
     private void OnPanelExecuteRequested(FilePanel panel, PanelItem item)
     {
-        if (_shell is null)
-        {
-            return;
-        }
-
         if (panel != _active)
         {
             Activate(panel);
         }
 
+        if (!Core.FileSystem.RunnableFiles.IsRunnable(item.Name))
+        {
+            OpenWithAssociation(panel, item.Name);
+            return;
+        }
+
+        if (_shell is null)
+        {
+            return;
+        }
+
         SyncShellDirectory();
         _shell.Host.Run("& " + ShellQuote.Quote(".\\" + item.Name));
     }
+
+    /// <summary>The file's default shell verb; with no associated program Windows asks which one to use.</summary>
+    private static void OpenWithAssociation(FilePanel panel, string name)
+    {
+        var path = Path.Combine(panel.CurrentPath, name);
+        foreach (var verb in new[] { string.Empty, "openas" })
+        {
+            try
+            {
+                using var process = System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(path)
+                {
+                    UseShellExecute = true,
+                    Verb = verb,
+                    WorkingDirectory = panel.CurrentPath,
+                });
+                return;
+            }
+            catch (System.ComponentModel.Win32Exception ex) when (verb.Length == 0 && ex.NativeErrorCode == NoAssociation)
+            {
+                // No program for this type: the next verb shows Windows' "Open with" list.
+            }
+            catch (System.ComponentModel.Win32Exception ex)
+            {
+                if (ex.NativeErrorCode != Cancelled)
+                {
+                    panel.Message = $"Cannot open '{name}': {ex.Message}";
+                }
+
+                return;
+            }
+        }
+    }
+
+    private const int NoAssociation = 1155; // ERROR_NO_ASSOCIATION
+    private const int Cancelled = 1223; // ERROR_CANCELLED: the user closed a dialog the shell showed
 
     /// <summary>
     /// The shell context menu (issue #41). "Rename" goes to the panel's own Shift+F6 when it covers the same items:
