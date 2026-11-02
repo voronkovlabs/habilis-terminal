@@ -257,7 +257,7 @@ public partial class MainWindow
         Line($"Shell: {App.FindPwsh()}", "Habi.DescriptionStyle");
         Line($"Settings: {App.Paths.SettingsFile}", "Habi.DescriptionStyle");
         Line("MIT License. Includes VS Code themes and Seti icons (MIT), Material Icon Theme (MIT), Codicons (CC BY 4.0), " +
-             "the Windows Terminal control and ConPTY (MIT), AvalonEdit (MIT) and Velopack (MIT).", "Habi.DescriptionStyle");
+             "the Windows Terminal control and ConPTY (MIT), AvalonEdit (MIT), Velopack (MIT), Markdig (BSD-2-Clause) and the WebView2 SDK (BSD-3-Clause).", "Habi.DescriptionStyle");
 
         var choice = ThemedDialog.Show(this, "Habilis Terminal", body,
         [

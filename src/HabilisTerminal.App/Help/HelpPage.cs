@@ -44,6 +44,7 @@ public sealed class HelpPage : DockPanel, IPage
         ("Files",
         [
             ("F3", "View (on a folder: compute its size)"),
+            ("Alt+F3", "Markdown rendered; other files in their associated program"),
             ("F4", "Edit"),
             ("F5 / Shift+F5", "Copy / copy the item under the cursor"),
             ("F6 / Shift+F6", "Move or rename / rename the item under the cursor"),

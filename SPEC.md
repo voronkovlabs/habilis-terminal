@@ -137,6 +137,7 @@ Far Manager defaults unless noted.
 | Ctrl+Up/Down, Ctrl+Left/Right | Resize terminal height / single-panel width |
 | F1 | Help (keyboard map) |
 | F3 / F4 | View / edit (§9) |
+| Alt+F3 | Markdown files rendered (§9); any other file in its associated program, as Far's external viewer (issue #57) |
 | F5 / Shift+F5 | Copy / copy the item under the cursor |
 | F6 / Shift+F6 | Move-rename / rename the item under the cursor |
 | F7 | Make directory |
@@ -325,6 +326,15 @@ F6 switches between viewer and editor, as in Far. One page at a time (no F12 scr
   selection's files and size, the contents of the counted folders included. While counting, the status line
   shows "Counting <folder>…" with the running totals; moving the cursor or leaving the directory stops it.
 - Ctrl+Q shows the same control as quick view in the opposite panel.
+
+### Markdown view (Alt+F3, issue #57)
+- `.md`, `.markdown`, `.mdown`, `.mkd`: Markdig (advanced extensions: tables, task lists, footnotes, autolinks) renders
+  the file to HTML, shown in WebView2 in a GitHub-like style with the colour theme's editor colours.
+- Raw HTML in the file is escaped and the page allows no scripts. The file's folder is served as
+  `https://md.habi.local/`, so relative images load. Links to other Markdown files open in the same view, web links
+  in the browser, other local files in their associated program.
+- F3 plain viewer, F4 / F6 editor, Esc / F10 / Alt+F3 close (the cursor stays on the file).
+- WebView2 keeps its profile in the state folder (`WebView2`); without the WebView2 Runtime the page says so.
 
 ### Editor (F4)
 - Text detection by content (first 64 KB): BOM → text; no NUL bytes and few control characters → text; otherwise binary.

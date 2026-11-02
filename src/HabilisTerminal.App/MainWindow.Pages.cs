@@ -91,6 +91,44 @@ public partial class MainWindow
         ShowPage(page);
     }
 
+    /// <summary>
+    /// Alt+F3 (issue #57): Markdown renders in <see cref="MarkdownPage"/>; any other file opens in its associated
+    /// program, as Far's external viewer.
+    /// </summary>
+    private void ViewAlternative(FilePanel panel)
+    {
+        var item = panel.State.Current;
+        if (panel.IsPlugin || item.IsParent || item.Entry.IsDirectory || panel.State.Count == 0)
+        {
+            return;
+        }
+
+        var path = Path.Combine(panel.CurrentPath, item.Name);
+        if (MarkdownPage.IsMarkdown(path))
+        {
+            OpenMarkdown(path, panel);
+        }
+        else
+        {
+            OpenWithAssociation(panel, item.Name);
+        }
+    }
+
+    private void OpenMarkdown(string path, FilePanel returnTo)
+    {
+        var page = new MarkdownPage(path, _themes.Current);
+        RememberFile(path, edited: false);
+        page.CloseRequested += () =>
+        {
+            ClosePage();
+            returnTo.State.TrySetCursor(Path.GetFileName(path));
+            returnTo.Refresh();
+        };
+        page.ViewRequested += file => OpenViewer(file, returnTo);
+        page.EditRequested += file => Edit(file, returnTo);
+        ShowPage(page);
+    }
+
     /// <summary>Ctrl+Q: quick view of the active panel's current file in the other panel.</summary>
     private void ToggleQuickView()
     {

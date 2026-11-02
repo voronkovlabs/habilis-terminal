@@ -22,6 +22,7 @@
     <PackageReference Include="CI.Microsoft.Terminal.Wpf" />
     <PackageReference Include="Microsoft.Windows.Console.ConPTY" />
     <PackageReference Include="Velopack" />
+    <PackageReference Include="Microsoft.Web.WebView2" />
   </ItemGroup>
   <ItemGroup>
     <!-- Program.Main starts the app: Velopack hooks must run before WPF. -->

@@ -214,6 +214,10 @@ public partial class MainWindow
                 View(panel);
                 return true;
 
+            case Key.F3 when modifiers == KeyModifiers.Alt:
+                ViewAlternative(panel);
+                return true;
+
             case Key.F4 when modifiers == KeyModifiers.None:
                 Edit(panel);
                 return true;
