@@ -55,7 +55,11 @@ public sealed record PanelEntry(string Name, bool IsFolder = false, long? Size =
     public object? Tag { get; init; }
 }
 
-/// <summary>A cell's text and the value it sorts by (a number, a <see cref="DateTime"/>, a <see cref="TimeSpan"/> or text).</summary>
+/// <summary>
+/// A cell's text and the value it sorts by (a number, a <see cref="DateTime"/>, a <see cref="TimeSpan"/> or text). A null
+/// <see cref="SortValue"/> marks the value as missing (e.g. text "?"): such cells sort last in either direction. A plain
+/// string converts to a cell that sorts by its text.
+/// </summary>
 public readonly record struct CellValue(string Text, IComparable? SortValue = null)
 {
     public static implicit operator CellValue(string text) => new(text, text);

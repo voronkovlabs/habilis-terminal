@@ -267,10 +267,38 @@ public partial class MainWindow : IPluginWindow
         var provider = panel.Provider!;
         try
         {
-            if (provider is IViewEntry viewer && await viewer.ViewAsync(entry, CancellationToken.None) is { } view)
+            if (provider is IViewEntry viewer)
             {
-                await ViewTextAsync(view.Title, view.Text);
-                return;
+                // A view that takes longer than half a second gets a card with Cancel.
+                using var control = new OperationControl();
+                var progress = new PluginProgress(Dispatcher, () => Toasts.Add($"Opening {entry.Name}", control));
+                var viewing = viewer.ViewAsync(entry, control.Token);
+                _ = Task.Delay(500).ContinueWith(_ =>
+                {
+                    if (!viewing.IsCompleted)
+                    {
+                        progress.Begin(entry.Name);
+                    }
+                }, TaskScheduler.Default);
+                (string Title, string Text)? view;
+                try
+                {
+                    view = await viewing;
+                }
+                catch (OperationCanceledException) when (control.Token.IsCancellationRequested)
+                {
+                    return;
+                }
+                finally
+                {
+                    progress.Close();
+                }
+
+                if (view is { } shown)
+                {
+                    await ViewTextAsync(shown.Title, shown.Text);
+                    return;
+                }
             }
 
             if (provider is IGetFiles getter && !entry.IsFolder)

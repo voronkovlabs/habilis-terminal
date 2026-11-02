@@ -480,3 +480,6 @@ $RECYCLE.BIN/
 
 # Vim temporary swap files
 *.swp
+
+# Test run results (Microsoft.Testing.Platform)
+TestResults/

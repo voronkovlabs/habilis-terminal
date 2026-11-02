@@ -287,7 +287,7 @@ public sealed partial class FilePanel
             Extension = new PanelExtension
             {
                 Cell = (row, key) => Entries.TryGetValue(RowKey(row), out var entry) && entry.Cells is { } cells && cells.TryGetValue(key, out var cell)
-                    ? (cell.Text, cell.SortValue ?? cell.Text)
+                    ? (cell.Text, cell.SortValue)
                     : null,
                 Group = row => Entries.TryGetValue(RowKey(row), out var entry) ? entry.Group : 0,
                 Tone = row => Entries.TryGetValue(RowKey(row), out var entry) ? (int)entry.Tone : 0,
