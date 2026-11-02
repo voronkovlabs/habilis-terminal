@@ -62,7 +62,7 @@ public sealed record AwsSession(string Profile, string Region, string? Credentia
 
         try
         {
-            return profile.GetAWSCredentials(chain);
+            return AwsClients.Own(profile.GetAWSCredentials(chain), this);
         }
         catch (Exception ex) when (ex is AmazonClientException or InvalidOperationException or ArgumentException)
         {

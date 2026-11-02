@@ -6,7 +6,7 @@
     <!-- Compile against the SDK; the host provides it at run time, so it is never copied next to a plugin. -->
     <PackageReference Include="HabilisTerminal.Plugins.Sdk" PrivateAssets="all" ExcludeAssets="runtime" />
     <PackageReference Include="AWSSDK.Core" />
-    <!-- Loaded by AWSSDK.Core for role and SSO profiles. -->
+    <!-- Role and SSO profiles: AwsClients hands these clients to AWSSDK.Core (issue #61). -->
     <PackageReference Include="AWSSDK.SecurityToken" />
     <PackageReference Include="AWSSDK.SSO" />
     <PackageReference Include="AWSSDK.SSOOIDC" />
