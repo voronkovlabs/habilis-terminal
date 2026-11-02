@@ -309,6 +309,11 @@ F6 switches between viewer and editor, as in Far. One page at a time (no F12 scr
 
 ### Viewer (F3, Ctrl+Q)
 - Own lightweight control: memory-mapped file, lazy line index — multi-GB files open instantly.
+- **Text mode for small files (issue #56):** text files up to `viewer.textModeMaxMB` (10 MB; 0 turns it off) show in a
+  read-only AvalonEdit with the editor's syntax colours, line numbers, mouse selection and Ctrl+C. The viewer keys
+  stay: F2 wrap, F4 hex (the paged control at the caret's line; F4 again returns), F7 / Shift+F7 / Alt+F7 search,
+  F8 / Shift+F8 encoding, Alt+F8 go to line or percent (a `0x` offset opens hex there). Larger and binary files
+  use the paged control.
 - Text / hex modes, word wrap on/off.
 - Encodings: auto-detection (BOM, UTF-8 heuristic), manual switch to UTF-8, UTF-16 LE/BE, ANSI (1251), OEM (866).
 - Search (F7, Shift+F7 next), go to line / offset.

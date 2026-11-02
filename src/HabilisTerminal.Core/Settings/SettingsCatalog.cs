@@ -51,6 +51,7 @@ public static class SettingsCatalog
         new("viewer.wrap", Viewer, "Word Wrap", "Wrap long lines when a file opens (F2 toggles it).", SettingKind.Toggle, false),
         new("viewer.fontFamily", Viewer, "Font Family", "Font of the viewer.", SettingKind.Text, "Cascadia Mono"),
         new("viewer.fontSize", Viewer, "Font Size", "Font size of the viewer, in pixels.", SettingKind.Number, 13, Minimum: 6, Maximum: 48),
+        new("viewer.textModeMaxMB", Viewer, "Text Mode Limit", "Text files up to this many megabytes open in a read-only editor (syntax colors, mouse selection); larger ones in the paged viewer. 0 turns it off.", SettingKind.Number, 10, Minimum: 0, Maximum: 500),
 
         new("editor.syntaxHighlighting", Editor, "Syntax Highlighting", "Color the text by file type.", SettingKind.Toggle, true),
         new("editor.largeFileThresholdMB", Editor, "Large File Threshold", "Text files larger than this many megabytes ask before opening in the editor.", SettingKind.Number, 50, Minimum: 1, Maximum: 2000),

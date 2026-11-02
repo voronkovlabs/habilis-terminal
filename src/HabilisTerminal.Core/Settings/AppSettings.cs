@@ -55,6 +55,8 @@ public sealed class AppSettings
 
     public int ViewerFontSize => Get<int>("viewer.fontSize");
 
+    public int ViewerTextModeMaxMB => Get<int>("viewer.textModeMaxMB");
+
     public bool EditorSyntaxHighlighting => Get<bool>("editor.syntaxHighlighting");
 
     public int EditorLargeFileThresholdMB => Get<int>("editor.largeFileThresholdMB");

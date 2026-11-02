@@ -202,6 +202,10 @@ public partial class MainWindow : Window
         {
             editor.ApplyTheme(theme);
         }
+        else if (PageHost?.Content is Viewing.ViewerPage viewer)
+        {
+            viewer.ApplyTheme(theme);
+        }
 
         if (IsLoaded)
         {

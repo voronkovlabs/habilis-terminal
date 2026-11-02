@@ -1,5 +1,4 @@
 using System.IO;
-using System.Text.Json;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
@@ -94,121 +93,13 @@ public sealed class EditorPage : DockPanel, IPage
     /// <summary>Editor colours from the theme (<c>editor.*</c>) and syntax colours from its <c>tokenColors</c>.</summary>
     public void ApplyTheme(ColorTheme theme)
     {
-        Brush Brush(string key, string fallbackKey = "editor.background")
-        {
-            var background = theme.GetOpaque("editor.background");
-            var color = (theme.Get(key) ?? theme.Get(fallbackKey) ?? background).Over(background);
-            var brush = new SolidColorBrush(PanelPalette.ToColor(color));
-            brush.Freeze();
-            return brush;
-        }
-
-        Background = Brush("editor.background");
-        _editor.Background = Brush("editor.background");
-        _editor.Foreground = Brush("editor.foreground", "foreground");
-        _editor.LineNumbersForeground = Brush("editorLineNumber.foreground", "editor.foreground");
-        _editor.TextArea.SelectionBrush = Brush("editor.selectionBackground");
-        _editor.TextArea.SelectionForeground = null;
-        _editor.TextArea.SelectionBorder = null;
-        _editor.TextArea.Caret.CaretBrush = Brush("editorCursor.foreground", "editor.foreground");
-        _editor.TextArea.TextView.CurrentLineBackground = Brush("editor.lineHighlightBackground");
-        _editor.TextArea.TextView.CurrentLineBorder = new Pen(Brush("editor.lineHighlightBorder", "editor.lineHighlightBackground"), 1);
+        Background = TextEditorTheme.Brush(theme, "editor.background");
+        TextEditorTheme.Apply(_editor, theme);
         Header.Background = PanelPalette.HeaderBackground;
         Header.BorderBrush = PanelPalette.Border;
         _title.Foreground = PanelPalette.Foreground;
         _status.Foreground = PanelPalette.DescriptionForeground;
         ((TextBlock)((DockPanel)Header.Child).Children[0]).Foreground = PanelPalette.DescriptionForeground;
-        RecolorSyntax(theme);
-    }
-
-    private void RecolorSyntax(ColorTheme theme)
-    {
-        if (_editor.SyntaxHighlighting is not { } definition)
-        {
-            return;
-        }
-
-        var scopes = TokenColors(theme);
-        Color? Scope(params string[] candidates)
-        {
-            // TextMate matching: a rule applies when its scope is a prefix of the token scope; the longest wins.
-            foreach (var candidate in candidates)
-            {
-                Color? best = null;
-                var bestLength = -1;
-                foreach (var (scope, color) in scopes)
-                {
-                    if (scope.Length > bestLength && (scope == candidate || candidate.StartsWith(scope + ".", StringComparison.Ordinal)))
-                    {
-                        best = color;
-                        bestLength = scope.Length;
-                    }
-                }
-
-                if (best is not null)
-                {
-                    return best;
-                }
-            }
-
-            return null;
-        }
-
-        foreach (var named in definition.NamedHighlightingColors)
-        {
-            var name = named.Name;
-            var color = name.Contains("Punctuation", StringComparison.OrdinalIgnoreCase) ? null
-                : name.Contains("Comment", StringComparison.OrdinalIgnoreCase) ? Scope("comment")
-                : name.Contains("TrueFalse", StringComparison.OrdinalIgnoreCase) || name.Contains("Null", StringComparison.OrdinalIgnoreCase) ? Scope("constant.language")
-                : name.Contains("ThisOrBase", StringComparison.OrdinalIgnoreCase) ? Scope("variable.language", "keyword")
-                : name.Contains("String", StringComparison.OrdinalIgnoreCase) || name.Contains("Char", StringComparison.OrdinalIgnoreCase) ? Scope("string")
-                : name.Contains("Number", StringComparison.OrdinalIgnoreCase) || name.Contains("Digits", StringComparison.OrdinalIgnoreCase) ? Scope("constant.numeric")
-                : name.Contains("Method", StringComparison.OrdinalIgnoreCase) || name.Contains("Function", StringComparison.OrdinalIgnoreCase) ? Scope("entity.name.function")
-                : name.Contains("Attribute", StringComparison.OrdinalIgnoreCase) ? Scope("entity.other.attribute-name")
-                : name.Contains("Tag", StringComparison.OrdinalIgnoreCase) || name.Contains("Element", StringComparison.OrdinalIgnoreCase) ? Scope("entity.name.tag")
-                : name.Contains("Type", StringComparison.OrdinalIgnoreCase) ? Scope("entity.name.type", "storage.type")
-                : name.Contains("Preprocessor", StringComparison.OrdinalIgnoreCase) ? Scope("keyword.control.directive", "meta.preprocessor", "keyword")
-                : name is "Keywords" || name.Contains("Goto", StringComparison.OrdinalIgnoreCase) || name.Contains("Exception", StringComparison.OrdinalIgnoreCase) ? Scope("keyword.control", "keyword")
-                : Scope("storage.modifier", "keyword.other", "keyword");
-            named.Foreground = color is { } c ? new SimpleHighlightingBrush(c) : new SimpleHighlightingBrush(((SolidColorBrush)_editor.Foreground).Color);
-            named.Background = null;
-            named.FontWeight = null;
-            named.FontStyle = null;
-        }
-
-        // Force AvalonEdit to re-apply the changed colours.
-        _editor.SyntaxHighlighting = null;
-        _editor.SyntaxHighlighting = definition;
-    }
-
-    private static List<(string Scope, Color Color)> TokenColors(ColorTheme theme)
-    {
-        var result = new List<(string, Color)>();
-        foreach (var rule in theme.TokenColors)
-        {
-            if (!rule.TryGetProperty("settings", out var settings) || !settings.TryGetProperty("foreground", out var foreground) ||
-                !ThemeColor.TryParse(foreground.GetString(), out var color))
-            {
-                continue;
-            }
-
-            if (!rule.TryGetProperty("scope", out var scope))
-            {
-                continue;
-            }
-
-            IEnumerable<string> names = scope.ValueKind == JsonValueKind.Array
-                ? scope.EnumerateArray().Select(s => s.GetString() ?? string.Empty)
-                : (scope.GetString() ?? string.Empty).Split(',');
-            foreach (var name in names)
-            {
-                result.Add((name.Trim(), PanelPalette.ToColor(color)));
-            }
-        }
-
-        // Later rules win in TextMate themes.
-        result.Reverse();
-        return result;
     }
 
     private void OnEditorKeyDown(object sender, KeyEventArgs e)

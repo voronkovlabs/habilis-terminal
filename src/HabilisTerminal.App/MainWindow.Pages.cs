@@ -79,7 +79,7 @@ public partial class MainWindow
 
     private void OpenViewer(string path, FilePanel returnTo)
     {
-        var page = new ViewerPage(path, _settings.ViewerWrap);
+        var page = new ViewerPage(path, _settings, _themes.Current);
         RememberFile(path, edited: false);
         page.CloseRequested += () =>
         {
