@@ -32,5 +32,8 @@ foreach ($manifest in Get-ChildItem "$repo\plugins\*\plugin.json") {
     $id = (Get-Content $manifest -Raw | ConvertFrom-Json).id
     dotnet publish $project.FullName -c $Configuration -o (Join-Path $output $id) -nologo -v q --no-build | Out-Host
     if ($LASTEXITCODE -ne 0) { throw "Publishing $id failed." }
+    # The README (install, settings, permissions, test plan) travels with the plugin.
+    $readme = Join-Path $project.FullName 'README.md'
+    if (Test-Path $readme) { Copy-Item $readme (Join-Path $output $id) }
     Write-Host "plugin $id -> $(Join-Path $output $id)"
 }
