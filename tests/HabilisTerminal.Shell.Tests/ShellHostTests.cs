@@ -137,6 +137,28 @@ public class ShellHostTests
     }
 
     [Fact]
+    public async Task Enter_on_a_plugin_prefix_reports_the_address_instead_of_running_it()
+    {
+        using var shell = new TestShell();
+        var addresses = new System.Collections.Concurrent.ConcurrentQueue<string>();
+        shell.Host.AddressEntered += addresses.Enqueue;
+        shell.Host.AddressPrefixes = ["demo", "sqs"];
+        await shell.WaitIdleAsync();
+
+        shell.Host.Write("sqs:prod/eu-west-1\r");
+        await TestShell.WaitUntilAsync(() => addresses.Count == 1, "open-address message");
+        Assert.True(addresses.TryPeek(out var address));
+        Assert.Equal("sqs:prod/eu-west-1", address);
+
+        // Other lines, including ones with an unknown prefix or a drive letter, still run.
+        shell.Host.Write("'RAN-' + 'OK'\r");
+        await shell.WaitForTextAsync("RAN-OK");
+        shell.Host.Write("Set-Location C:; 'ON-' + 'C'\r");
+        await shell.WaitForTextAsync("ON-C");
+        Assert.Single(addresses);
+    }
+
+    [Fact]
     public async Task Non_filesystem_location_does_not_change_directory()
     {
         using var shell = new TestShell();

@@ -78,6 +78,8 @@ public interface IPluginHost
     string TempDirectory { get; }          // per plugin, emptied on start
     Task ViewFileAsync(string path, string? title = null);
     Task ViewTextAsync(string title, string text);
+    void Refresh(IPanelProvider provider); // re-list open panels, e.g. after the settings changed
+    void ShowStatus(string message);
     Version HostVersion { get; }
 }
 ```
@@ -146,7 +148,12 @@ as "<plugin> failed: <message>". Plugin calls run off the UI thread or are await
 - A key the provider does not support shows "Not supported by <plugin>" in the status line.
 - The command line: Enter on a line starting with a registered prefix and a colon (`s3:`, `sqs:`, `sm:`) opens the
   plugin panel instead of running the line in PowerShell (PSReadLine Enter handler, as for Tab).
-- F11 lists the plugins' menu items; F9 > Options > Plugins lists loaded and failed plugins and their configuration.
+- F11 lists the plugins' menu items; F9 > Options > Plugins (Alt+Shift+F9) lists loaded and failed plugins and opens
+  their configuration; F9 > Commands > Plugin panel commands lists the commands of the plugin panel with their keys.
+- After a plugin command the host re-lists the panel. Ctrl+1... switch the provider's layouts, Ctrl+F12 adds its sort
+  keys, and a click on a custom column's header sorts by it.
+- The shell stays in the local folder the plugin panel was opened from; a plugin panel's location is never sent to
+  the shell as a directory.
 - Plugin locations are kept in folder history (Alt+F12) and reopen through the plugin's `OpenAddressAsync`.
 
 ## 6. Packaging and testing

@@ -13,7 +13,16 @@ How the project is built, tested and checked by hand. Most of this is not visibl
   - `src/HabilisTerminal.Core`: panels, file system, settings, viewer, editor.
   - `src/HabilisTerminal.Shell`: ConPTY and pwsh integration.
   - `src/HabilisTerminal.Themes`.
+  - `src/HabilisTerminal.Plugins.Sdk`: the public plugin SDK (contracts only, packed as a NuGet package).
   - Tests are in `tests/`.
+  - `plugins/`: plugins built outside the app's solution (see Plugins below).
+
+## Plugins
+- **Design:** `docs/plugins.md`. The host side is `src/HabilisTerminal.Core/Plugins` (manifest, loader, settings) and `src/HabilisTerminal.App/Plugins`, `MainWindow.Plugins.cs`, `Panels/FilePanel.Plugin.cs`.
+- **Build the plugins:** `tools/plugins/Build-Plugins.ps1`. It packs the SDK into `artifacts/nuget`, builds `plugins/Plugins.slnx` against it (packages restore into `artifacts/packages`), runs the plugin tests and publishes each plugin into `artifacts/plugins/<id>`.
+- **Try them:** `tools/ui/New-TestCopy.ps1 -Name ... -WithPlugins` copies `artifacts/plugins` into the copy's `plugins` folder. The demo plugin (`demo:` on the command line, or F11) exercises every plugin panel feature without network access.
+- **AWS plugins are tested with fakes only.** Never use the owner's AWS profiles; the owner checks against a real account with each plugin's README test plan.
+- **The SDK is a public contract.** A breaking change needs a new SDK major version (`PluginManifest.HostSdkVersion`, the package version, every `plugin.json`).
 
 ## Build and test
 ```
