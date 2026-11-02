@@ -95,6 +95,14 @@ public class PluginTests
     }
 
     [Fact]
+    public void Sdk_assembly_version_is_the_sdk_version_not_the_app_version()
+    {
+        // Plugins bind to this version; a release build's -p:Version once moved it with the app (issue #60).
+        var sdk = PluginManifest.HostSdkVersion;
+        Assert.Equal(new Version(sdk.Major, sdk.Minor, 0, 0), typeof(Plugin).Assembly.GetName().Version);
+    }
+
+    [Fact]
     public void Settings_round_trip_and_a_broken_file_reads_as_empty()
     {
         using var sandbox = new TestSandbox();

@@ -103,7 +103,8 @@ public static class PluginLoader
 
     private sealed class PluginLoadContext(string id, string assemblyPath) : AssemblyLoadContext($"plugin:{id}")
     {
-        private static readonly string SdkName = typeof(Plugin).Assembly.GetName().Name!;
+        private static readonly Assembly SdkAssembly = typeof(Plugin).Assembly;
+        private static readonly string SdkName = SdkAssembly.GetName().Name!;
         private readonly AssemblyDependencyResolver _resolver = new(assemblyPath);
 
         protected override Assembly? Load(AssemblyName assemblyName)
@@ -111,7 +112,10 @@ public static class PluginLoader
             // The SDK is shared: plugin types must derive from the host's Plugin class.
             if (assemblyName.Name == SdkName)
             {
-                return null;
+                // The host's own SDK assembly, whatever version the plugin was built against: binding by version would
+                // refuse a plugin built against a newer minor SDK, and compatibility is already checked through the
+                // manifest's "sdk" (issue #60).
+                return SdkAssembly;
             }
 
             return _resolver.ResolveAssemblyToPath(assemblyName) is { } path ? LoadFromAssemblyPath(path) : null;

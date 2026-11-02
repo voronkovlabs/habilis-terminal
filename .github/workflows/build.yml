@@ -68,6 +68,9 @@ jobs:
             dotnet publish src/HabilisTerminal.App -c Release -r $rid --self-contained true -p:Version=$version -p:CrashReportToken=$reportToken -o $publish
             if ($LASTEXITCODE) { exit $LASTEXITCODE }
             Copy-Item artifacts/plugins "$publish/plugins" -Recurse
+            # The SDK keeps its own assembly version; -p:Version must not reach it (issue #60).
+            $sdkVersion = [Reflection.AssemblyName]::GetAssemblyName((Resolve-Path "$publish/HabilisTerminal.Plugins.Sdk.dll")).Version
+            if ($sdkVersion.ToString() -eq "$version.0") { throw "The plugin SDK took the app version $version." }
 
             # Previous release for delta updates; the first release has none.
             dotnet vpk download github --repoUrl $env:REPO_URL --channel $rid --outputDir "releases/$rid" --token $env:GH_TOKEN
