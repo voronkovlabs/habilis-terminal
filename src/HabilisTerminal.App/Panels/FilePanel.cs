@@ -139,6 +139,12 @@ public sealed partial class FilePanel : Border
     /// <summary>Enter on a file: run it through the shell.</summary>
     public event Action<FilePanel, PanelItem>? ExecuteRequested;
 
+    /// <summary>
+    /// Enter on a file with an archive extension (anyFormat false; the window runs it when it is no archive after
+    /// all) or Ctrl+PgDn on any file (anyFormat true): open it as a folder (issue #51).
+    /// </summary>
+    public event Action<FilePanel, PanelItem, bool>? ArchiveRequested;
+
     /// <summary>The cursor, selection or listing changed (the info panel follows).</summary>
     public event Action<FilePanel>? Changed;
 
@@ -541,9 +547,13 @@ public sealed partial class FilePanel : Border
                 GoToParent();
                 return true;
             case Key.PageDown when modifiers == KeyModifiers.Control:
-                if (State.Current.Entry.IsDirectory || State.Current.IsParent)
+                if (State.Current.Entry.IsDirectory || State.Current.IsParent || IsPlugin)
                 {
                     Open(State.Current);
+                }
+                else if (State.Count > 0)
+                {
+                    ArchiveRequested?.Invoke(this, State.Current, true);
                 }
 
                 return true;
@@ -836,6 +846,10 @@ public sealed partial class FilePanel : Border
         else if (item.Entry.IsDirectory)
         {
             _ = NavigateAsync(System.IO.Path.Combine(State.Path, item.Entry.Name));
+        }
+        else if (Core.Archives.ArchiveProvider.HasArchiveExtension(item.Name))
+        {
+            ArchiveRequested?.Invoke(this, item, false);
         }
         else
         {

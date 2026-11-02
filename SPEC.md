@@ -103,7 +103,8 @@ Far Manager defaults unless noted.
 |---|---|
 | Up/Down, PgUp/PgDn, Home/End, Left/Right | Move cursor (Left/Right: the neighbouring column in multi-column modes, Home/End in one-column modes; never another panel) |
 | Tab | Switch active panel. With one panel shown (Ctrl+P) the terminal stands in for the other panel: Tab moves focus to it, and Tab on an empty command line moves back (otherwise Tab completes) |
-| Enter | Open directory; run a program or script (`PATHEXT`, `.ps1`) through the shell (§7); open any other file in its associated program (issue #52) |
+| Enter | Open directory; open an archive as a folder (§8.1); run a program or script (`PATHEXT`, `.ps1`) through the shell (§7); open any other file in its associated program (issue #52) |
+| Ctrl+PgDn | Enter a directory, or open any file as an archive by its signature (§8.1) |
 | Ctrl+PgUp | Parent directory |
 | Ctrl+\\ | Root of the drive |
 | Ins | Toggle selection and move down |
@@ -302,6 +303,19 @@ Common rules:
   or newer than the counterpart are selected.
 - Time comparison tolerance 2 s when either side is FAT / exFAT; size comparison optional.
 - Directories are compared by presence only. No content compare, no recursion.
+
+### 8.1 Archives as folders (issue #51)
+As Far's arclite, on 7-Zip's `7z.dll` (26.04, shipped next to `habi.exe` per architecture; `third_party/7-Zip`).
+- **Enter** on a file whose extension belongs to a format 7z.dll reads (zip, 7z, rar, tar, gz, bz2, xz, iso, cab...)
+  opens it as a folder in a plugin panel; when it is no archive after all, Enter does what it does with any file.
+  Documents and programs that are zip or PE inside (docx, xlsx, exe, msi...) are excluded from Enter.
+- **Ctrl+PgDn** on any file tries every format by signature.
+- The panel path reads `C:\data\a.zip\docs`; folders only implied by item paths are shown. ".." at the archive's top
+  returns to its folder with the cursor on the archive file. Folder history reopens such locations.
+- **F3 / Enter** on a file views it from a temporary copy; **F5** copies files and folders out (times kept, overwrite
+  asked); an archive inside an archive (e.g. `.tar` in `.zip`) opens in place from a temporary copy.
+- Encrypted archives ask for the password once per archive.
+- Not yet: writing into archives (F5 into, F8, F7, Shift+F1 add) and multi-volume archives.
 
 ## 9. Viewer (F3) and editor (F4)
 

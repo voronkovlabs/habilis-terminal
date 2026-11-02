@@ -24,9 +24,9 @@ public sealed class HelpPage : DockPanel, IPage
         ]),
         ("Navigation",
         [
-            ("Enter", "Open a folder, run a file in the shell"),
+            ("Enter", "Open a folder or archive; run a program in the shell; open other files in their program"),
             ("Ctrl+PgUp", "Parent folder"),
-            ("Ctrl+PgDn", "Enter the folder under the cursor"),
+            ("Ctrl+PgDn", "Enter the folder under the cursor; on a file: open it as an archive"),
             ("Ctrl+\\", "Root of the drive"),
             ("Alt+F1 / Alt+F2", "Drive menu for the left / right panel"),
             ("Alt+F12", "Folder history"),

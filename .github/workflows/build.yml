@@ -71,6 +71,10 @@ jobs:
             # The SDK keeps its own assembly version; -p:Version must not reach it (issue #60).
             $sdkVersion = [Reflection.AssemblyName]::GetAssemblyName((Resolve-Path "$publish/HabilisTerminal.Plugins.Sdk.dll")).Version
             if ($sdkVersion.ToString() -eq "$version.0") { throw "The plugin SDK took the app version $version." }
+            # Archives (issue #51): the 7z.dll of this architecture (PE machine 0x8664 x64, 0xAA64 arm64).
+            $dll = [IO.File]::ReadAllBytes((Resolve-Path "$publish/7z.dll"))
+            $machine = [BitConverter]::ToUInt16($dll, [BitConverter]::ToInt32($dll, 0x3C) + 4)
+            if ($machine -ne @{ 'win-x64' = 0x8664; 'win-arm64' = 0xAA64 }[$rid]) { throw "7z.dll for $rid has machine 0x$($machine.ToString('X4'))." }
 
             # Previous release for delta updates; the first release has none.
             dotnet vpk download github --repoUrl $env:REPO_URL --channel $rid --outputDir "releases/$rid" --token $env:GH_TOKEN

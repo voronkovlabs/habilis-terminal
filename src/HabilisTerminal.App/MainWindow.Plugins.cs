@@ -44,6 +44,11 @@ public partial class MainWindow : IPluginWindow
             return await OpenPluginAsync(panel, plugin, token => plugin.Instance!.OpenAddressAsync(target, token));
         }
 
+        if (Path.IsPathFullyQualified(target) && !Directory.Exists(target) && await OpenArchiveLocationAsync(panel, target))
+        {
+            return true;
+        }
+
         return await panel.NavigateAsync(target);
     }
 

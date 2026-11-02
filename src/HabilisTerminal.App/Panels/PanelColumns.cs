@@ -88,6 +88,9 @@ public static class PanelColumns
             ColumnKind.Size => entry.Length.ToString("N0", culture),
             ColumnKind.CompactSize => FormatCompactSize(entry.Length, culture),
             _ when item.IsParent => string.Empty,
+            // A plugin entry without a time (an archive folder implied by paths, issue #51) shows none.
+            ColumnKind.Date or ColumnKind.Time or ColumnKind.Created or ColumnKind.Modified or ColumnKind.ModifiedShort or ColumnKind.Accessed
+                when entry.LastWriteTimeUtc == DateTime.MinValue => string.Empty,
             ColumnKind.Date => entry.LastWriteTimeUtc.ToLocalTime().ToString("d", culture),
             ColumnKind.Time => entry.LastWriteTimeUtc.ToLocalTime().ToString("t", culture),
             ColumnKind.Created => entry.CreationTimeUtc.ToLocalTime().ToString("g", culture),

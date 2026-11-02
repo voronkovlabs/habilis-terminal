@@ -48,14 +48,16 @@ public sealed partial class FilePanel
     }
 
     /// <summary>Shows a plugin panel; false (and the folder listing back) when its first listing fails.</summary>
-    internal async Task<bool> OpenPluginAsync(LoadedPlugin plugin, IPanelProvider provider)
+    /// <param name="returnPath">The folder ".." at the top leads back to; the current local folder by default.</param>
+    /// <param name="returnFocus">The item the cursor goes to there (an archive's file name).</param>
+    internal async Task<bool> OpenPluginAsync(LoadedPlugin plugin, IPanelProvider provider, string? returnPath = null, string? returnFocus = null)
     {
-        var returnPath = LocalPath;
+        returnPath ??= LocalPath;
         ClosePlugin();
         _watcher?.Dispose();
         _watcher = null;
         SizeWorker.Cancel(this);
-        _session = new PluginSession(plugin, provider, returnPath);
+        _session = new PluginSession(plugin, provider, returnPath, returnFocus);
         State.SetExtension(_session.Extension);
         _session.ApplyLayout(0, provider);
         if (await ListPluginAsync(focusName: null, opening: true))
@@ -228,7 +230,7 @@ public sealed partial class FilePanel
 
         var returnPath = session.ReturnPath;
         ClosePlugin();
-        if (!await NavigateAsync(returnPath))
+        if (!await NavigateAsync(returnPath, session.ReturnFocus))
         {
             await NavigateAsync(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile));
         }
@@ -279,11 +281,12 @@ public sealed partial class FilePanel
     /// <summary>One open plugin panel: the plugin, its provider, the entries by row and the panel extension.</summary>
     private sealed class PluginSession
     {
-        public PluginSession(LoadedPlugin plugin, IPanelProvider provider, string returnPath)
+        public PluginSession(LoadedPlugin plugin, IPanelProvider provider, string returnPath, string? returnFocus)
         {
             Plugin = plugin;
             Provider = provider;
             ReturnPath = returnPath;
+            ReturnFocus = returnFocus;
             Extension = new PanelExtension
             {
                 Cell = (row, key) => Entries.TryGetValue(RowKey(row), out var entry) && entry.Cells is { } cells && cells.TryGetValue(key, out var cell)
@@ -299,6 +302,8 @@ public sealed partial class FilePanel
         public IPanelProvider Provider { get; }
 
         public string ReturnPath { get; }
+
+        public string? ReturnFocus { get; }
 
         public PanelExtension Extension { get; }
 

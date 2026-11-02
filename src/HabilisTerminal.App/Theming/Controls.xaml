@@ -67,6 +67,34 @@
         </Setter>
     </Style>
 
+    <!-- The archive password prompt (issue #51): the same look as TextBox. -->
+    <Style TargetType="PasswordBox">
+        <Setter Property="Background" Value="{DynamicResource Habi.InputBackground}" />
+        <Setter Property="Foreground" Value="{DynamicResource Habi.Foreground}" />
+        <Setter Property="CaretBrush" Value="{DynamicResource Habi.Foreground}" />
+        <Setter Property="SelectionBrush" Value="{DynamicResource Habi.Accent}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource Habi.InputBorder}" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="Padding" Value="5,3" />
+        <Setter Property="FontFamily" Value="Segoe UI" />
+        <Setter Property="FontSize" Value="13" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="PasswordBox">
+                    <Border x:Name="Body" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}"
+                            BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="2">
+                        <ScrollViewer x:Name="PART_ContentHost" Margin="{TemplateBinding Padding}" />
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsKeyboardFocusWithin" Value="True">
+                            <Setter TargetName="Body" Property="BorderBrush" Value="{DynamicResource Habi.Accent}" />
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
     <Style x:Key="Habi.ToggleBase" TargetType="ToggleButton">
         <Setter Property="Foreground" Value="{DynamicResource Habi.Foreground}" />
         <Setter Property="FontFamily" Value="Segoe UI" />

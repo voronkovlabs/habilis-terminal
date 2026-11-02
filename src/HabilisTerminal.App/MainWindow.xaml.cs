@@ -74,6 +74,7 @@ public partial class MainWindow : Window
         {
             panel.Navigated += OnPanelNavigated;
             panel.ExecuteRequested += OnPanelExecuteRequested;
+            panel.ArchiveRequested += (p, item, anyFormat) => Fire(OpenArchiveAsync(p, item, anyFormat));
             panel.ShellMenuRequested += OnPanelShellMenuRequested;
             panel.Changed += OnPanelChanged;
             panel.GotKeyboardFocus += (_, _) => OnPanelFocused(panel);
