@@ -20,7 +20,8 @@ pwsh tools/plugins/Build-Plugins.ps1
 ```
 
 It packs the SDK into `artifacts/nuget`, restores the plugins into `artifacts/packages`, builds and tests them, and
-publishes each into `artifacts/plugins/<id>/` with its `plugin.json`. Install a plugin by copying its folder into
+publishes each into `artifacts/plugins/<id>/` with its `plugin.json`. These four plugins are standard: a release
+copies them into the `plugins` folder next to `habi.exe` (issue #58). Install another plugin by copying its folder into
 `%LOCALAPPDATA%\HabilisTerminal\plugins\` (or the `plugins` folder next to a portable `habi.exe`).
 `tools/ui/New-TestCopy.ps1 -WithPlugins` makes a test copy with all of them.
 

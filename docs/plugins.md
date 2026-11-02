@@ -35,7 +35,9 @@ From the three plugin briefs (#46 S3, #47 SageMaker training jobs, #48 SQS):
 
 ## 3. Discovery and loading
 
-- **Folders:** `<app>\plugins\<id>\` (portable copies and test copies) and `%LOCALAPPDATA%\HabilisTerminal\plugins\<id>\`.
+- **Folders:** `<app>\plugins\<id>\` (the standard plugins shipped with the app, issue #58; also test copies) and
+  `%LOCALAPPDATA%\HabilisTerminal\plugins\<id>\` (plugins the user installs). When both hold the same plugin id, the
+  higher manifest version loads; on a tie the shipped one.
 - **Manifest:** `plugin.json` in each plugin folder:
   ```json
   { "id": "aws.sqs", "name": "SQS Queues", "version": "1.0.0", "assembly": "Habilis.Aws.Sqs.dll", "sdk": "1.0" }
@@ -161,6 +163,10 @@ as "<plugin> failed: <message>". Plugin calls run off the UI thread or are await
 - `tools/plugins/Build-Plugins.ps1`: `dotnet pack` the SDK into `artifacts/nuget`, build `plugins/Plugins.slnx`
   against it, and publish each plugin with its `plugin.json` into `artifacts/plugins/<id>/`.
 - `tools/ui/New-TestCopy.ps1 -WithPlugins` copies those folders into the test copy's `plugins\`.
+- **Standard plugins (issue #58):** the S3, SageMaker, SQS and demo plugins ship with the app. CI runs the script on
+  every push (build and plugin tests); a release runs it and copies `artifacts/plugins` into each `publish/<rid>/plugins`
+  before `vpk pack` and the portable zip, so the installer, the portable zip and auto-updates carry them. They are still
+  developed against the SDK package only.
 - Plugin tests run without network access: the AWS clients sit behind small interfaces with fakes.
 - Each plugin has a README (install, settings, AWS permissions) and a manual test plan for a real account.
 

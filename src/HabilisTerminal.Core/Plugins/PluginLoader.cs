@@ -18,23 +18,52 @@ public sealed record LoadedPlugin(string Folder, PluginManifest? Manifest, Plugi
 /// </summary>
 public static class PluginLoader
 {
-    /// <summary>Plugin folders (subfolders with a plugin.json) under the given roots; the first root wins for an id.</summary>
+    /// <summary>
+    /// Plugin folders (subfolders with a plugin.json) under the given roots. The same plugin in several roots (a standard
+    /// plugin shipped with the app and a copy the user installed) loads once: the highest version wins, and on a tie the
+    /// earlier root (issue #58). A folder whose manifest cannot be read is kept, so its error is shown.
+    /// </summary>
     public static IReadOnlyList<string> Discover(IEnumerable<string> roots)
     {
-        var folders = new List<string>();
-        var ids = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var chosen = new Dictionary<string, (string Folder, Version Version)>(StringComparer.OrdinalIgnoreCase);
+        var order = new List<string>();
         foreach (var root in roots.Where(Directory.Exists))
         {
             foreach (var folder in Directory.EnumerateDirectories(root).Order(StringComparer.OrdinalIgnoreCase))
             {
-                if (File.Exists(Path.Combine(folder, PluginManifest.FileName)) && ids.Add(Path.GetFileName(folder)))
+                if (!File.Exists(Path.Combine(folder, PluginManifest.FileName)))
                 {
-                    folders.Add(folder);
+                    continue;
+                }
+
+                var (id, version) = Identify(folder);
+                if (!chosen.TryGetValue(id, out var current))
+                {
+                    order.Add(id);
+                    chosen[id] = (folder, version);
+                }
+                else if (version > current.Version)
+                {
+                    chosen[id] = (folder, version);
                 }
             }
         }
 
-        return folders;
+        return order.Select(id => chosen[id].Folder).ToList();
+    }
+
+    /// <summary>The manifest's id and version; the folder name and 0.0 when the manifest is unreadable.</summary>
+    private static (string Id, Version Version) Identify(string folder)
+    {
+        try
+        {
+            var manifest = PluginManifest.Parse(File.ReadAllText(Path.Combine(folder, PluginManifest.FileName)));
+            return (manifest.Id, Version.TryParse(manifest.Version, out var version) ? version : new Version(0, 0));
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidDataException)
+        {
+            return (Path.GetFileName(folder), new Version(0, 0));
+        }
     }
 
     /// <summary>Loads one plugin; never throws: failures come back in <see cref="LoadedPlugin.Error"/>.</summary>

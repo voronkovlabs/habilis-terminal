@@ -38,19 +38,25 @@ public class PluginTests
     }
 
     [Fact]
-    public void Discover_finds_folders_with_a_manifest_and_the_first_root_wins()
+    public void Discover_finds_folders_with_a_manifest_and_the_newest_copy_of_a_plugin_wins()
     {
         using var sandbox = new TestSandbox();
-        var first = Path.Combine(sandbox.Path, "first");
-        var second = Path.Combine(sandbox.Path, "second");
-        WriteManifest(Path.Combine(first, "a"));
-        WriteManifest(Path.Combine(second, "a"));
-        WriteManifest(Path.Combine(second, "b"));
-        Directory.CreateDirectory(Path.Combine(second, "no-manifest"));
+        var bundled = Path.Combine(sandbox.Path, "bundled");
+        var user = Path.Combine(sandbox.Path, "user");
+        WriteManifest(Path.Combine(bundled, "a"), "a", "1.0.0");
+        WriteManifest(Path.Combine(user, "a"), "a", "1.0.0"); // same version: the earlier root stays
+        WriteManifest(Path.Combine(bundled, "b"), "b", "1.0.0");
+        WriteManifest(Path.Combine(user, "b-newer"), "b", "1.2.0"); // a newer copy under another folder name
+        WriteManifest(Path.Combine(user, "c"), "c", "2.0.0");
+        Directory.CreateDirectory(Path.Combine(user, "no-manifest"));
+        Directory.CreateDirectory(Path.Combine(user, "broken"));
+        File.WriteAllText(Path.Combine(user, "broken", PluginManifest.FileName), "{ broken");
 
-        var found = PluginLoader.Discover([first, second, Path.Combine(sandbox.Path, "missing")]);
+        var found = PluginLoader.Discover([bundled, user, Path.Combine(sandbox.Path, "missing")]);
 
-        Assert.Equal([Path.Combine(first, "a"), Path.Combine(second, "b")], found);
+        Assert.Equal(
+            [Path.Combine(bundled, "a"), Path.Combine(user, "b-newer"), Path.Combine(user, "broken"), Path.Combine(user, "c")],
+            found);
     }
 
     [Fact]
@@ -154,5 +160,11 @@ public class PluginTests
     {
         Directory.CreateDirectory(folder);
         File.WriteAllText(Path.Combine(folder, PluginManifest.FileName), Valid);
+    }
+
+    private static void WriteManifest(string folder, string id, string version)
+    {
+        Directory.CreateDirectory(folder);
+        File.WriteAllText(Path.Combine(folder, PluginManifest.FileName), $$"""{ "id": "{{id}}", "name": "{{id}}", "version": "{{version}}", "assembly": "{{id}}.dll", "sdk": "1.0" }""");
     }
 }

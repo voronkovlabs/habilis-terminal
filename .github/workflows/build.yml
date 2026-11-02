@@ -21,6 +21,10 @@ jobs:
         run: dotnet build -c Release
       - name: Test
         run: dotnet test -c Release --no-build
+      - name: Plugins
+        # The standard plugins (plugins/, issue #58): built against the SDK package and tested on every push.
+        shell: pwsh
+        run: ./tools/plugins/Build-Plugins.ps1
 
   release:
     # A tag vX.Y.Z builds the installers, update packages and portable zips and publishes a GitHub release.
@@ -45,7 +49,10 @@ jobs:
           CRASH_REPORT_TOKEN: ${{ secrets.CRASH_REPORT_TOKEN }}
         run: |
           $version = '${{ github.ref_name }}'.TrimStart('v')
-          New-Item -ItemType Directory artifacts | Out-Null
+          New-Item -ItemType Directory -Force artifacts | Out-Null
+
+          # The standard plugins ship in a 'plugins' folder next to habi.exe (issue #58); the test job already ran their tests.
+          ./tools/plugins/Build-Plugins.ps1 -SkipTests
 
           # Crash and feedback reports (issues #22, #23): the token goes into the build as base64 of the reversed token,
           # so the binary holds no plain github_pat_ string. Masked in the log. Without the secret reports use the browser.
@@ -60,6 +67,7 @@ jobs:
             $publish = "publish/$rid"
             dotnet publish src/HabilisTerminal.App -c Release -r $rid --self-contained true -p:Version=$version -p:CrashReportToken=$reportToken -o $publish
             if ($LASTEXITCODE) { exit $LASTEXITCODE }
+            Copy-Item artifacts/plugins "$publish/plugins" -Recurse
 
             # Previous release for delta updates; the first release has none.
             dotnet vpk download github --repoUrl $env:REPO_URL --channel $rid --outputDir "releases/$rid" --token $env:GH_TOKEN
