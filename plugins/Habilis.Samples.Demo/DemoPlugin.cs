@@ -76,6 +76,9 @@ internal sealed class DemoNode(string name, DemoNode? parent, bool isFolder)
 
     public bool Pinned { get; set; }
 
+    /// <summary>A host icon (<see cref="PanelIcons"/>) instead of the file or folder icon.</summary>
+    public string? Icon { get; set; }
+
     public string Path => Parent is null ? "/" : (Parent.Path.TrimEnd('/') + "/" + Name + (IsFolder ? "/" : string.Empty));
 
     public DemoNode Add(string name, bool folder, string text = "")
@@ -123,6 +126,10 @@ internal sealed class DemoNode(string name, DemoNode? parent, bool isFolder)
         }
 
         root.Add("empty folder", folder: true);
+        var icons = root.Add("host icons", folder: true);
+        icons.Add("a bucket", folder: true).Icon = PanelIcons.Bucket;
+        icons.Add("a gpu", folder: false, "PanelIcons.Gpu").Icon = PanelIcons.Gpu;
+        icons.Add("a process", folder: false, "PanelIcons.Process").Icon = PanelIcons.Process;
         root.Add("Ünïcödé — names ✓.txt", folder: false, "Non-ASCII names work too.");
         return root;
     }
@@ -304,6 +311,7 @@ internal sealed class DemoPanel(IPluginHost host, DemoNode folder) : IPanelProvi
     private static PanelEntry Entry(DemoNode node, bool tones) => new(node.Name, node.IsFolder, node.IsFolder ? null : node.Content.Length, node.Modified)
     {
         Tag = node,
+        Icon = node.Icon,
         Group = node.Pinned ? 0 : 1,
         Tone = !tones ? RowTone.Normal : node.Pinned ? RowTone.Accent : node.Score >= 90 ? RowTone.Good : node.Score < 10 && !node.IsFolder ? RowTone.Bad : RowTone.Normal,
         Cells = node.IsFolder ? null : new Dictionary<string, CellValue>

@@ -78,6 +78,20 @@ internal static class IconProvider
         dc.Pop();
     }
 
+    /// <summary>Draws a named icon for plugin rows (<c>PanelIcons</c>, issue #69); false for an unknown name.</summary>
+    public static bool DrawNamed(DrawingContext dc, string name, double x, double y)
+    {
+        if (NamedIcons.Get(name) is not { } drawing)
+        {
+            return false;
+        }
+
+        dc.PushTransform(new TranslateTransform(x, y));
+        dc.DrawDrawing(drawing);
+        dc.Pop();
+        return true;
+    }
+
     private static FileIconTheme LoadTheme() => FileIconTheme.LoadBuiltIn(FileIconTheme.Material);
 
     private static Drawing ThemeDrawing(IconDefinition definition)

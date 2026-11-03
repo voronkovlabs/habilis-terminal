@@ -110,6 +110,7 @@ public sealed record PanelEntry(string Name, bool IsFolder, long? Size = null, D
     public int Group { get; init; }                                      // sorted first: e.g. running jobs
     public RowTone Tone { get; init; }                                   // Normal, Accent, Good, Warning, Bad, Dim
     public object? Tag { get; init; }                                    // plugin data
+    public string? Icon { get; init; }                                   // SDK 1.1: PanelIcons.Bucket, Gpu, Process
 }
 ```
 - **Columns:** `PanelLayout(Name, Columns)` where a column is the name, size, modified date or a custom column

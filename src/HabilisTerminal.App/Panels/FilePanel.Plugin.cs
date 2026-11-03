@@ -294,6 +294,7 @@ public sealed partial class FilePanel
                     : null,
                 Group = row => Entries.TryGetValue(RowKey(row), out var entry) ? entry.Group : 0,
                 Tone = row => Entries.TryGetValue(RowKey(row), out var entry) ? (int)entry.Tone : 0,
+                Icon = row => Entries.TryGetValue(RowKey(row), out var entry) ? entry.Icon : null,
             };
         }
 

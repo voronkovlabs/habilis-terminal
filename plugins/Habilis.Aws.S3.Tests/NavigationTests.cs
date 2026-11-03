@@ -49,6 +49,7 @@ public class NavigationTests
 
         Assert.Equal(["logs", "photos"], entries.Select(e => e.Name));
         Assert.All(entries, e => Assert.True(e.IsFolder));
+        Assert.All(entries, e => Assert.Equal(PanelIcons.Bucket, e.Icon)); // issue #69
         Assert.Equal(new DateTime(2024, 1, 2, 3, 4, 5, DateTimeKind.Utc), entries[0].Modified);
         Assert.Equal("s3:", panel.Location);
         Assert.Equal("S3 · default", panel.Title);

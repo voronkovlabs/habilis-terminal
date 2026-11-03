@@ -313,6 +313,7 @@ internal sealed partial class S3Panel : IPanelProvider, IPanelCommands, IGetFile
     internal static PanelEntry BucketEntry(S3BucketInfo bucket) => new(bucket.Name, IsFolder: true, Modified: bucket.Created)
     {
         Tag = new S3Ref(S3Kind.Bucket, bucket.Name, string.Empty),
+        Icon = PanelIcons.Bucket, // issue #69
     };
 
     internal static PanelEntry FolderEntry(string bucket, string prefix, string commonPrefix) =>

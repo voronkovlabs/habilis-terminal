@@ -4,7 +4,7 @@
   </PropertyGroup>
   <ItemGroup>
     <!-- The host's SDK, from the local feed (tools/plugins/Build-Plugins.ps1 packs it). Never copied with a plugin. -->
-    <PackageVersion Include="HabilisTerminal.Plugins.Sdk" Version="1.0.0" />
+    <PackageVersion Include="HabilisTerminal.Plugins.Sdk" Version="1.1.0" />
     <!-- AWS SDK for .NET, Apache 2.0. -->
     <PackageVersion Include="AWSSDK.Core" Version="4.0.102.16" />
     <PackageVersion Include="AWSSDK.S3" Version="4.0.104.8" />

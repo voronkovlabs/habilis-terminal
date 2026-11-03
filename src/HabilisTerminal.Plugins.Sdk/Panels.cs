@@ -51,6 +51,12 @@ public sealed record PanelEntry(string Name, bool IsFolder = false, long? Size =
     /// <summary>The row colour, mapped to the host theme.</summary>
     public RowTone Tone { get; init; }
 
+    /// <summary>
+    /// An icon the host draws instead of the file or folder icon, one of <see cref="PanelIcons"/> (SDK 1.1). An
+    /// unknown name falls back to the usual icon.
+    /// </summary>
+    public string? Icon { get; init; }
+
     /// <summary>The plugin's own data for this entry; the host never looks at it.</summary>
     public object? Tag { get; init; }
 }
@@ -97,3 +103,16 @@ public sealed record PanelSortKey(string Key, string Title);
 
 /// <summary>A label and value of the info panel.</summary>
 public sealed record InfoLine(string Label, string Value);
+
+/// <summary>Names of the icons the host draws for <see cref="PanelEntry.Icon"/> (SDK 1.1).</summary>
+public static class PanelIcons
+{
+    /// <summary>A storage bucket (S3 and the like).</summary>
+    public const string Bucket = "bucket";
+
+    /// <summary>A graphics processor.</summary>
+    public const string Gpu = "gpu";
+
+    /// <summary>A running program.</summary>
+    public const string Process = "process";
+}

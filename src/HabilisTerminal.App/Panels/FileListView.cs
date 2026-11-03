@@ -500,6 +500,12 @@ public sealed class FileListView : FrameworkElement
 
     private void DrawIcon(DrawingContext dc, PanelItem item, double x, double y)
     {
+        // A plugin row may name a host icon (issue #69).
+        if (!item.IsParent && _state!.Extension?.Icon(item.Entry) is { } icon && IconProvider.DrawNamed(dc, icon, x, y))
+        {
+            return;
+        }
+
         IconProvider.Draw(dc, item, _state!.Path, x, y);
         if (!item.IsParent && item.Entry.IsReparsePoint)
         {

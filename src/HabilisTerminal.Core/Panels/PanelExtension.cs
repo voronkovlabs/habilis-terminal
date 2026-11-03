@@ -24,6 +24,9 @@ public sealed class PanelExtension
     /// <summary>The row tone, as the SDK's <c>RowTone</c> number (0 = normal).</summary>
     public Func<FileEntry, int> Tone { get; init; } = _ => 0;
 
+    /// <summary>A named host icon for the row (<c>PanelEntry.Icon</c>), or null for the usual file or folder icon.</summary>
+    public Func<FileEntry, string?> Icon { get; init; } = _ => null;
+
     /// <summary>The custom column the panel is sorted by; null: the panel's <see cref="SortOptions"/>.</summary>
     public string? SortKey { get; set; }
 
