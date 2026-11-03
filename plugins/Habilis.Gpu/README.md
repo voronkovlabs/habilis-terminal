@@ -4,13 +4,13 @@ A GPU monitor like nvtop, in a Habilis Terminal panel (issue #70). Read-only.
 
 ## This computer (`gpu:`)
 
-- The NVIDIA GPUs first: load, memory used / total, temperature, power draw / limit. Then the processes using them,
-  with their GPU memory and PID.
-- Enter on a GPU lists only its processes; `..` goes back.
-- The panel samples `nvidia-smi` (installed with the NVIDIA driver) and refreshes itself every 2 seconds (setting).
-  Shift+F4 pauses and resumes.
-- Ctrl+Q in the other panel shows the GPU under the cursor: bars, charts of the last 60 samples (load, memory,
-  temperature, power) and its processes. F3 shows the same text.
+- The panel draws itself like nvtop (issue #79): per GPU its name, temperature, power, fan and bars for load and
+  memory; bars for CPU and RAM; four separate charts in a 2 × 2 grid (GPU load, GPU memory, CPU, RAM; more rows
+  with more GPUs) of the last 120 samples; and the processes using the GPU with PID, type (Compute / Graphic), GPU
+  load, GPU memory, CPU load, RAM and command, busiest first.
+- GPUs come from `nvidia-smi` (installed with the NVIDIA driver); CPU and RAM from Windows; each process's GPU load and
+  memory from the Windows "GPU Engine" / "GPU Process Memory" counters, which work where nvidia-smi reports N/A.
+- It samples every 2 seconds (setting); the first values need a few seconds. Shift+F4 pauses and resumes.
 - Without an NVIDIA GPU or driver the panel says that nvidia-smi was not found.
 
 ## SageMaker (`gpu:sm`, `gpu:sm:profile/region`)

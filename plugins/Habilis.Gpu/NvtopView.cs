@@ -79,69 +79,51 @@ internal sealed class NvtopView : FrameworkElement
         Bar(dc, "RAM", sample.System.RamPercent, $"{Gib(sample.System.RamUsedMiB)}/{Gib(sample.System.RamTotalMiB)} GiB", Gap + halfWidth + Gap, y, halfWidth, line);
         y += line + Gap;
 
-        // The chart takes about 40% of what is left; the processes get the rest.
-        var chartHeight = Math.Max(line * 4, (ActualHeight - y) * 0.4);
-        y = Legend(dc, sample, y, line, colours, muted);
-        Chart(dc, sample, new Rect(Gap, y, width, chartHeight), colours, muted);
-        y += chartHeight + Gap;
+        // Separate charts in a grid of two columns (GPU load and memory per GPU, CPU, RAM); they take about half of
+        // what is left, the processes the rest.
+        var charts = new List<(string Title, IReadOnlyList<double?> Values, double? Now, Brush Colour)>();
+        foreach (var gpu in sample.Gpus.Gpus)
+        {
+            var history = _gpuHistory.TryGetValue(gpu.Uuid, out var h) ? h : ([], []);
+            charts.Add(($"GPU{gpu.Index} load", history.Load, gpu.Utilization, colours[0]));
+            charts.Add(($"GPU{gpu.Index} memory", history.Memory, gpu.MemoryPercent, colours[1]));
+        }
+
+        charts.Add(("CPU", _cpuHistory, sample.System.CpuPercent, colours[2]));
+        charts.Add(("RAM", _ramHistory, sample.System.RamPercent, colours[3]));
+        var rows = (charts.Count + 1) / 2;
+        var gridHeight = Math.Max(rows * line * 3, (ActualHeight - y) * 0.5);
+        var cellWidth = (width - Gap) / 2;
+        var cellHeight = (gridHeight - ((rows - 1) * Gap)) / rows;
+        for (var i = 0; i < charts.Count; i++)
+        {
+            var (title, values, now, colour) = charts[i];
+            var cell = new Rect(Gap + ((i % 2) * (cellWidth + Gap)), y + ((i / 2) * (cellHeight + Gap)), cellWidth, cellHeight);
+            Chart(dc, title, values, now, colour, cell, line, muted);
+        }
+
+        y += gridHeight + Gap;
 
         Processes(dc, sample, y, width, line, foreground, muted);
-        if (_paused)
-        {
-            TextRight(dc, "paused (Shift+F4)", Gap + width, Gap, Brush(HostBrushes.Warning, Brushes.Gold), bold: true);
-        }
     }
 
     private static string Gib(double? mib) => mib is { } v ? (v / 1024).ToString("0.0", CultureInfo.InvariantCulture) : "n/a";
 
-    private double Legend(DrawingContext dc, LocalSample sample, double y, double line, Brush[] colours, Brush muted)
+    /// <summary>One chart: its title and current value above a framed 0–100 plot with grid lines at 25, 50 and 75.</summary>
+    private void Chart(DrawingContext dc, string title, IReadOnlyList<double?> values, double? now, Brush colour, Rect cell, double line, Brush muted)
     {
-        var x = Gap;
-        var index = 0;
-        foreach (var gpu in sample.Gpus.Gpus)
-        {
-            x = Key(dc, $"GPU{gpu.Index} %", colours[index++ % colours.Length], x, y, muted);
-            x = Key(dc, $"GPU{gpu.Index} mem", colours[index++ % colours.Length], x, y, muted);
-        }
-
-        x = Key(dc, "CPU", colours[index++ % colours.Length], x, y, muted);
-        Key(dc, "RAM", colours[index % colours.Length], x, y, muted);
-        return y + line;
-    }
-
-    private double Key(DrawingContext dc, string label, Brush colour, double x, double y, Brush muted)
-    {
-        var mid = y + (FontSize * 0.7);
-        dc.DrawLine(new Pen(colour, 2), new Point(x, mid), new Point(x + 16, mid));
-        return x + 22 + Text(dc, label, x + 20, y, muted) + 12;
-    }
-
-    private void Chart(DrawingContext dc, LocalSample sample, Rect area, Brush[] colours, Brush muted)
-    {
-        var border = new Pen(Brush(HostBrushes.Border, Brushes.DimGray), 1);
-        dc.DrawRectangle(null, border, area);
+        Text(dc, title, cell.Left, cell.Top, muted);
+        TextRight(dc, TextChart.Value(now, "%"), cell.Right, cell.Top, colour, bold: true);
+        var area = new Rect(cell.Left, cell.Top + line, cell.Width, Math.Max(0, cell.Height - line));
+        dc.DrawRectangle(null, new Pen(Brush(HostBrushes.Border, Brushes.DimGray), 1), area);
         var grid = new Pen(Brush(HostBrushes.ProgressTrack, Brushes.DimGray), 0.5) { DashStyle = DashStyles.Dot };
         foreach (var level in new[] { 25, 50, 75 })
         {
             var y = area.Bottom - (area.Height * level / 100);
             dc.DrawLine(grid, new Point(area.Left, y), new Point(area.Right, y));
-            Text(dc, level.ToString(CultureInfo.InvariantCulture), area.Left + 2, y - FontSize, muted, small: true);
         }
 
-        var index = 0;
-        foreach (var gpu in sample.Gpus.Gpus)
-        {
-            if (_gpuHistory.TryGetValue(gpu.Uuid, out var history))
-            {
-                Line(dc, history.Load, area, colours[index % colours.Length]);
-                Line(dc, history.Memory, area, colours[(index + 1) % colours.Length]);
-            }
-
-            index += 2;
-        }
-
-        Line(dc, _cpuHistory, area, colours[index++ % colours.Length]);
-        Line(dc, _ramHistory, area, colours[index % colours.Length]);
+        Line(dc, values, area, colour);
     }
 
     /// <summary>A series of 0–100 values, newest at the right edge, one step per sample.</summary>
@@ -189,7 +171,9 @@ internal sealed class NvtopView : FrameworkElement
         var header = new Rect(Gap, y, width, line);
         dc.DrawRectangle(Brush(HostBrushes.WidgetBackground, Brushes.DimGray), null, header);
         var columns = Columns();
-        Row(dc, columns, ["PID", "TYPE", "GPU%", "GPU MEM", "CPU%", "RAM", "COMMAND"], y, foreground, bold: true);
+        // Paused, the header says so in the command column (the panel's status line says it too).
+        Row(dc, columns, ["PID", "TYPE", "GPU%", "GPU MEM", "CPU%", "RAM", _paused ? "COMMAND · PAUSED" : "COMMAND"], y, _paused ? Brush(HostBrushes.Warning, Brushes.Gold) : foreground, bold: true);
+
         y += line;
         var shown = 0;
         foreach (var process in sample.Processes)

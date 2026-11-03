@@ -153,6 +153,9 @@ internal sealed class DemoPanel(IPluginHost host, DemoNode folder) : IPanelProvi
 
     public IReadOnlyList<PanelSortKey> SortKeys { get; } = [new("score", "Score"), new("kind", "Kind")];
 
+    /// <summary>SDK 1.2: no ".." at the top (Ctrl+PgUp leaves the panel), as flat plugin lists do; folders keep it.</summary>
+    public bool ShowsParent => _folder.Parent is not null;
+
     public IReadOnlyList<InfoLine> Info => [new("Folder", _folder.Path), new("Entries", _folder.Children.Count.ToString("N0", CultureInfo.CurrentCulture)), new("Storage", "in memory")];
 
     public bool CanMove => true;

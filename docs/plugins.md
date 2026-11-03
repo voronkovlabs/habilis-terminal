@@ -130,6 +130,8 @@ Optional capabilities, by interface:
 | `IDeleteEntries` | F8 / Del | The host confirms with the item list, then the plugin deletes. |
 | `IMakeFolder` | F7 | |
 | `IViewEntry` | F3 | A plugin-made view (text or a local file), e.g. a job summary. |
+| `IPanelProvider.ShowsParent` | ".." row | SDK 1.2: false hides ".." (flat lists such as queues or jobs); Ctrl+PgUp still leaves the panel. |
+| `IPanelView` (`HabilisTerminal.Plugins.Sdk.Wpf`) | the panel | SDK 1.2: the plugin draws the panel itself with WPF, using `HostBrushes` resource keys; the panel keys stay the host's. Target `net10.0-windows` with WPF. |
 | `IQuickViewEntry` | Ctrl+Q | SDK 1.1: text for the other panel's quick view (monospace; block characters draw charts). Asked on every cursor move and refresh. |
 | `IPanelCommands` | plugin keys, F9 > Panel, F11 | Commands with a title and an optional key: purge, filter, switch profile, show the full record. |
 
