@@ -45,7 +45,6 @@ public sealed class FileListView : FrameworkElement
     private readonly Dictionary<(string Mode, string Column), double> _columnWidths = [];
     private PanelState? _state;
     private int _topIndex;
-    private int _hoverIndex = -1;
     private (ColumnSpec Column, double StartX, double StartWidth)? _resizing;
     private (int Top, int Count) _reportedRange = (-1, -1);
 
@@ -254,20 +253,8 @@ public sealed class FileListView : FrameworkElement
             return;
         }
 
+        // No hover highlight on rows, as in Far: moving the mouse over a panel changes nothing (issue #65).
         Cursor = HasHeader && point.Y < HeaderHeight && HeaderSeparatorAt(point.X) is not null ? Cursors.SizeWE : null;
-        var hover = HitTest(point);
-        if (hover != _hoverIndex)
-        {
-            _hoverIndex = hover;
-            InvalidateVisual();
-        }
-    }
-
-    protected override void OnMouseLeave(MouseEventArgs e)
-    {
-        base.OnMouseLeave(e);
-        _hoverIndex = -1;
-        InvalidateVisual();
     }
 
     protected override void OnMouseDown(MouseButtonEventArgs e)
@@ -452,10 +439,6 @@ public sealed class FileListView : FrameworkElement
             {
                 dc.DrawRectangle(null, new Pen(PanelPalette.FocusOutline, 1), new Rect(cell.X + 0.5, cell.Y + 0.5, cell.Width - 1, cell.Height - 1));
             }
-        }
-        else if (index == _hoverIndex)
-        {
-            dc.DrawRectangle(PanelPalette.HoverBackground, null, cell);
         }
 
         // A plugin row may carry a tone (issue #49): it colours the row unless it is marked or under the cursor.
