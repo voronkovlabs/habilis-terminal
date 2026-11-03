@@ -236,6 +236,16 @@ public partial class MainWindow : Window
 
         ApplyTerminalTheme(_themes.Current);
         Terminal.Connection = _shell;
+
+        // The control sizes the connection only when its own size changes later, so the shell started at the
+        // connection's default 120x30 and kept it until the layout changed (found in issue #82). Tell it the real size.
+        Dispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.Loaded, () =>
+        {
+            if (Terminal.Rows > 0 && Terminal.Columns > 0)
+            {
+                _shell?.Resize((uint)Terminal.Rows, (uint)Terminal.Columns);
+            }
+        });
         FocusActivePanel();
     }
 
