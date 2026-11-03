@@ -11,11 +11,15 @@ public sealed class SageMakerPlugin : Plugin
 {
     private readonly List<WeakReference<SageMakerPanel>> _panels = [];
     private readonly Lazy<PriceTable> _builtInPrices = new(PriceTable.Load);
+    private LivePrices? _livePrices;
 
     internal Func<AwsSession, ISageMakerApi> Connect { get; set; } = session => new SageMakerApi(session);
 
     /// <summary>The price table for cost estimates; read on first use, not while the host starts.</summary>
     internal Func<PriceTable> Prices { get; set; }
+
+    /// <summary>The AWS Price List client (issue #67); null leaves only the price table.</summary>
+    internal Func<AwsSession, IPricingApi>? Pricing { get; set; } = session => new PricingApi(session);
 
     internal Func<DateTime> Clock { get; set; } = () => DateTime.UtcNow;
 
@@ -65,7 +69,9 @@ public sealed class SageMakerPlugin : Plugin
             throw new PluginException($"\"{chosenRegion}\" is not a valid AWS region name, e.g. eu-west-1.");
         }
 
-        var panel = new SageMakerPanel(Host, settings, settings.Session(chosenProfile, chosenRegion), Connect, Prices, Clock);
+        // One cache of live prices for all panels.
+        _livePrices ??= new LivePrices(() => Prices(), Pricing, Clock);
+        var panel = new SageMakerPanel(Host, settings, settings.Session(chosenProfile, chosenRegion), Connect, _livePrices, Clock);
         lock (_panels)
         {
             _panels.RemoveAll(w => !w.TryGetTarget(out _));

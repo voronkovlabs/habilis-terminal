@@ -5,6 +5,7 @@
   <ItemGroup>
     <PackageReference Include="HabilisTerminal.Plugins.Sdk" PrivateAssets="all" ExcludeAssets="runtime" />
     <PackageReference Include="AWSSDK.SageMaker" />
+    <PackageReference Include="AWSSDK.Pricing" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\Habilis.Aws.Common\Habilis.Aws.Common.csproj" />

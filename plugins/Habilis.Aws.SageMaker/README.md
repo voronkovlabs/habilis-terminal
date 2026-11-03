@@ -75,16 +75,18 @@ Changes apply to open panels at once.
 
 The plugin uses the standard AWS shared config and credentials files, including profiles that assume a role and SSO
 profiles (run `aws sso login --profile <name>` first). Credentials stay in memory; nothing is written to disk or logs.
-The plugin connects only to Amazon SageMaker (and STS / SSO when a profile needs them) and sends nothing anywhere
-else: no telemetry, no update checks.
+The plugin connects only to Amazon SageMaker, the AWS Price List API (and STS / SSO when a profile needs them) and
+sends nothing anywhere else: no telemetry, no update checks.
 
 It only reads. Required IAM permissions:
 
 - `sagemaker:ListTrainingJobs`
 - `sagemaker:DescribeTrainingJob`
+- `pricing:GetProducts` (optional): current prices for cost estimates. Without it the built-in price table is used
+  and the summary says why.
 
 A missing permission is reported by name, e.g. "Permission missing: sagemaker:DescribeTrainingJob". The AWS managed
-policy `AmazonSageMakerReadOnly` includes both.
+policy `AmazonSageMakerReadOnly` includes the two SageMaker permissions; `pricing:GetProducts` is in `AWSPriceListServiceFullAccess`.
 
 ## How the cost is estimated
 
@@ -99,15 +101,16 @@ For each job:
   when SageMaker chose among several instance preferences, the selected type and count.
 - **Warm pool**: `WarmPoolStatus.ResourceRetainedBillableTimeInSeconds` when SageMaker reports it. A warm pool that
   is still available keeps costing until it ends or is reused; the summary says so.
-- **Prices** come from a small table of on-demand SageMaker training prices in USD for us-east-1, built into the
-  plugin (`prices.json`, embedded). Its basis is stated in every summary: "Estimate from on-demand us-east-1 prices
-  as of 2025-01; managed spot, discounts and other regions differ."
-- An instance type missing from the table shows **?** as the cost; the summary names the type.
+- **Prices** come from the AWS Price List API first (issue #67): `GetProducts` for service `AmazonSageMaker`,
+  the instance type, the job's region and the Training component, on-demand USD per hour. Answers are kept for the
+  app's run; a failing API (no permission, no network) is asked again after 30 minutes. The summary then says
+  "Estimate from on-demand eu-west-1 prices from the AWS Price List; managed spot and discounts differ."
+- Types the API cannot price come from a table of on-demand training prices in USD for us-east-1, built into the
+  plugin (`prices.json`, embedded; 214 types from the AWS price list of 2026-11-03). Its basis is stated in the summary.
+- An instance type with no price anywhere shows **?** as the cost; the summary names the type.
 
-**The built-in prices were compiled from general knowledge and must be checked against the AWS pricing page
-(https://aws.amazon.com/sagemaker/pricing/, Training, On-Demand) before relying on them.** To correct or extend them,
-or to use another region's prices, put your own `prices.json` next to `Habilis.Aws.SageMaker.dll` in the plugin
-folder; it replaces the built-in table. The format:
+To correct or extend the table, or to use another region's prices without the API, put your own `prices.json` next to
+`Habilis.Aws.SageMaker.dll` in the plugin folder; it replaces the built-in table. The format:
 
 ```json
 {

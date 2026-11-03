@@ -34,14 +34,14 @@ internal sealed class SageMakerPanel : IPanelProvider, IPanelCommands, IViewEntr
 
     private readonly IPluginHost _host;
     private readonly Func<AwsSession, ISageMakerApi> _connect;
-    private readonly Func<PriceTable> _prices;
+    private readonly LivePrices _prices;
     private readonly Func<DateTime> _clock;
     private SageMakerSettings _settings;
     private AwsSession _session;
     private ISageMakerApi? _api;
     private Summary? _summary;
 
-    public SageMakerPanel(IPluginHost host, SageMakerSettings settings, AwsSession session, Func<AwsSession, ISageMakerApi> connect, Func<PriceTable> prices, Func<DateTime> clock)
+    public SageMakerPanel(IPluginHost host, SageMakerSettings settings, AwsSession session, Func<AwsSession, ISageMakerApi> connect, LivePrices prices, Func<DateTime> clock)
     {
         _host = host;
         _settings = settings;
@@ -113,7 +113,6 @@ internal sealed class SageMakerPanel : IPanelProvider, IPanelCommands, IViewEntr
     public async IAsyncEnumerable<IReadOnlyList<PanelEntry>> ListAsync([EnumeratorCancellation] CancellationToken cancellationToken)
     {
         _summary = null;
-        var prices = _prices();
         var max = _settings.MaxJobs;
         var shown = 0;
         var query = new JobQuery(_settings.NameContains, _settings.StatusFilter, max);
@@ -142,6 +141,7 @@ internal sealed class SageMakerPanel : IPanelProvider, IPanelCommands, IViewEntr
             }
 
             var jobs = await DescribeAllAsync(page.Select(s => s.TrainingJobName).ToList(), cancellationToken).ConfigureAwait(false);
+            var prices = await PricesForAsync(jobs, cancellationToken).ConfigureAwait(false);
             var now = _clock();
             var entries = jobs.Select(job => Entry(job, JobCost.Estimate(job, prices, now), now, _settings.ColorRows)).ToList();
             shown += entries.Count;
@@ -159,9 +159,13 @@ internal sealed class SageMakerPanel : IPanelProvider, IPanelCommands, IViewEntr
     public async Task<(string Title, string Text)?> ViewAsync(PanelEntry entry, CancellationToken cancellationToken)
     {
         var job = await DescribeAsync(entry.Name, cancellationToken).ConfigureAwait(false);
+        var prices = await PricesForAsync([job], cancellationToken).ConfigureAwait(false);
         var now = _clock();
-        return (entry.Name, JobText.Summary(job, JobCost.Estimate(job, _prices(), now), now));
+        return (entry.Name, JobText.Summary(job, JobCost.Estimate(job, prices, now), now));
     }
+
+    private Task<PriceTable> PricesForAsync(IEnumerable<DescribeTrainingJobResponse> jobs, CancellationToken cancellationToken) =>
+        _prices.ForAsync(jobs.SelectMany(JobFacts.Instances).Select(i => i.Type), _session, cancellationToken);
 
     /// <summary>
     /// F5: writes <c>&lt;job name&gt;.json</c> (the full description) for each job into the local folder. Each file is

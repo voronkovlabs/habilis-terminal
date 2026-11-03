@@ -15,6 +15,8 @@ internal sealed class PriceTable
     public const string FileName = "prices.json";
 
     private readonly Dictionary<string, decimal> _perHour;
+    private readonly HashSet<string> _live = new(StringComparer.OrdinalIgnoreCase);
+    private string _liveRegion = string.Empty;
 
     private PriceTable(Dictionary<string, decimal> perHour, string basis, string source, string? problem)
     {
@@ -39,6 +41,30 @@ internal sealed class PriceTable
     public string Statement => $"Estimate from {Basis}; managed spot, discounts and other regions differ.";
 
     public bool TryGetHourly(string instanceType, out decimal price) => _perHour.TryGetValue(instanceType, out price);
+
+    /// <summary>
+    /// This table with prices from the AWS Price List API over it (issue #67); <paramref name="problem"/> says why
+    /// live prices are missing, when they are.
+    /// </summary>
+    public PriceTable WithLive(IReadOnlyDictionary<string, decimal> live, string region, string? problem)
+    {
+        var merged = new Dictionary<string, decimal>(_perHour, StringComparer.OrdinalIgnoreCase);
+        foreach (var (type, price) in live)
+        {
+            merged[type] = price;
+        }
+
+        var problems = string.Join(" ", new[] { Problem, problem }.Where(p => p is not null));
+        var table = new PriceTable(merged, Basis, Source, problems.Length > 0 ? problems : null) { _liveRegion = region };
+        table._live.UnionWith(live.Keys);
+        return table;
+    }
+
+    /// <summary>The sentence for an estimate over these instance types: live prices, or the table's basis.</summary>
+    public string StatementFor(IEnumerable<string> instanceTypes) =>
+        _live.Count > 0 && instanceTypes.All(_live.Contains)
+            ? $"Estimate from on-demand {_liveRegion} prices from the AWS Price List; managed spot and discounts differ."
+            : Statement;
 
     /// <summary>
     /// Reads a price table: <c>{ "basis": "...", "perHour": { "ml.m5.large": 0.115, ... } }</c>.
@@ -124,11 +150,12 @@ internal static class JobCost
             return new CostEstimate(null, lines, prices.Statement);
         }
 
+        var statement = prices.StatementFor(instances.Select(i => i.Type));
         var unknown = instances.Select(i => i.Type).Where(t => !prices.TryGetHourly(t, out _)).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
         if (unknown.Count > 0)
         {
-            lines.Add($"No estimate: the price table has no price for {string.Join(", ", unknown)}. Add it to {PriceTable.FileName} next to the plugin to see an estimate.");
-            return new CostEstimate(null, lines, prices.Statement);
+            lines.Add($"No estimate: neither the AWS Price List nor the price table has a price for {string.Join(", ", unknown)}. Add it to {PriceTable.FileName} next to the plugin to see an estimate.");
+            return new CostEstimate(null, lines, statement);
         }
 
         var (billable, basis) = BillableTime(job, now);
@@ -162,7 +189,7 @@ internal static class JobCost
             lines.Add("The warm pool is still available: its time is billed until it ends or is reused.");
         }
 
-        return new CostEstimate(total, lines, prices.Statement);
+        return new CostEstimate(total, lines, statement);
     }
 
     /// <summary>

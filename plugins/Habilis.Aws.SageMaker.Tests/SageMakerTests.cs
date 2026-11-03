@@ -259,7 +259,7 @@ public sealed class SageMakerTests : IDisposable
         Assert.Null(cost.Amount);
         Assert.Equal("?", cost.Text);
         Assert.Equal("?", entry.Cells![SageMakerPanel.CostKey].Text);
-        Assert.Contains(cost.Lines, l => l.Contains("no price for ml.x99.huge", StringComparison.Ordinal));
+        Assert.Contains(cost.Lines, l => l.Contains("a price for ml.x99.huge", StringComparison.Ordinal));
     }
 
     [Fact]
@@ -287,7 +287,7 @@ public sealed class SageMakerTests : IDisposable
 
         Assert.Contains("us-east-1", table.Basis, StringComparison.Ordinal);
         Assert.Null(table.Problem);
-        foreach (var type in new[] { "ml.m5.large", "ml.c5.xlarge", "ml.g4dn.xlarge", "ml.g5.2xlarge", "ml.p3.2xlarge", "ml.p4d.24xlarge", "ml.trn1.32xlarge" })
+        foreach (var type in new[] { "ml.m5.large", "ml.c5.xlarge", "ml.g4dn.xlarge", "ml.g5.2xlarge", "ml.g6.12xlarge", "ml.p4d.24xlarge", "ml.trn1.32xlarge" })
         {
             Assert.True(table.TryGetHourly(type, out var price), type);
             Assert.True(price > 0, type);
@@ -313,9 +313,11 @@ public sealed class SageMakerTests : IDisposable
         File.WriteAllText(Path.Combine(_folder, PriceTable.FileName), "{ broken");
 
         var table = PriceTable.Load(_folder);
-        var cost = JobCost.Estimate(Completed("done", Now.AddHours(-3)), table, Now);
+        var job = Completed("done", Now.AddHours(-3));
+        job.ResourceConfig.InstanceType = "ml.g6.12xlarge"; // ml.p3 is retired: no longer in the AWS price list
+        var cost = JobCost.Estimate(job, table, Now);
 
-        Assert.True(table.TryGetHourly("ml.p3.2xlarge", out _));
+        Assert.True(table.TryGetHourly("ml.g6.12xlarge", out _));
         Assert.Contains("could not be read", table.Problem, StringComparison.Ordinal);
         Assert.Contains(cost.Lines, l => l.Contains("could not be read", StringComparison.Ordinal));
         Assert.NotNull(cost.Amount);
@@ -548,7 +550,7 @@ public sealed class SageMakerTests : IDisposable
     {
         var api = new FakeSageMaker(SampleJobs());
         var host = new FakeHost();
-        var plugin = new SageMakerPlugin { Connect = _ => api, Prices = () => Prices, Clock = () => Now };
+        var plugin = new SageMakerPlugin { Connect = _ => api, Prices = () => Prices, Pricing = null, Clock = () => Now };
         plugin.Initialize(host);
         var panel = (await plugin.OpenAddressAsync("sm:prod/eu-west-1", CancellationToken.None))!;
         host.EditForm = form =>
@@ -601,7 +603,7 @@ public sealed class SageMakerTests : IDisposable
 
     private static async Task<SageMakerPanel> OpenAsync(FakeHost host, FakeSageMaker api, string address)
     {
-        var plugin = new SageMakerPlugin { Connect = _ => api, Prices = () => Prices, Clock = () => Now };
+        var plugin = new SageMakerPlugin { Connect = _ => api, Prices = () => Prices, Pricing = null, Clock = () => Now };
         plugin.Initialize(host);
         return (SageMakerPanel)(await plugin.OpenAddressAsync(address, CancellationToken.None))!;
     }
