@@ -399,58 +399,95 @@ public sealed class SageMakerTests : IDisposable
     }
 
     [Fact]
-    public async Task F5_writes_each_job_as_json_and_leaves_no_temporary_files()
+    public async Task F5_writes_a_folder_per_job_with_its_record_and_s3_outputs_and_code()
     {
-        var panel = await OpenAsync(new FakeHost(), new FakeSageMaker(SampleJobs()), "sm:prod/eu-west-1");
+        var data = new FakeJobData
+        {
+            ["models/done-1/output/model.tar.gz"] = "model",
+            ["models/done-1/output/output.tar.gz"] = "output",
+            ["models/done-1/debug-output/events/0.json"] = "debug",
+            ["models/done-2/output/model.tar.gz"] = "another job",
+            ["code/done-1/sourcedir.tar.gz"] = "code",
+            ["checkpoints/done-1/step-100.pt"] = "checkpoint",
+        };
+        var jobs = SampleJobs();
+        var done = jobs.Single(j => j.TrainingJobName == "done-1");
+        done.HyperParameters["sagemaker_submit_directory"] = "\"s3://code/done-1/sourcedir.tar.gz\"";
+        done.CheckpointConfig = new CheckpointConfig { S3Uri = "s3://checkpoints/done-1" };
+        var panel = await OpenAsync(new FakeHost(), new FakeSageMaker(jobs), "sm:prod/eu-west-1", data);
         var entries = await Listing.AllAsync(panel);
-        var selected = entries.Where(e => e.Name is "done-1" or "failed-1").ToList();
         var progress = new FakeProgress();
 
-        var outcome = await panel.GetFilesAsync(Request(selected, _ => throw new InvalidOperationException("No target exists.")), progress, CancellationToken.None);
+        var outcome = await panel.GetFilesAsync(Request(entries.Where(e => e.Name is "done-1" or "failed-1").ToList(), _ => throw new InvalidOperationException("No target exists.")), progress, CancellationToken.None);
 
         Assert.Equal(new OperationOutcome(2, 0, 0), outcome);
-        Assert.Equal(["done-1.json", "failed-1.json"], Directory.GetFiles(_folder).Select(Path.GetFileName).Order(StringComparer.Ordinal));
-        Assert.Equal("failed-1", (string?)JsonNode.Parse(await File.ReadAllTextAsync(Path.Combine(_folder, "failed-1.json")))!["TrainingJobName"]);
+        Assert.Equal(
+            ["done-1/checkpoints/step-100.pt", "done-1/code/sourcedir.tar.gz", "done-1/done-1.json", "done-1/output/debug-output/events/0.json",
+             "done-1/output/output/model.tar.gz", "done-1/output/output/output.tar.gz", "failed-1/failed-1.json"],
+            Files());
+        Assert.Equal("done-1", (string?)JsonNode.Parse(await File.ReadAllTextAsync(Path.Combine(_folder, "done-1", "done-1.json")))!["TrainingJobName"]);
+        Assert.Equal("code", await File.ReadAllTextAsync(Path.Combine(_folder, "done-1", "code", "sourcedir.tar.gz")));
         Assert.Equal((2L, (long?)null), progress.Totals);
         Assert.Equal(2, progress.Items);
-        Assert.Equal(["done-1", "failed-1"], progress.Begun);
+        Assert.Equal(5 + 6 + 5 + 4 + 10, progress.Bytes);
+        Assert.Contains("done-1/output/output/model.tar.gz", progress.Begun);
         Assert.False(panel.CanMove);
     }
 
     [Fact]
-    public async Task F5_asks_about_existing_files_and_honours_skip()
+    public void Job_data_is_this_jobs_part_of_shared_paths_and_skips_locations_inside_others()
+    {
+        var job = SampleJobs().Single(j => j.TrainingJobName == "done-1");
+        job.OutputDataConfig.S3OutputPath = "s3://bucket/sagemaker-output";
+        job.ModelArtifacts.S3ModelArtifacts = "s3://bucket/sagemaker-output/done-1/output/model.tar.gz";
+        job.ProfilerConfig = new ProfilerConfig { S3OutputPath = "s3://bucket/profiles/" };
+        job.TensorBoardOutputConfig = new TensorBoardOutputConfig { S3OutputPath = "s3://bucket/tb/done-1/run" };
+        job.InputDataConfig = [new Channel { ChannelName = "train", DataSource = new DataSource { S3DataSource = new S3DataSource { S3Uri = "s3://bucket/data" } } }];
+
+        Assert.Equal(
+            ["output s3://bucket/sagemaker-output/done-1/", "tensorboard s3://bucket/tb/done-1/run/", "profiler s3://bucket/profiles/done-1/"],
+            JobData.Sources(job).Select(s => $"{s.Folder} {s.Uri}"));
+        Assert.Null(JobData.Parse("https://bucket/key"));
+        Assert.Equal(("b", ""), JobData.Parse("s3://b"));
+    }
+
+    [Fact]
+    public async Task F5_asks_once_per_existing_job_folder_and_honours_skip()
     {
         var panel = await OpenAsync(new FakeHost(), new FakeSageMaker(SampleJobs()), "sm:prod/eu-west-1");
         var entries = await Listing.AllAsync(panel);
         var selected = entries.Where(e => e.Name is "done-1" or "failed-1").ToList();
-        await File.WriteAllTextAsync(Path.Combine(_folder, "done-1.json"), "old");
+        Directory.CreateDirectory(Path.Combine(_folder, "done-1"));
+        await File.WriteAllTextAsync(Path.Combine(_folder, "done-1", "done-1.json"), "old");
         var asked = new List<string>();
 
         var outcome = await panel.GetFilesAsync(Request(selected, name => { asked.Add(name); return OverwriteChoice.Skip; }), new FakeProgress(), CancellationToken.None);
 
         Assert.Equal(new OperationOutcome(1, 1, 0), outcome);
-        Assert.Equal(["done-1.json"], asked);
-        Assert.Equal("old", await File.ReadAllTextAsync(Path.Combine(_folder, "done-1.json")));
-        Assert.True(File.Exists(Path.Combine(_folder, "failed-1.json")));
+        Assert.Equal(["done-1"], asked);
+        Assert.Equal("old", await File.ReadAllTextAsync(Path.Combine(_folder, "done-1", "done-1.json")));
+        Assert.True(File.Exists(Path.Combine(_folder, "failed-1", "failed-1.json")));
     }
 
     [Fact]
-    public async Task F5_overwrite_all_asks_once_and_replaces_every_existing_file()
+    public async Task F5_overwrite_all_asks_once_and_replaces_the_records()
     {
         var panel = await OpenAsync(new FakeHost(), new FakeSageMaker(SampleJobs()), "sm:prod/eu-west-1");
         var entries = await Listing.AllAsync(panel);
         var selected = entries.Where(e => e.Name is "done-1" or "failed-1").ToList();
-        await File.WriteAllTextAsync(Path.Combine(_folder, "done-1.json"), "old");
-        await File.WriteAllTextAsync(Path.Combine(_folder, "failed-1.json"), "old");
-        var asked = new List<string>();
+        foreach (var name in new[] { "done-1", "failed-1" })
+        {
+            Directory.CreateDirectory(Path.Combine(_folder, name));
+            await File.WriteAllTextAsync(Path.Combine(_folder, name, name + ".json"), "old");
+        }
 
+        var asked = new List<string>();
         var outcome = await panel.GetFilesAsync(Request(selected, name => { asked.Add(name); return OverwriteChoice.OverwriteAll; }), new FakeProgress(), CancellationToken.None);
 
         Assert.Equal(new OperationOutcome(2, 0, 0), outcome);
         Assert.Single(asked);
-        Assert.Equal("done-1", (string?)JsonNode.Parse(await File.ReadAllTextAsync(Path.Combine(_folder, "done-1.json")))!["TrainingJobName"]);
-        Assert.Equal("failed-1", (string?)JsonNode.Parse(await File.ReadAllTextAsync(Path.Combine(_folder, "failed-1.json")))!["TrainingJobName"]);
-        Assert.Equal(2, Directory.GetFiles(_folder).Length);
+        Assert.Equal("done-1", (string?)JsonNode.Parse(await File.ReadAllTextAsync(Path.Combine(_folder, "done-1", "done-1.json")))!["TrainingJobName"]);
+        Assert.Equal(["done-1/done-1.json", "failed-1/failed-1.json"], Files());
     }
 
     [Fact]
@@ -459,44 +496,50 @@ public sealed class SageMakerTests : IDisposable
         var panel = await OpenAsync(new FakeHost(), new FakeSageMaker(SampleJobs()), "sm:prod/eu-west-1");
         var entries = await Listing.AllAsync(panel);
         var selected = entries.Where(e => e.Name is "done-1" or "failed-1").ToList();
-        await File.WriteAllTextAsync(Path.Combine(_folder, "done-1.json"), "old");
+        Directory.CreateDirectory(Path.Combine(_folder, "done-1"));
+        await File.WriteAllTextAsync(Path.Combine(_folder, "done-1", "done-1.json"), "old");
 
         var outcome = await panel.GetFilesAsync(Request(selected, _ => OverwriteChoice.Cancel), new FakeProgress(), CancellationToken.None);
 
         Assert.Equal((0, 0, 0), (outcome.Succeeded, outcome.Skipped, outcome.Failed));
-        Assert.Equal(["done-1.json"], Directory.GetFiles(_folder).Select(Path.GetFileName));
-        Assert.Equal("old", await File.ReadAllTextAsync(Path.Combine(_folder, "done-1.json")));
+        Assert.Equal(["done-1/done-1.json"], Files());
     }
 
     [Fact]
-    public async Task F5_cancelled_while_saving_leaves_no_file()
+    public async Task F5_cancelled_while_downloading_leaves_no_partial_file()
     {
         using var cancel = new CancellationTokenSource();
-        var api = new FakeSageMaker(SampleJobs());
-        var panel = await OpenAsync(new FakeHost(), api, "sm:prod/eu-west-1");
+        var data = new FakeJobData { ["models/done-1/output/model.tar.gz"] = "model" };
+        data.OnDownload = cancel.Cancel;
+        var panel = await OpenAsync(new FakeHost(), new FakeSageMaker(SampleJobs()), "sm:prod/eu-west-1", data);
         var entries = await Listing.AllAsync(panel);
-        api.OnDescribe = _ => cancel.Cancel();
 
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
-            panel.GetFilesAsync(Request(entries.Take(2).ToList(), _ => OverwriteChoice.Overwrite), new FakeProgress(), cancel.Token));
+            panel.GetFilesAsync(Request(entries.Where(e => e.Name == "done-1").ToList(), _ => OverwriteChoice.Overwrite), new FakeProgress(), cancel.Token));
 
-        Assert.Empty(Directory.GetFiles(_folder));
+        Assert.Equal(["done-1/done-1.json"], Files());
     }
 
     [Fact]
-    public async Task F5_reports_a_job_that_cannot_be_read_and_saves_the_others()
+    public async Task F5_reports_jobs_and_s3_data_that_cannot_be_read_and_saves_the_rest()
     {
         var api = new FakeSageMaker(SampleJobs());
-        var panel = await OpenAsync(new FakeHost(), api, "sm:prod/eu-west-1");
+        var data = new FakeJobData { ["models/failed-1/output/output.tar.gz"] = "x" };
+        data.ListError = new Amazon.S3.AmazonS3Exception("Access Denied") { ErrorCode = "AccessDenied", StatusCode = HttpStatusCode.Forbidden };
+        var panel = await OpenAsync(new FakeHost(), api, "sm:prod/eu-west-1", data);
         var entries = await Listing.AllAsync(panel);
         api.DescribeError = ("done-1", new AmazonSageMakerException("Requested resource not found") { ErrorCode = "ValidationException" });
 
         var outcome = await panel.GetFilesAsync(Request(entries.Where(e => e.Name is "done-1" or "failed-1").ToList(), _ => OverwriteChoice.Overwrite), new FakeProgress(), CancellationToken.None);
 
-        Assert.Equal((1, 0, 1), (outcome.Succeeded, outcome.Skipped, outcome.Failed));
+        Assert.Equal((0, 0, 2), (outcome.Succeeded, outcome.Skipped, outcome.Failed));
         Assert.Contains("done-1", outcome.Message, StringComparison.Ordinal);
-        Assert.Equal(["failed-1.json"], Directory.GetFiles(_folder).Select(Path.GetFileName));
+        Assert.Contains("s3://models/failed-1/", outcome.Message, StringComparison.Ordinal);
+        Assert.Equal(["failed-1/failed-1.json"], Files());
     }
+
+    private List<string> Files() =>
+        Directory.GetFiles(_folder, "*", SearchOption.AllDirectories).Select(f => Path.GetRelativePath(_folder, f).Replace('\\', '/')).Order(StringComparer.Ordinal).ToList();
 
     [Theory]
     [InlineData("sm:", "default", "us-east-1")]
@@ -550,7 +593,7 @@ public sealed class SageMakerTests : IDisposable
     {
         var api = new FakeSageMaker(SampleJobs());
         var host = new FakeHost();
-        var plugin = new SageMakerPlugin { Connect = _ => api, Prices = () => Prices, Pricing = null, Clock = () => Now };
+        var plugin = new SageMakerPlugin { Connect = _ => api, Prices = () => Prices, Pricing = null, Clock = () => Now, DataStore = _ => new FakeJobData() };
         plugin.Initialize(host);
         var panel = (await plugin.OpenAddressAsync("sm:prod/eu-west-1", CancellationToken.None))!;
         host.EditForm = form =>
@@ -601,9 +644,9 @@ public sealed class SageMakerTests : IDisposable
     private static PanelCommandContext Context(IReadOnlyList<PanelEntry> selected, PanelEntry? current = null) =>
         new(current, selected, new FakeProgress(), CancellationToken.None);
 
-    private static async Task<SageMakerPanel> OpenAsync(FakeHost host, FakeSageMaker api, string address)
+    private static async Task<SageMakerPanel> OpenAsync(FakeHost host, FakeSageMaker api, string address, FakeJobData? data = null)
     {
-        var plugin = new SageMakerPlugin { Connect = _ => api, Prices = () => Prices, Pricing = null, Clock = () => Now };
+        var plugin = new SageMakerPlugin { Connect = _ => api, Prices = () => Prices, Pricing = null, Clock = () => Now, DataStore = _ => data ?? new FakeJobData() };
         plugin.Initialize(host);
         return (SageMakerPanel)(await plugin.OpenAddressAsync(address, CancellationToken.None))!;
     }
@@ -685,6 +728,55 @@ public sealed class SageMakerTests : IDisposable
         job.TrainingEndTime = created.AddMinutes(30);
         job.BillableTimeInSeconds = 1200;
         return job;
+    }
+
+    /// <summary>S3 objects by "bucket/key"; listing and downloads as the real store does them.</summary>
+    private sealed class FakeJobData : IJobDataStore
+    {
+        private readonly Dictionary<string, string> _objects = new(StringComparer.Ordinal);
+
+        public Exception? ListError { get; set; }
+
+        public Action? OnDownload { get; set; }
+
+        public string this[string bucketAndKey]
+        {
+            set => _objects[bucketAndKey] = value;
+        }
+
+        public async IAsyncEnumerable<(string Key, long Size)> ListAsync(JobDataSource source, [EnumeratorCancellation] CancellationToken cancellationToken)
+        {
+            await Task.Yield();
+            if (ListError is { } error)
+            {
+                throw error;
+            }
+
+            var prefix = $"{source.Bucket}/{source.Key}";
+            var found = source.IsPrefix ? _objects.Keys.Where(k => k.StartsWith(prefix, StringComparison.Ordinal)).ToList() : _objects.Keys.Where(k => k == prefix).ToList();
+            if (!source.IsPrefix && found.Count == 0)
+            {
+                throw new Amazon.S3.AmazonS3Exception("Not Found") { StatusCode = HttpStatusCode.NotFound };
+            }
+
+            foreach (var key in found.Order(StringComparer.Ordinal))
+            {
+                yield return (key[(source.Bucket.Length + 1)..], _objects[key].Length);
+            }
+        }
+
+        public async Task DownloadAsync(string bucket, string key, string target, Action<long> bytes, CancellationToken cancellationToken)
+        {
+            await File.WriteAllTextAsync(target, _objects[$"{bucket}/{key}"][..1], cancellationToken);
+            OnDownload?.Invoke();
+            cancellationToken.ThrowIfCancellationRequested();
+            await File.AppendAllTextAsync(target, _objects[$"{bucket}/{key}"][1..], cancellationToken);
+            bytes(_objects[$"{bucket}/{key}"].Length);
+        }
+
+        public void Dispose()
+        {
+        }
     }
 
     private sealed class FakeSageMaker(IReadOnlyList<DescribeTrainingJobResponse> jobs) : ISageMakerApi

@@ -11,7 +11,7 @@ namespace Habilis.Aws.SageMaker;
 /// <summary>
 /// The training jobs of one account and region (issue #47), like the console's Training jobs page: newest first,
 /// running jobs on top, status, warm pool and an estimated cost; a summary (F3) and the full record (Shift+F3);
-/// F5 saves the full records as JSON files. Read-only: it only lists and describes jobs.
+/// F5 copies each job's record and its S3 outputs and code into a local folder. Read-only: it changes nothing in AWS.
 /// </summary>
 internal sealed class SageMakerPanel : IPanelProvider, IPanelCommands, IViewEntry, IGetFiles
 {
@@ -34,6 +34,7 @@ internal sealed class SageMakerPanel : IPanelProvider, IPanelCommands, IViewEntr
 
     private readonly IPluginHost _host;
     private readonly Func<AwsSession, ISageMakerApi> _connect;
+    private readonly Func<AwsSession, IJobDataStore> _dataStore;
     private readonly LivePrices _prices;
     private readonly Func<DateTime> _clock;
     private SageMakerSettings _settings;
@@ -41,8 +42,9 @@ internal sealed class SageMakerPanel : IPanelProvider, IPanelCommands, IViewEntr
     private ISageMakerApi? _api;
     private Summary? _summary;
 
-    public SageMakerPanel(IPluginHost host, SageMakerSettings settings, AwsSession session, Func<AwsSession, ISageMakerApi> connect, LivePrices prices, Func<DateTime> clock)
+    public SageMakerPanel(IPluginHost host, SageMakerSettings settings, AwsSession session, Func<AwsSession, ISageMakerApi> connect, LivePrices prices, Func<DateTime> clock, Func<AwsSession, IJobDataStore> dataStore)
     {
+        _dataStore = dataStore;
         _host = host;
         _settings = settings;
         _session = session;
@@ -168,8 +170,10 @@ internal sealed class SageMakerPanel : IPanelProvider, IPanelCommands, IViewEntr
         _prices.ForAsync(jobs.SelectMany(JobFacts.Instances).Select(i => i.Type), _session, cancellationToken);
 
     /// <summary>
-    /// F5: writes <c>&lt;job name&gt;.json</c> (the full description) for each job into the local folder. Each file is
-    /// written to a temporary name and moved into place, so a failure or a cancel never leaves a partial file.
+    /// F5 (issue #68): a folder <c>&lt;job name&gt;</c> per job in the local folder with <c>&lt;job name&gt;.json</c> (the
+    /// full description) and the job's S3 data (<see cref="JobData"/>) in subfolders: output, model, checkpoints,
+    /// tensorboard, debugger, profiler, code. Every file is written to a temporary name and moved into place, so a
+    /// failure or a cancel never leaves a partial file. A job folder that exists is asked about once.
     /// </summary>
     public async Task<OperationOutcome> GetFilesAsync(TransferRequest request, IOperationProgress progress, CancellationToken cancellationToken)
     {
@@ -181,12 +185,11 @@ internal sealed class SageMakerPanel : IPanelProvider, IPanelCommands, IViewEntr
         {
             cancellationToken.ThrowIfCancellationRequested();
             progress.Begin(entry.Name);
-            var fileName = FileNameOf(entry.Name);
-            var target = Path.Combine(request.LocalFolder, fileName);
-            var overwrite = false;
-            if (File.Exists(target))
+            var folderName = SafeName(entry.Name);
+            var jobFolder = Path.Combine(request.LocalFolder, folderName);
+            if (Directory.Exists(jobFolder) || File.Exists(jobFolder))
             {
-                var choice = forAll ?? await request.AskOverwrite(fileName).ConfigureAwait(false);
+                var choice = forAll ?? await request.AskOverwrite(folderName).ConfigureAwait(false);
                 switch (choice)
                 {
                     case OverwriteChoice.OverwriteAll:
@@ -205,26 +208,103 @@ internal sealed class SageMakerPanel : IPanelProvider, IPanelCommands, IViewEntr
                     progress.CompleteItem();
                     continue;
                 }
-
-                overwrite = true;
             }
 
             try
             {
                 var job = await DescribeAsync(entry.Name, cancellationToken).ConfigureAwait(false);
-                await WriteAtomicallyAsync(target, JobText.FullRecord(job), overwrite, cancellationToken).ConfigureAwait(false);
-                saved++;
+                Directory.CreateDirectory(jobFolder);
+                await WriteAtomicallyAsync(Path.Combine(jobFolder, FileNameOf(entry.Name)), JobText.FullRecord(job), overwrite: true, cancellationToken).ConfigureAwait(false);
+                var dataProblems = await CopyJobDataAsync(job, jobFolder, progress, cancellationToken).ConfigureAwait(false);
+                if (dataProblems.Count == 0)
+                {
+                    saved++;
+                }
+                else
+                {
+                    failed++;
+                    problems.AddRange(dataProblems);
+                }
             }
             catch (Exception ex) when (!cancellationToken.IsCancellationRequested)
             {
                 failed++;
-                problems.Add(ex is PluginException ? ex.Message : $"{fileName}: {ex.Message}");
+                problems.Add(ex is PluginException ? ex.Message : $"{folderName}: {ex.Message}");
             }
 
             progress.CompleteItem();
         }
 
         return new OperationOutcome(saved, skipped, failed, Report(problems, null));
+    }
+
+    /// <summary>Copies the job's S3 data into its folder; returns what could not be copied (a missing location is not a problem).</summary>
+    private async Task<List<string>> CopyJobDataAsync(DescribeTrainingJobResponse job, string jobFolder, IOperationProgress progress, CancellationToken cancellationToken)
+    {
+        var problems = new List<string>();
+        var sources = JobData.Sources(job);
+        if (sources.Count == 0)
+        {
+            return problems;
+        }
+
+        var root = Path.GetFullPath(jobFolder) + Path.DirectorySeparatorChar;
+        using var store = _dataStore(_session);
+        foreach (var source in sources)
+        {
+            try
+            {
+                await foreach (var (key, _) in store.ListAsync(source, cancellationToken).ConfigureAwait(false))
+                {
+                    var relative = source.IsPrefix ? key[source.Key.Length..] : key[(key.LastIndexOf('/') + 1)..];
+                    var target = Path.GetFullPath(Path.Combine(jobFolder, source.Folder, relative.Replace('/', Path.DirectorySeparatorChar)));
+                    if (relative.Length == 0 || !target.StartsWith(root, StringComparison.OrdinalIgnoreCase))
+                    {
+                        // A key that would land outside the job folder ("../") is not copied.
+                        continue;
+                    }
+
+                    progress.Begin($"{job.TrainingJobName}/{source.Folder}/{relative}");
+                    Directory.CreateDirectory(Path.GetDirectoryName(target)!);
+                    var temporary = Path.Combine(Path.GetDirectoryName(target)!, $".{Path.GetFileName(target)}.{Guid.NewGuid().ToString("N")[..8]}.tmp");
+                    try
+                    {
+                        await store.DownloadAsync(source.Bucket, key, temporary, progress.AddBytes, cancellationToken).ConfigureAwait(false);
+                        File.Move(temporary, target, overwrite: true);
+                    }
+                    catch
+                    {
+                        TryDelete(temporary);
+                        throw;
+                    }
+                }
+            }
+            catch (Exception ex) when (!cancellationToken.IsCancellationRequested && IsNotFound(ex))
+            {
+                // The job never wrote there (no checkpoints, a failed job without a model): nothing to copy.
+            }
+            catch (Exception ex) when (!cancellationToken.IsCancellationRequested)
+            {
+                problems.Add(AwsErrors.Describe(ex, $"Copying {source.Uri}", _session).Message);
+            }
+        }
+
+        return problems;
+    }
+
+    private static bool IsNotFound(Exception ex) =>
+        ex is Amazon.S3.AmazonS3Exception { StatusCode: System.Net.HttpStatusCode.NotFound } or FileNotFoundException;
+
+    private static void TryDelete(string file)
+    {
+        try
+        {
+            File.Delete(file);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            // Best effort: the original error is what the user needs to see.
+        }
     }
 
     public ValueTask DisposeAsync()
@@ -296,10 +376,12 @@ internal sealed class SageMakerPanel : IPanelProvider, IPanelCommands, IViewEntr
     };
 
     /// <summary>The file name for a job's record; job names are letters, digits and hyphens, but stay safe anyway.</summary>
-    internal static string FileNameOf(string jobName)
+    internal static string FileNameOf(string jobName) => SafeName(jobName) + ".json";
+
+    private static string SafeName(string jobName)
     {
         var invalid = Path.GetInvalidFileNameChars();
-        return new string(jobName.Select(c => invalid.Contains(c) ? '_' : c).ToArray()) + ".json";
+        return new string(jobName.Select(c => invalid.Contains(c) ? '_' : c).ToArray());
     }
 
     /// <summary>Describes the jobs, at most <see cref="ParallelRequests"/> at a time; the first failure stops the rest.</summary>

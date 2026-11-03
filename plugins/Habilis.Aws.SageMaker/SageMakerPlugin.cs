@@ -23,6 +23,9 @@ public sealed class SageMakerPlugin : Plugin
 
     internal Func<DateTime> Clock { get; set; } = () => DateTime.UtcNow;
 
+    /// <summary>S3 for the job data F5 copies (issue #68).</summary>
+    internal Func<AwsSession, IJobDataStore> DataStore { get; set; } = session => new JobDataStore(session);
+
     public SageMakerPlugin() => Prices = () => _builtInPrices.Value;
 
     public override IEnumerable<PluginMenuItem> MenuItems => [new("SageMaker training jobs", token => OpenAsync(null, null))];
@@ -71,7 +74,7 @@ public sealed class SageMakerPlugin : Plugin
 
         // One cache of live prices for all panels.
         _livePrices ??= new LivePrices(() => Prices(), Pricing, Clock);
-        var panel = new SageMakerPanel(Host, settings, settings.Session(chosenProfile, chosenRegion), Connect, _livePrices, Clock);
+        var panel = new SageMakerPanel(Host, settings, settings.Session(chosenProfile, chosenRegion), Connect, _livePrices, Clock, DataStore);
         lock (_panels)
         {
             _panels.RemoveAll(w => !w.TryGetTarget(out _));

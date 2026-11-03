@@ -24,7 +24,7 @@ restart Habilis Terminal. No administrator rights are needed.
 |---|---|
 | F3 / Enter | Summary of the job under the cursor (see below) |
 | Shift+F3 | Full record: the complete DescribeTrainingJob response as indented JSON |
-| F5 | Save the full records of the selected jobs as `<job name>.json` into the other panel's folder |
+| F5 | Copy the selected jobs into the other panel's folder: a folder per job with its record and S3 outputs and code |
 | Ctrl+I | Filter: part of the job name and the job status (saved in the settings) |
 | Shift+F2 | Switch profile and region |
 | Ctrl+R | Refresh |
@@ -49,12 +49,23 @@ Then the details (times, instances, spot, image, channels, output path, role, wa
 cost estimate with its basis. The summary, the full record and F5 always describe the job afresh, so a running job
 shows its current state.
 
-### Saving records (F5)
+### Copying jobs (F5)
 
-Each selected job is written as `<job name>.json`, the same JSON as the full record. Every file is written to a
-temporary name in the target folder and then moved into place, so a failure or a cancel never leaves a partial file.
-An existing file is offered for overwrite or skip (with "all" variants and Cancel). F6 (move) is not offered: the
-plugin never changes anything in AWS.
+Each selected job becomes a folder `<job name>` (issue #68) with:
+
+- `<job name>.json`: the same JSON as the full record;
+- `output/`: this job's part of the output path, `<S3OutputPath>/<job name>/` (model.tar.gz, output.tar.gz,
+  debugger, profiler and rule output written there);
+- `model/`: the model artifacts, when they are outside that output folder;
+- `checkpoints/`: the checkpoint location (`CheckpointConfig.S3Uri`);
+- `tensorboard/`, `debugger/`, `profiler/`: their output paths when set outside the output folder (only this job's
+  part of a shared path);
+- `code/`: the source code (`sagemaker_submit_directory`, usually `sourcedir.tar.gz`).
+
+Input channels are not copied. A location the job never wrote is skipped silently. Every file is written to a
+temporary name and then moved into place, so a failure or a cancel never leaves a partial file. An existing job folder
+is offered for overwrite or skip once (with "all" variants and Cancel). F6 (move) is not offered: the plugin never
+changes anything in AWS.
 
 ## Settings
 
@@ -82,6 +93,8 @@ It only reads. Required IAM permissions:
 
 - `sagemaker:ListTrainingJobs`
 - `sagemaker:DescribeTrainingJob`
+- `s3:ListBucket` and `s3:GetObject` on the jobs' output, checkpoint and code buckets: F5 copies job data; a missing
+  permission is reported per location and the job's record is still saved.
 - `pricing:GetProducts` (optional): current prices for cost estimates. Without it the built-in price table is used
   and the summary says why.
 
@@ -165,8 +178,9 @@ for the plugin (a second, more privileged profile creates the jobs).
 5. Check one cost by hand: instance price from the AWS pricing page × instance count × billable seconds (console,
    job details) / 3600. It matches the estimate if the price table is current.
 6. Shift+F3: the full record; compare with `aws sagemaker describe-training-job --training-job-name <name>`.
-7. Select three jobs, F5 into a local folder: three `.json` files. F5 again: answer Skip, then Overwrite all. Start a
-   large F5 and cancel it: no `.tmp` or partial `.json` file remains.
+7. Select three jobs, F5 into a local folder: three job folders, each with its `.json`, `output/` (model.tar.gz) and
+   `code/` (sourcedir.tar.gz) when the job had them; compare with `aws s3 ls --recursive` of the job's output path.
+   F5 again: answer Skip, then Overwrite all. Start a large F5 and cancel it: no `.tmp` or partial file remains.
 8. Ctrl+I: name part of one job, status Failed; only matching jobs are listed and Ctrl+L shows the filter. Clear it
    (blank name, All).
 9. Settings: Jobs listed 2. Only the two newest jobs are listed. Turn row colouring off: rows lose their colours.
