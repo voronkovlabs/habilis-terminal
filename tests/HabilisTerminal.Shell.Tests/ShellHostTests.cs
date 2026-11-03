@@ -148,7 +148,7 @@ public class ShellHostTests
         shell.Host.PanelKeyReturned += returned.Enqueue;
         await shell.WaitIdleAsync();
 
-        foreach (var name in ShellHost.PanelKeyNames)
+        foreach (var name in ShellHost.PanelKeys.Keys)
         {
             Assert.True(shell.Host.SendPanelKey(name));
             await TestShell.WaitUntilAsync(() => returned.Count == 1, $"{name} returned");
@@ -165,6 +165,16 @@ public class ShellHostTests
         }
 
         await shell.WaitForTextAsync("PANEL-EDIT");
+
+        // Shift selects in the line (issue #88): the selected last word and the selected tail are deleted.
+        shell.Host.Write("'PANEL-' + 'SELECT'tail junk");
+        await Task.Delay(300, TestContext.Current.CancellationToken);
+        foreach (var name in new[] { "Ctrl+Shift+Left", "Backspace", "Backspace", "Shift+Left", "Shift+Left", "Shift+Left", "Shift+Left", "Backspace", "Enter" })
+        {
+            shell.Host.SendPanelKey(name);
+        }
+
+        await shell.WaitForTextAsync("PANEL-SELECT");
         Assert.Empty(returned);
         Assert.False(shell.Host.SendPanelKey("Tab"));
     }

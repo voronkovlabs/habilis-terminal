@@ -73,7 +73,7 @@ public sealed class ShellHost : IDisposable
 
     /// <summary>
     /// A key sent by <see cref="SendPanelKey"/> found the command line empty, so it belongs to the panel (issue #85):
-    /// "Enter", "Left", "Right", "Home", "End", "Delete", "Backspace" or "Escape". Background thread.
+    /// one of the names of <see cref="PanelKeys"/>. Background thread.
     /// </summary>
     public event Action<string>? PanelKeyReturned;
 
@@ -179,18 +179,37 @@ public sealed class ShellHost : IDisposable
     /// </summary>
     public bool SendPanelKey(string name)
     {
-        var index = Array.IndexOf(PanelKeyNames, name);
-        if (index < 0)
+        if (!PanelKeys.TryGetValue(name, out var key))
         {
             return false;
         }
 
-        SendKey(Win32InputSequence.VkF13 + index);
+        SendKey(key.VirtualKey, controlKeyState: key.ControlKeyState);
         return true;
     }
 
-    /// <summary>The keys of <see cref="SendPanelKey"/>, in the order of F13..F20 (the integration script's table).</summary>
-    public static readonly string[] PanelKeyNames = ["Enter", "Left", "Right", "Home", "End", "Delete", "Backspace", "Escape"];
+    /// <summary>
+    /// The keys of <see cref="SendPanelKey"/> and the keys they are sent as (the integration script's table): F13..F20,
+    /// with Shift / Ctrl+Shift for selecting in the line (issue #88).
+    /// </summary>
+    public static readonly IReadOnlyDictionary<string, (int VirtualKey, int ControlKeyState)> PanelKeys =
+        new Dictionary<string, (int, int)>
+        {
+            ["Enter"] = (Win32InputSequence.VkF13, 0),
+            ["Left"] = (Win32InputSequence.VkF13 + 1, 0),
+            ["Right"] = (Win32InputSequence.VkF13 + 2, 0),
+            ["Home"] = (Win32InputSequence.VkF13 + 3, 0),
+            ["End"] = (Win32InputSequence.VkF13 + 4, 0),
+            ["Delete"] = (Win32InputSequence.VkF13 + 5, 0),
+            ["Backspace"] = (Win32InputSequence.VkF13 + 6, 0),
+            ["Escape"] = (Win32InputSequence.VkF13 + 7, 0),
+            ["Shift+Left"] = (Win32InputSequence.VkF13 + 1, Win32InputSequence.Shift),
+            ["Shift+Right"] = (Win32InputSequence.VkF13 + 2, Win32InputSequence.Shift),
+            ["Shift+Home"] = (Win32InputSequence.VkF13 + 3, Win32InputSequence.Shift),
+            ["Shift+End"] = (Win32InputSequence.VkF13 + 4, Win32InputSequence.Shift),
+            ["Ctrl+Shift+Left"] = (Win32InputSequence.VkF13 + 1, Win32InputSequence.Shift | Win32InputSequence.LeftCtrl),
+            ["Ctrl+Shift+Right"] = (Win32InputSequence.VkF13 + 2, Win32InputSequence.Shift | Win32InputSequence.LeftCtrl),
+        };
 
     /// <summary>Sends a key press to the shell (e.g. history navigation from panel focus).</summary>
     public void SendKey(int virtualKey, char unicodeChar = '\0', int controlKeyState = 0) =>

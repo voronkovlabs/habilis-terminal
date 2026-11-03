@@ -185,22 +185,32 @@ Set-PSReadLineKeyHandler -Chord Escape -BriefDescription HabilisTerminalEscape -
 
 # Keys from a focused panel whose meaning depends on the command line, as in Far (issue #85): with text on the line
 # they edit it (or run it), on an empty line they go back to the panel (OSC 7731;habi;panel-key;<name>). Habilis
-# Terminal sends them as F13..F20, so the same keys typed inside the console keep their usual meaning.
+# Terminal sends them as F13..F20 (with Shift / Ctrl+Shift for selecting, issue #88), so the same keys typed inside the
+# console keep their usual meaning.
 $global:__Habi | Add-Member -NotePropertyName PanelKeys -NotePropertyValue @{
-    F13 = @('Enter', $null)
-    F14 = @('Left', 'BackwardChar')
-    F15 = @('Right', 'ForwardChar')
-    F16 = @('Home', 'BeginningOfLine')
-    F17 = @('End', 'EndOfLine')
-    F18 = @('Delete', 'DeleteChar')
-    F19 = @('Backspace', 'BackwardDeleteChar')
-    F20 = @('Escape', 'RevertLine')
+    'F13'            = @('Enter', $null)
+    'F14'            = @('Left', 'BackwardChar')
+    'F15'            = @('Right', 'ForwardChar')
+    'F16'            = @('Home', 'BeginningOfLine')
+    'F17'            = @('End', 'EndOfLine')
+    'F18'            = @('Delete', 'DeleteChar')
+    'F19'            = @('Backspace', 'BackwardDeleteChar')
+    'F20'            = @('Escape', 'RevertLine')
+    'Shift+F14'      = @('Shift+Left', 'SelectBackwardChar')
+    'Shift+F15'      = @('Shift+Right', 'SelectForwardChar')
+    'Shift+F16'      = @('Shift+Home', 'SelectBackwardsLine')
+    'Shift+F17'      = @('Shift+End', 'SelectLine')
+    'Ctrl+Shift+F14' = @('Ctrl+Shift+Left', 'SelectBackwardWord')
+    'Ctrl+Shift+F15' = @('Ctrl+Shift+Right', 'SelectNextWord')
 }
 
 foreach ($chord in $global:__Habi.PanelKeys.Keys) {
     Set-PSReadLineKeyHandler -Chord $chord -BriefDescription "HabilisTerminalPanel$chord" -Description 'Habilis Terminal panel key' -ScriptBlock {
         param($key, $arg)
-        $name, $function = $global:__Habi.PanelKeys[$key.Key.ToString()]
+        $chord = $key.Key.ToString()
+        if ($key.Modifiers -band [ConsoleModifiers]::Shift) { $chord = "Shift+$chord" }
+        if ($key.Modifiers -band [ConsoleModifiers]::Control) { $chord = "Ctrl+$chord" }
+        $name, $function = $global:__Habi.PanelKeys[$chord]
         $line = $null
         $cursor = $null
         [Microsoft.PowerShell.PSConsoleReadLine]::GetBufferState([ref] $line, [ref] $cursor)

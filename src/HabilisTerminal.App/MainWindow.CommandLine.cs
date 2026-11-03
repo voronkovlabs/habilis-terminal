@@ -9,7 +9,7 @@ namespace HabilisTerminal.App;
 
 /// <summary>
 /// The command line as in Far (issue #85): the focus stays on the panel and typed text goes to the command line.
-/// Keys whose meaning depends on the line (Enter, Left, Right, Home, End, Del, Backspace, Esc) go to the shell, which
+/// Keys whose meaning depends on the line (Enter, Left, Right, Home, End, Del, Backspace, Esc, Shift selection) go to the shell, which
 /// edits or runs the line when it has text and returns the key to the panel when it is empty. While a command runs,
 /// the console has the keys; when the prompt is back, the panel has them again.
 /// </summary>
@@ -66,7 +66,7 @@ public partial class MainWindow
     /// <summary>A key pressed in a panel that the command line takes when it has text; false when it is the panel's.</summary>
     private bool SendToCommandLine(Key key, KeyModifiers modifiers)
     {
-        if (modifiers != KeyModifiers.None || _shell?.Host.State != ShellState.Idle || PanelKeyName(key) is not { } name)
+        if (_shell?.Host.State != ShellState.Idle || PanelKeyName(key, modifiers) is not { } name)
         {
             return false;
         }
@@ -77,13 +77,13 @@ public partial class MainWindow
     /// <summary>The command line was empty: the key acts in the panel after all.</summary>
     private void OnPanelKeyReturned(string name)
     {
-        if (IsPageOpen || PanelKey(name) is not { } key)
+        if (IsPageOpen || PanelKey(name) is not var (key, modifiers))
         {
             return;
         }
 
         // Esc on an empty line collapses the console grown over the panels first (issue #82).
-        if (key == Key.Escape && OverflowExpanded)
+        if (key == Key.Escape && modifiers == KeyModifiers.None && OverflowExpanded)
         {
             CollapseConsole(stopGrowing: false);
             return;
@@ -94,9 +94,9 @@ public partial class MainWindow
             return;
         }
 
-        if (!HandlePluginKey(panel, key, KeyModifiers.None) && !HandleWindowKey(panel, key, KeyModifiers.None))
+        if (!HandlePluginKey(panel, key, modifiers) && !HandleWindowKey(panel, key, modifiers))
         {
-            panel.HandleKey(key, KeyModifiers.None);
+            panel.HandleKey(key, modifiers);
         }
     }
 
@@ -123,29 +123,28 @@ public partial class MainWindow
     [DllImport("Microsoft.Terminal.Control.dll", CallingConvention = CallingConvention.StdCall)]
     private static extern void TerminalSetFocused(IntPtr terminal, [MarshalAs(UnmanagedType.Bool)] bool focused);
 
-    private static string? PanelKeyName(Key key) => key switch
-    {
-        Key.Enter => "Enter",
-        Key.Left => "Left",
-        Key.Right => "Right",
-        Key.Home => "Home",
-        Key.End => "End",
-        Key.Delete => "Delete",
-        Key.Back => "Backspace",
-        Key.Escape => "Escape",
-        _ => null,
-    };
+    /// <summary>The keys the command line takes when it has text, by their names in <see cref="ShellHost.PanelKeys"/>.</summary>
+    private static readonly (string Name, Key Key, KeyModifiers Modifiers)[] CommandLineKeys =
+    [
+        ("Enter", Key.Enter, KeyModifiers.None),
+        ("Left", Key.Left, KeyModifiers.None),
+        ("Right", Key.Right, KeyModifiers.None),
+        ("Home", Key.Home, KeyModifiers.None),
+        ("End", Key.End, KeyModifiers.None),
+        ("Delete", Key.Delete, KeyModifiers.None),
+        ("Backspace", Key.Back, KeyModifiers.None),
+        ("Escape", Key.Escape, KeyModifiers.None),
+        ("Shift+Left", Key.Left, KeyModifiers.Shift),
+        ("Shift+Right", Key.Right, KeyModifiers.Shift),
+        ("Shift+Home", Key.Home, KeyModifiers.Shift),
+        ("Shift+End", Key.End, KeyModifiers.Shift),
+        ("Ctrl+Shift+Left", Key.Left, KeyModifiers.Control | KeyModifiers.Shift),
+        ("Ctrl+Shift+Right", Key.Right, KeyModifiers.Control | KeyModifiers.Shift),
+    ];
 
-    private static Key? PanelKey(string name) => name switch
-    {
-        "Enter" => Key.Enter,
-        "Left" => Key.Left,
-        "Right" => Key.Right,
-        "Home" => Key.Home,
-        "End" => Key.End,
-        "Delete" => Key.Delete,
-        "Backspace" => Key.Back,
-        "Escape" => Key.Escape,
-        _ => null,
-    };
+    private static string? PanelKeyName(Key key, KeyModifiers modifiers) =>
+        CommandLineKeys.FirstOrDefault(k => k.Key == key && k.Modifiers == modifiers).Name;
+
+    private static (Key Key, KeyModifiers Modifiers)? PanelKey(string name) =>
+        CommandLineKeys.FirstOrDefault(k => k.Name == name) is { Name: not null } found ? (found.Key, found.Modifiers) : null;
 }
