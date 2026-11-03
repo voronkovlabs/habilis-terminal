@@ -19,28 +19,67 @@ public enum KeyModifiers
 /// </summary>
 public sealed class GlobalKeyHook : IDisposable
 {
+    private const int WM_KEYFIRST = 0x0100;
     private const int WM_KEYDOWN = 0x0100;
     private const int WM_SYSKEYDOWN = 0x0104;
+    private const int WM_KEYLAST = 0x0109;
     private const int VK_SHIFT = 0x10;
     private const int VK_CONTROL = 0x11;
     private const int VK_MENU = 0x12;
 
+    private const int WM_LBUTTONDOWN = 0x0201;
     private const int WM_RBUTTONDOWN = 0x0204;
     private const int WM_MOUSEWHEEL = 0x020A;
 
     private readonly Func<Key, KeyModifiers, bool> _handler;
     private readonly Func<MSG, KeyModifiers, bool>? _mouseHandler;
+    private readonly Func<IntPtr, bool>? _isConsole;
 
     /// <param name="handler">Returns true when the key is consumed and must not reach its target.</param>
-    /// <param name="mouseHandler">Right button down and wheel messages; returns true when consumed.</param>
-    public GlobalKeyHook(Func<Key, KeyModifiers, bool> handler, Func<MSG, KeyModifiers, bool>? mouseHandler = null)
+    /// <param name="mouseHandler">Left and right button down and wheel messages; returns true when consumed.</param>
+    /// <param name="isConsole">
+    /// Whether a window belongs to the console. Its keyboard messages bypass WPF (issue #90): with the Win32 focus in
+    /// the console WPF has no focused element, and its keyboard navigation would move the focus to a panel on an
+    /// arrow key. They go to the handler first and are then dispatched to the console as the message loop would.
+    /// </param>
+    public GlobalKeyHook(
+        Func<Key, KeyModifiers, bool> handler,
+        Func<MSG, KeyModifiers, bool>? mouseHandler = null,
+        Func<IntPtr, bool>? isConsole = null)
     {
         _handler = handler;
         _mouseHandler = mouseHandler;
+        _isConsole = isConsole;
+        ComponentDispatcher.ThreadFilterMessage += OnThreadFilterMessage;
         ComponentDispatcher.ThreadPreprocessMessage += OnThreadPreprocessMessage;
     }
 
-    public void Dispose() => ComponentDispatcher.ThreadPreprocessMessage -= OnThreadPreprocessMessage;
+    public void Dispose()
+    {
+        ComponentDispatcher.ThreadFilterMessage -= OnThreadFilterMessage;
+        ComponentDispatcher.ThreadPreprocessMessage -= OnThreadPreprocessMessage;
+    }
+
+    private void OnThreadFilterMessage(ref MSG msg, ref bool handled)
+    {
+        if (handled || msg.message is < WM_KEYFIRST or > WM_KEYLAST || _isConsole?.Invoke(msg.hwnd) != true)
+        {
+            return;
+        }
+
+        handled = true;
+        if (msg.message is WM_KEYDOWN or WM_SYSKEYDOWN)
+        {
+            if (_handler(KeyInterop.KeyFromVirtualKey((int)msg.wParam), CurrentModifiers()))
+            {
+                return;
+            }
+
+            TranslateMessage(ref msg);
+        }
+
+        DispatchMessage(ref msg);
+    }
 
     private void OnThreadPreprocessMessage(ref MSG msg, ref bool handled)
     {
@@ -49,7 +88,7 @@ public sealed class GlobalKeyHook : IDisposable
             return;
         }
 
-        if (msg.message is WM_RBUTTONDOWN or WM_MOUSEWHEEL)
+        if (msg.message is WM_LBUTTONDOWN or WM_RBUTTONDOWN or WM_MOUSEWHEEL)
         {
             handled = _mouseHandler?.Invoke(msg, CurrentModifiers()) == true;
             return;
@@ -92,4 +131,10 @@ public sealed class GlobalKeyHook : IDisposable
 
     [DllImport("user32.dll")]
     private static extern short GetKeyState(int nVirtKey);
+
+    [DllImport("user32.dll")]
+    private static extern bool TranslateMessage(ref MSG msg);
+
+    [DllImport("user32.dll")]
+    private static extern IntPtr DispatchMessage(ref MSG msg);
 }

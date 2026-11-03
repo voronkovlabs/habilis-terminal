@@ -156,17 +156,63 @@ function global:__HabiEnter($key, $arg) {
     [Microsoft.PowerShell.PSConsoleReadLine]::$function($key, $arg)
 }
 
-Set-PSReadLineKeyHandler -Chord Enter -BriefDescription HabilisTerminalEnter -Description 'Run the line, or open a plugin address' -ScriptBlock {
+Set-PSReadLineKeyHandler -Chord Enter -BriefDescription HabilisTerminalEnter -Description 'Run the line, open a plugin address, or open the panel item on an empty line' -ScriptBlock {
     param($key, $arg)
-    __HabiEnter $key $arg
+    if (-not (__HabiPanelKey 'Enter')) {
+        __HabiEnter $key $arg
+    }
 }
 
-# Inside the console (reached by a click), Esc on an empty command line goes back to the panels while they are
-# shown (issue #85). Habilis Terminal creates the 'panels-shown' file in the channel while any panel is shown.
-# Otherwise Esc does whatever it was bound to before (RevertLine by default).
+# Keys whose meaning depends on the command line, as in Far (issues #85, #90). While a panel has the keys, Habilis
+# Terminal keeps the 'panel-mode' file in the channel; on an empty line these keys then go back to the panel
+# (OSC 7731;habi;panel-key;<name>). With text on the line, or inside the console (reached by a click), they do
+# whatever they were bound to before.
+function global:__HabiPanelKey([string] $Name) {
+    $line = $null
+    $cursor = $null
+    [Microsoft.PowerShell.PSConsoleReadLine]::GetBufferState([ref] $line, [ref] $cursor)
+    if ($line.Length -eq 0 -and (Test-Path -LiteralPath (Join-Path $global:__Habi.Channel 'panel-mode'))) {
+        [Console]::Write((__HabiOsc "7731;habi;panel-key;$Name"))
+        return $true
+    }
+
+    $false
+}
+
+$global:__Habi | Add-Member -NotePropertyName PanelKeys -NotePropertyValue @{}
+foreach ($entry in @(
+        @('LeftArrow', 'Left', 'BackwardChar'),
+        @('RightArrow', 'Right', 'ForwardChar'),
+        @('Home', 'Home', 'BeginningOfLine'),
+        @('End', 'End', 'EndOfLine'),
+        @('Delete', 'Delete', 'DeleteChar'),
+        @('Backspace', 'Backspace', 'BackwardDeleteChar'),
+        @('Tab', 'Tab', 'TabCompleteNext'))) {
+    $chord, $name, $default = $entry
+    $function = (Get-PSReadLineKeyHandler -Chord $chord | Select-Object -First 1).Function
+    if (-not $function -or -not [Microsoft.PowerShell.PSConsoleReadLine].GetMethod($function)) {
+        $function = $default
+    }
+
+    $global:__Habi.PanelKeys[$chord] = @($name, $function)
+    Set-PSReadLineKeyHandler -Chord $chord -BriefDescription "HabilisTerminal$name" -Description "$name, or the panel's $name on an empty line" -ScriptBlock {
+        param($key, $arg)
+        $name, $function = $global:__Habi.PanelKeys[$key.Key.ToString()]
+        if (-not (__HabiPanelKey $name)) {
+            [Microsoft.PowerShell.PSConsoleReadLine]::$function($key, $arg)
+        }
+    }
+}
+
+# Esc: on an empty line the panel's Esc while a panel has the keys; inside the console it goes back to the panels
+# while they are shown ('panels-shown' file in the channel). Otherwise whatever it was bound to before (RevertLine).
 Set-PSReadLineKeyHandler -Chord Escape -BriefDescription HabilisTerminalEscape -Description 'Clear the line, or go back to the panel on an empty line' -ScriptBlock {
     param($key, $arg)
     $state = $global:__Habi
+    if (__HabiPanelKey 'Escape') {
+        return
+    }
+
     $line = $null
     $cursor = $null
     [Microsoft.PowerShell.PSConsoleReadLine]::GetBufferState([ref] $line, [ref] $cursor)
@@ -181,45 +227,4 @@ Set-PSReadLineKeyHandler -Chord Escape -BriefDescription HabilisTerminalEscape -
     }
 
     [Microsoft.PowerShell.PSConsoleReadLine]::$function($key, $arg)
-}
-
-# Keys from a focused panel whose meaning depends on the command line, as in Far (issue #85): with text on the line
-# they edit it (or run it), on an empty line they go back to the panel (OSC 7731;habi;panel-key;<name>). Habilis
-# Terminal sends them as F13..F20 (with Shift / Ctrl+Shift for selecting, issue #88), so the same keys typed inside the
-# console keep their usual meaning.
-$global:__Habi | Add-Member -NotePropertyName PanelKeys -NotePropertyValue @{
-    'F13'            = @('Enter', $null)
-    'F14'            = @('Left', 'BackwardChar')
-    'F15'            = @('Right', 'ForwardChar')
-    'F16'            = @('Home', 'BeginningOfLine')
-    'F17'            = @('End', 'EndOfLine')
-    'F18'            = @('Delete', 'DeleteChar')
-    'F19'            = @('Backspace', 'BackwardDeleteChar')
-    'F20'            = @('Escape', 'RevertLine')
-    'Shift+F14'      = @('Shift+Left', 'SelectBackwardChar')
-    'Shift+F15'      = @('Shift+Right', 'SelectForwardChar')
-    'Shift+F16'      = @('Shift+Home', 'SelectBackwardsLine')
-    'Shift+F17'      = @('Shift+End', 'SelectLine')
-    'Ctrl+Shift+F14' = @('Ctrl+Shift+Left', 'SelectBackwardWord')
-    'Ctrl+Shift+F15' = @('Ctrl+Shift+Right', 'SelectNextWord')
-}
-
-foreach ($chord in $global:__Habi.PanelKeys.Keys) {
-    Set-PSReadLineKeyHandler -Chord $chord -BriefDescription "HabilisTerminalPanel$chord" -Description 'Habilis Terminal panel key' -ScriptBlock {
-        param($key, $arg)
-        $chord = $key.Key.ToString()
-        if ($key.Modifiers -band [ConsoleModifiers]::Shift) { $chord = "Shift+$chord" }
-        if ($key.Modifiers -band [ConsoleModifiers]::Control) { $chord = "Ctrl+$chord" }
-        $name, $function = $global:__Habi.PanelKeys[$chord]
-        $line = $null
-        $cursor = $null
-        [Microsoft.PowerShell.PSConsoleReadLine]::GetBufferState([ref] $line, [ref] $cursor)
-        if ($line.Length -eq 0) {
-            [Console]::Write((__HabiOsc "7731;habi;panel-key;$name"))
-        } elseif ($name -eq 'Enter') {
-            __HabiEnter $key $arg
-        } else {
-            [Microsoft.PowerShell.PSConsoleReadLine]::$function($key, $arg)
-        }
-    }
 }

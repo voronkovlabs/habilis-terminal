@@ -106,7 +106,7 @@ public partial class MainWindow
             alternate = _overflow.AlternateScreen;
         }
 
-        if (!OverflowExpanded || !TerminalHasFocus || alternate || _shell?.Host.State != ShellState.Idle)
+        if (!OverflowExpanded || !ConsoleHasKeys || alternate || _shell?.Host.State != ShellState.Idle)
         {
             return false;
         }

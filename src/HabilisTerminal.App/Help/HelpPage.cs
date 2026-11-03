@@ -12,9 +12,9 @@ public sealed class HelpPage : DockPanel, IPage
     [
         ("Focus and layout",
         [
-            ("Tab", "Switch panels"),
+            ("Tab", "Switch panels; completes on a command line with text"),
             ("Typing", "Goes to the command line; the focus stays on the panel, as in Far"),
-            ("Enter, ←/→, Home/End, Del, Backspace", "Edit or run the command line when it has text, act in the panel when it is empty"),
+            ("Enter, ←/→, Home/End, Del, Backspace", "Edit or run the command line when it has text, act in the panel when it is empty; Shift selects in the line"),
             ("Esc", "Clear the command line; on an empty line, collapse the console grown over the panels"),
             ("Click in the console", "Work inside the console (selection, scrollback); Esc on an empty line comes back"),
             ("Ctrl+O", "Hide / show panels"),

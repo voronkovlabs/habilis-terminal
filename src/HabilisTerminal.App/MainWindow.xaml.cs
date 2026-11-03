@@ -81,14 +81,9 @@ public partial class MainWindow : Window
             panel.GotKeyboardFocus += (_, _) => OnPanelFocused(panel);
             panel.GotKeyboardFocus += (_, _) =>
             {
-                if (!_returningFocus)
-                {
-                    CollapseConsole(stopGrowing: true); // issue #82
-                }
-
-                QueueCommandLineCaret();
+                CollapseConsole(stopGrowing: true); // issue #82
+                OnPanelGotFocus(panel); // issue #90: the panel gets the keys, the console keeps the Win32 focus
             };
-            panel.LostKeyboardFocus += (_, _) => QueueCommandLineCaret();
         }
 
         LoadPlugins();
@@ -111,7 +106,7 @@ public partial class MainWindow : Window
         host.DirectoryChanged += path => Dispatcher.BeginInvoke(() => OnShellDirectoryChanged(path));
         host.FocusPanelRequested += () => Dispatcher.BeginInvoke(() =>
         {
-            if (!IsPageOpen && TerminalHasFocus && IsShown(_active))
+            if (!IsPageOpen && ConsoleHasKeys && IsShown(_active))
             {
                 FocusActivePanel();
             }
@@ -243,7 +238,7 @@ public partial class MainWindow : Window
 
     private void OnLoaded()
     {
-        _keyHook = new GlobalKeyHook(OnGlobalKey, OnTerminalMouse);
+        _keyHook = new GlobalKeyHook(OnGlobalKey, OnTerminalMouse, window => TerminalHandle is var terminal && terminal != IntPtr.Zero && IsChildOrSelf(terminal, window));
         UpdateCellSize();
 
         ApplyTerminalTheme(_themes.Current);
@@ -268,7 +263,9 @@ public partial class MainWindow : Window
     private void OnPreviewArrowKey(object sender, KeyEventArgs e)
     {
         var key = e.Key == Key.System ? e.SystemKey : e.Key;
-        if (key is not (Key.Left or Key.Right or Key.Up or Key.Down) || FocusedPanel() is null)
+
+        // With the Win32 focus in the console the window's key hook routes every key (issue #90).
+        if (key is not (Key.Left or Key.Right or Key.Up or Key.Down) || TerminalHasFocus || FocusedPanel() is null)
         {
             return;
         }
@@ -296,7 +293,7 @@ public partial class MainWindow : Window
     /// <summary>Printable characters typed in a panel go to the command line, or to quick search while it is open (SPEC §4).</summary>
     private void OnPreviewTextInput(object sender, TextCompositionEventArgs e)
     {
-        if (FocusedPanel() is not { } panel || string.IsNullOrEmpty(e.Text) || e.Text.Any(char.IsControl))
+        if (TerminalHasFocus || FocusedPanel() is not { } panel || string.IsNullOrEmpty(e.Text) || e.Text.Any(char.IsControl))
         {
             return;
         }
@@ -357,6 +354,7 @@ public partial class MainWindow : Window
         Workspace.LeftVisible = left;
         Workspace.RightVisible = right;
         UpdatePanelsShown();
+        UpdatePanelKeys();
 
         if (!AnyPanelVisible)
         {
@@ -372,21 +370,22 @@ public partial class MainWindow : Window
             SyncShellDirectory();
         }
 
-        if (PanelVisibilityRule.FocusesPanel(before, (left, right), TerminalHasFocus))
+        if (PanelVisibilityRule.FocusesPanel(before, (left, right), ConsoleHasKeys))
         {
             FocusActivePanel();
         }
     }
 
     /// <summary>
-    /// The panel with keyboard focus. WPF can keep a panel as its focused element while Win32 focus is in the terminal
-    /// window, so the terminal's real focus wins.
+    /// The panel that has the keys (issue #90): the active panel while the console holds the Win32 focus, outside
+    /// console mode and while no command runs. Otherwise a panel that holds the WPF focus for a moment (a click,
+    /// before the focus goes back to the console).
     /// </summary>
     private FilePanel? FocusedPanel()
     {
-        if (FindHwndHost(Terminal) is { Handle: var terminal } && terminal != IntPtr.Zero && IsChildOrSelf(terminal, GetFocus()))
+        if (TerminalHasFocus)
         {
-            return null;
+            return !_consoleMode && !_commandRunning && IsShown(_active) ? _active : null;
         }
 
         return _left.IsKeyboardFocused ? _left : _right.IsKeyboardFocused ? _right : null;
@@ -413,6 +412,7 @@ public partial class MainWindow : Window
         _active = panel;
         _left.IsActive = panel == _left;
         _right.IsActive = panel == _right;
+        UpdatePanelKeys();
     }
 
     private void OnPanelFocused(FilePanel panel)
@@ -424,40 +424,56 @@ public partial class MainWindow : Window
         }
     }
 
+    /// <summary>The active panel gets the keys (issue #90); the Win32 focus goes to the console, as always.</summary>
     private void FocusActivePanel()
     {
-        // The panel may only become visible after the next layout pass. Win32 focus is taken back from the terminal
-        // window first: WPF may still consider the panel focused and would not move it otherwise.
+        _consoleMode = false;
+
+        // The panel may only become visible after the next layout pass.
         Dispatcher.BeginInvoke(() =>
         {
-            SetFocus(new WindowInteropHelper(this).Handle);
-            Keyboard.ClearFocus();
-            var focused = _active.Focus();
-            Trace($"focus panel {_active.Side}: {focused}, win32={GetFocus():X}");
+            if (!IsPageOpen)
+            {
+                PutFocusInTerminal();
+            }
+
+            UpdatePanelKeys();
+            Trace($"keys to panel {_active.Side}, win32={GetFocus():X}");
         }, System.Windows.Threading.DispatcherPriority.Input);
     }
 
     /// <summary>
     /// Moves Win32 focus from the terminal back to the window, e.g. before a popup opens from the command line.
-    /// A plain SetFocus is not enough: WPF hands focus straight back to the child window it remembers, so a WPF
-    /// element takes it; the active panel when shown (already active, so nothing else changes), else the window.
+    /// A plain SetFocus is not enough: WPF hands focus straight back to the child window it remembers, so the window
+    /// itself takes the WPF focus (a panel would hand it straight back to the console, issue #90).
     /// </summary>
     private void TakeFocusFromTerminal()
     {
         SetFocus(new WindowInteropHelper(this).Handle);
-        if (!(IsShown(_active) && _active.Focus()))
-        {
-            FocusManager.SetFocusedElement(this, this);
-            Keyboard.Focus(this);
-        }
+        FocusManager.SetFocusedElement(this, this);
+        Keyboard.Focus(this);
     }
 
+    /// <summary>Console mode: the console has the keys until a panel is chosen again (a click, Esc on an empty line).</summary>
     private void FocusTerminal()
+    {
+        _consoleMode = true;
+        PutFocusInTerminal();
+        UpdatePanelKeys();
+    }
+
+    /// <summary>
+    /// The Win32 focus to the console, whichever has the keys. WPF keeps no focused element (issue #90): a remembered
+    /// panel would get the focus back, and with it the keys, when the window is activated again. The console's keys
+    /// bypass WPF (<see cref="GlobalKeyHook"/>).
+    /// </summary>
+    private void PutFocusInTerminal()
     {
         var host = FindHwndHost(Terminal);
         if (host is not null && host.Handle != IntPtr.Zero)
         {
             Keyboard.ClearFocus();
+            FocusManager.SetFocusedElement(this, null);
             SetFocus(host.Handle);
             Trace($"focus terminal {host.Handle:X}");
         }

@@ -29,6 +29,8 @@ public partial class MainWindow
             {
                 page.Focus();
             }
+
+            UpdatePanelKeys();
         }, System.Windows.Threading.DispatcherPriority.Input);
     }
 

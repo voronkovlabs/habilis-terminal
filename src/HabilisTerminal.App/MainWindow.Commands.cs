@@ -62,18 +62,19 @@ public partial class MainWindow
             return HandleLayoutKeyInTerminal(key, modifiers);
         }
 
-        // Plugin panels and F11 first: a plugin's command key takes precedence over the host's key (issue #49).
-        if (!panel.IsQuickSearchActive && HandlePluginKey(panel, key, modifiers))
-        {
-            return true;
-        }
-
-        // Quick search sees its keys first (Backspace, Esc, Ctrl+Enter...). A typed character is left unhandled, so it
-        // arrives as text input and appends (OnPreviewTextInput); no key binding may take it meanwhile (issue #39).
+        // Quick search sees its keys first (Backspace, Esc, Ctrl+Enter...); no key binding may take a typed character
+        // meanwhile (issue #39). With the keys in the console (#90) the character is appended here; a panel holding the
+        // WPF focus for a moment gets it as text input (OnPreviewTextInput).
         if (panel.IsQuickSearchActive)
         {
             if (panel.IsQuickSearchTyping(key, modifiers))
             {
+                if (panel.HasKeys && KeyText.CharOf(key, modifiers == KeyModifiers.Shift) is { } typed)
+                {
+                    panel.AppendQuickSearch(typed.ToString());
+                    return true;
+                }
+
                 return false;
             }
 
@@ -83,8 +84,15 @@ public partial class MainWindow
             }
         }
 
-        // Enter, arrows, Home / End, Del, Backspace and Esc edit a command line that has text (issue #85).
-        if (SendToCommandLine(key, modifiers))
+        // Enter, arrows, Home / End, Del, Backspace, Esc and Tab act on a command line with text, and an empty line hands
+        // them back (OnPanelKeyReturned); Shift selects in the line (issues #85, #88, #89).
+        if (panel.HasKeys && IsCommandLineKey(key, modifiers))
+        {
+            return false;
+        }
+
+        // Plugin panels and F11 first: a plugin's command key takes precedence over the host's key (issue #49).
+        if (!panel.IsQuickSearchActive && HandlePluginKey(panel, key, modifiers))
         {
             return true;
         }
@@ -94,6 +102,7 @@ public partial class MainWindow
             return true;
         }
 
+        // Anything the panel does not take (typing, the profile's other bindings) goes on to the console.
         return panel.HandleKey(key, modifiers);
     }
 
@@ -478,7 +487,7 @@ public partial class MainWindow
 
     private void RevealOtherContent(FilePanel target, bool on)
     {
-        var fromTerminal = TerminalHasFocus;
+        var fromTerminal = ConsoleHasKeys;
         if (!(on ? _reveal.ContentOn(target, IsShown(target)) : _reveal.ContentOff(target)))
         {
             return;
@@ -603,7 +612,7 @@ public partial class MainWindow
     private async Task ShowDriveMenuAsync(FilePanel panel)
     {
         var previouslyActive = _active;
-        var fromTerminal = TerminalHasFocus;
+        var fromTerminal = ConsoleHasKeys;
         (string Id, string Title)? select = null;
         QuickPickResult? result;
         while (true)

@@ -72,8 +72,9 @@ public sealed class ShellHost : IDisposable
     public event Action? FocusPanelRequested;
 
     /// <summary>
-    /// A key sent by <see cref="SendPanelKey"/> found the command line empty, so it belongs to the panel (issue #85):
-    /// one of the names of <see cref="PanelKeys"/>. Background thread.
+    /// While <see cref="PanelMode"/> is on, a key whose meaning depends on the command line found it empty, so it
+    /// belongs to the panel (issues #85, #90): "Enter", "Left", "Right", "Home", "End", "Delete", "Backspace",
+    /// "Escape" or "Tab". Background thread.
     /// </summary>
     public event Action<string>? PanelKeyReturned;
 
@@ -117,25 +118,38 @@ public sealed class ShellHost : IDisposable
     public bool PanelsShown
     {
         get => File.Exists(Path.Combine(ChannelDirectory, "panels-shown"));
-        set
+        set => SetFlag("panels-shown", value); // without the flag Esc simply clears the line
+    }
+
+    /// <summary>
+    /// A panel has the keys (issue #90): on an empty command line Enter, Left, Right, Home, End, Del, Backspace, Esc
+    /// and Tab come back through <see cref="PanelKeyReturned"/> instead of acting in the line. A flag file in the
+    /// channel, which the integration script checks on those keys.
+    /// </summary>
+    public bool PanelMode
+    {
+        get => File.Exists(Path.Combine(ChannelDirectory, "panel-mode"));
+        set => SetFlag("panel-mode", value); // without the flag the keys simply act in the line
+    }
+
+    private void SetFlag(string name, bool value)
+    {
+        var flag = Path.Combine(ChannelDirectory, name);
+        try
         {
-            var flag = Path.Combine(ChannelDirectory, "panels-shown");
-            try
+            if (value)
             {
-                if (value)
-                {
-                    Directory.CreateDirectory(ChannelDirectory);
-                    File.WriteAllText(flag, string.Empty);
-                }
-                else
-                {
-                    File.Delete(flag);
-                }
+                Directory.CreateDirectory(ChannelDirectory);
+                File.WriteAllText(flag, string.Empty);
             }
-            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            else
             {
-                // Without the flag Esc simply clears the line; nothing else depends on it.
+                File.Delete(flag);
             }
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            // A missing flag only means the default behaviour of the key.
         }
     }
 
@@ -171,45 +185,6 @@ public sealed class ShellHost : IDisposable
 
     /// <summary>Inserts text at the command line cursor.</summary>
     public int Insert(string text) => Enqueue("insert", new Dictionary<string, string> { ["text"] = text }, coalesce: false);
-
-    /// <summary>
-    /// A key pressed in a panel whose meaning depends on the command line, as in Far (issue #85): the integration
-    /// script edits or runs the line when it has text, and returns the key through <see cref="PanelKeyReturned"/>
-    /// when it is empty. Sent as F13..F20, so the same keys typed inside the console keep their usual meaning.
-    /// </summary>
-    public bool SendPanelKey(string name)
-    {
-        if (!PanelKeys.TryGetValue(name, out var key))
-        {
-            return false;
-        }
-
-        SendKey(key.VirtualKey, controlKeyState: key.ControlKeyState);
-        return true;
-    }
-
-    /// <summary>
-    /// The keys of <see cref="SendPanelKey"/> and the keys they are sent as (the integration script's table): F13..F20,
-    /// with Shift / Ctrl+Shift for selecting in the line (issue #88).
-    /// </summary>
-    public static readonly IReadOnlyDictionary<string, (int VirtualKey, int ControlKeyState)> PanelKeys =
-        new Dictionary<string, (int, int)>
-        {
-            ["Enter"] = (Win32InputSequence.VkF13, 0),
-            ["Left"] = (Win32InputSequence.VkF13 + 1, 0),
-            ["Right"] = (Win32InputSequence.VkF13 + 2, 0),
-            ["Home"] = (Win32InputSequence.VkF13 + 3, 0),
-            ["End"] = (Win32InputSequence.VkF13 + 4, 0),
-            ["Delete"] = (Win32InputSequence.VkF13 + 5, 0),
-            ["Backspace"] = (Win32InputSequence.VkF13 + 6, 0),
-            ["Escape"] = (Win32InputSequence.VkF13 + 7, 0),
-            ["Shift+Left"] = (Win32InputSequence.VkF13 + 1, Win32InputSequence.Shift),
-            ["Shift+Right"] = (Win32InputSequence.VkF13 + 2, Win32InputSequence.Shift),
-            ["Shift+Home"] = (Win32InputSequence.VkF13 + 3, Win32InputSequence.Shift),
-            ["Shift+End"] = (Win32InputSequence.VkF13 + 4, Win32InputSequence.Shift),
-            ["Ctrl+Shift+Left"] = (Win32InputSequence.VkF13 + 1, Win32InputSequence.Shift | Win32InputSequence.LeftCtrl),
-            ["Ctrl+Shift+Right"] = (Win32InputSequence.VkF13 + 2, Win32InputSequence.Shift | Win32InputSequence.LeftCtrl),
-        };
 
     /// <summary>Sends a key press to the shell (e.g. history navigation from panel focus).</summary>
     public void SendKey(int virtualKey, char unicodeChar = '\0', int controlKeyState = 0) =>

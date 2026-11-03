@@ -707,6 +707,32 @@ public sealed partial class FilePanel : Border
         _quickSearch.Visibility = Visibility.Collapsed;
     }
 
+    /// <summary>
+    /// The panel has the keys while the Win32 focus stays in the console (issue #90): drawn as focused, and quick
+    /// search closes when the keys go elsewhere.
+    /// </summary>
+    public bool HasKeys
+    {
+        get => _hasKeys;
+        set
+        {
+            if (_hasKeys == value)
+            {
+                return;
+            }
+
+            _hasKeys = value;
+            if (!value)
+            {
+                CloseQuickSearch();
+            }
+
+            UpdateFocusVisuals();
+        }
+    }
+
+    private bool _hasKeys;
+
     protected override void OnGotKeyboardFocus(KeyboardFocusChangedEventArgs e)
     {
         base.OnGotKeyboardFocus(e);
@@ -716,7 +742,11 @@ public sealed partial class FilePanel : Border
     protected override void OnLostKeyboardFocus(KeyboardFocusChangedEventArgs e)
     {
         base.OnLostKeyboardFocus(e);
-        CloseQuickSearch();
+        if (!HasKeys)
+        {
+            CloseQuickSearch();
+        }
+
         UpdateFocusVisuals();
     }
 
@@ -1110,10 +1140,11 @@ public sealed partial class FilePanel : Border
 
     private void UpdateFocusVisuals()
     {
-        BorderBrush = IsKeyboardFocused ? PanelPalette.FocusOutline : PanelPalette.Border;
+        var focused = IsKeyboardFocused || HasKeys;
+        BorderBrush = focused ? PanelPalette.FocusOutline : PanelPalette.Border;
         _title.Opacity = _isActive ? 1.0 : 0.6;
         _list.IsActivePanel = _isActive;
-        _list.HasPanelFocus = IsKeyboardFocused;
+        _list.HasPanelFocus = focused;
         _list.InvalidateVisual();
     }
 }

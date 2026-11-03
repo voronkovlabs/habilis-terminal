@@ -141,42 +141,52 @@ public class ShellHostTests
     }
 
     [Fact]
-    public async Task Panel_keys_edit_a_line_with_text_and_come_back_on_an_empty_line()
+    public async Task Line_keys_come_back_to_the_panel_on_an_empty_line_only_in_panel_mode()
     {
         using var shell = new TestShell();
         var returned = new System.Collections.Concurrent.ConcurrentQueue<string>();
         shell.Host.PanelKeyReturned += returned.Enqueue;
         await shell.WaitIdleAsync();
 
-        foreach (var name in ShellHost.PanelKeys.Keys)
+        // Virtual keys as the console receives them (issue #90): the keys an empty line hands back to the panel.
+        (int Key, char Char, string Name)[] keys =
+        [
+            (0x0D, '\r', "Enter"), (0x25, '\0', "Left"), (0x27, '\0', "Right"), (0x24, '\0', "Home"), (0x23, '\0', "End"),
+            (0x2E, '\0', "Delete"), (0x08, '\b', "Backspace"), (0x1B, '\x1b', "Escape"), (0x09, '\t', "Tab"),
+        ];
+
+        shell.Host.PanelMode = true;
+        foreach (var (key, ch, name) in keys)
         {
-            Assert.True(shell.Host.SendPanelKey(name));
+            shell.Host.SendKey(key, ch);
             await TestShell.WaitUntilAsync(() => returned.Count == 1, $"{name} returned");
             Assert.True(returned.TryDequeue(out var back));
             Assert.Equal(name, back);
         }
 
-        // With text: Home, Delete, End, Backspace edit the line and Enter runs it; nothing comes back.
+        // With text the keys edit the line and Enter runs it; Tab completes; nothing comes back.
         shell.Host.Write("x'PANEL-' + 'EDITq'z");
         await Task.Delay(300, TestContext.Current.CancellationToken);
-        foreach (var name in new[] { "Home", "Delete", "End", "Backspace", "Left", "Backspace", "Right", "Enter" })
+        foreach (var (key, ch) in new[] { (0x24, '\0'), (0x2E, '\0'), (0x23, '\0'), (0x08, '\b'), (0x25, '\0'), (0x08, '\b'), (0x27, '\0'), (0x0D, '\r') })
         {
-            shell.Host.SendPanelKey(name);
+            shell.Host.SendKey(key, ch);
         }
 
         await shell.WaitForTextAsync("PANEL-EDIT");
-
-        // Shift selects in the line (issue #88): the selected last word and the selected tail are deleted.
-        shell.Host.Write("'PANEL-' + 'SELECT'tail junk");
+        shell.Host.Write("Write-Outp");
         await Task.Delay(300, TestContext.Current.CancellationToken);
-        foreach (var name in new[] { "Ctrl+Shift+Left", "Backspace", "Backspace", "Shift+Left", "Shift+Left", "Shift+Left", "Shift+Left", "Backspace", "Enter" })
-        {
-            shell.Host.SendPanelKey(name);
-        }
-
-        await shell.WaitForTextAsync("PANEL-SELECT");
+        shell.Host.SendKey(0x09, '\t');
+        await shell.WaitForTextAsync("Write-Output");
         Assert.Empty(returned);
-        Assert.False(shell.Host.SendPanelKey("Tab"));
+
+        // Inside the console (no panel mode) an empty line keeps the keys: Enter just shows a new prompt.
+        shell.Host.SendKey(0x1B, '\x1b');
+        shell.Host.PanelMode = false;
+        Assert.False(shell.Host.PanelMode);
+        shell.Host.SendKey(0x25, '\0');
+        shell.Host.SendKey(0x0D, '\r');
+        await Task.Delay(500, TestContext.Current.CancellationToken);
+        Assert.Empty(returned);
     }
 
     [Fact]

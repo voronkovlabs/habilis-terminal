@@ -12,6 +12,7 @@ namespace HabilisTerminal.App;
 /// </summary>
 public partial class MainWindow
 {
+    private const int WM_LBUTTONDOWN = 0x0201;
     private const int WM_RBUTTONDOWN = 0x0204;
     private const int WM_MOUSEWHEEL = 0x020A;
     private const int MK_CONTROL = 0x0008;
@@ -33,6 +34,17 @@ public partial class MainWindow
 
         switch (msg.message)
         {
+            // A click in the console works inside it (issue #90); the click itself goes on to the control.
+            case WM_LBUTTONDOWN:
+                Trace($"console clicked, console mode was {_consoleMode}");
+                _consoleMode = true;
+                UpdatePanelKeys();
+
+                // The click gives the terminal host the WPF focus as well; only the Win32 focus may stay.
+                Dispatcher.BeginInvoke(PutFocusInTerminal, System.Windows.Threading.DispatcherPriority.Input);
+
+                return false;
+
             case WM_MOUSEWHEEL when ((long)msg.wParam & MK_CONTROL) != 0:
                 var delta = (short)(((long)msg.wParam >> 16) & 0xFFFF);
                 ZoomTerminal(Math.Sign(delta));
@@ -115,14 +127,14 @@ public partial class MainWindow
             body.Children.Add(sample);
             var paste = ThemedDialog.Show(this, $"Paste {lines.Length} lines?", body,
                 [new DialogButton<bool>("_Paste", true, IsDefault: true), new DialogButton<bool>("Cancel", false, IsCancel: true)], false);
-            FocusTerminal();
+            PutFocusInTerminal();
             if (!paste)
             {
                 return;
             }
         }
 
-        FocusTerminal();
+        PutFocusInTerminal();
         _shell.WriteInput(_shell.Host.PrepareForPaste(text));
     }
 
