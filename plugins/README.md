@@ -10,6 +10,7 @@ package from a local feed. Nothing here references the app's code. Design: `docs
 | SageMaker training jobs | `Habilis.Aws.SageMaker` | `aws.sagemaker` | `sm:` | #47 |
 | S3 browser | `Habilis.Aws.S3` | `aws.s3` | `s3:` | #46 |
 | Demo (in-memory sample, no network) | `Habilis.Samples.Demo` | `samples.demo` | `demo:` | #49 |
+| GPU monitor (local NVIDIA GPUs, SageMaker jobs) | `Habilis.Gpu` | `gpu.monitor` | `gpu:`, `gpu:sm` | #70 |
 
 `Habilis.Aws.Common` holds what the AWS plugins share: profiles and credentials, regions, plain-language errors.
 

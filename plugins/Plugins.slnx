@@ -4,7 +4,9 @@
   <Project Path="Habilis.Aws.SageMaker/Habilis.Aws.SageMaker.csproj" />
   <Project Path="Habilis.Aws.S3/Habilis.Aws.S3.csproj" />
   <Project Path="Habilis.Samples.Demo/Habilis.Samples.Demo.csproj" />
+  <Project Path="Habilis.Gpu/Habilis.Gpu.csproj" />
   <Project Path="Habilis.Aws.Tests/Habilis.Aws.Tests.csproj" />
   <Project Path="Habilis.Aws.SageMaker.Tests/Habilis.Aws.SageMaker.Tests.csproj" />
   <Project Path="Habilis.Aws.S3.Tests/Habilis.Aws.S3.Tests.csproj" />
+  <Project Path="Habilis.Gpu.Tests/Habilis.Gpu.Tests.csproj" />
 </Solution>

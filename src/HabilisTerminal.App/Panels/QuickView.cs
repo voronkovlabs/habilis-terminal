@@ -10,12 +10,17 @@ using HabilisTerminal.Core.Viewing;
 
 namespace HabilisTerminal.App.Panels;
 
-/// <summary>Ctrl+Q (SPEC §9): the current file of the other panel as text or image, folders as a summary.</summary>
+/// <summary>
+/// Ctrl+Q (SPEC §9): the current file of the other panel as text or image, folders as a summary; for a plugin panel
+/// the text its provider gives (<c>IQuickViewEntry</c>).
+/// </summary>
 public sealed class QuickView : Grid, IDisposable
 {
     private readonly ViewerView _text = new();
     private readonly Image _image = new() { Stretch = Stretch.Uniform, StretchDirection = StretchDirection.DownOnly, Margin = new Thickness(8) };
     private readonly TextBlock _message = new() { Margin = new Thickness(12), TextWrapping = TextWrapping.Wrap, FontFamily = new FontFamily("Segoe UI"), FontSize = 13 };
+    private readonly TextBlock _plain = new() { Margin = new Thickness(10, 8, 10, 8), FontFamily = new FontFamily("Cascadia Mono, Consolas"), FontSize = 13 };
+    private readonly ScrollViewer _plainScroll = new() { HorizontalScrollBarVisibility = ScrollBarVisibility.Auto, VerticalScrollBarVisibility = ScrollBarVisibility.Auto, Visibility = Visibility.Collapsed };
     private ViewerDocument? _document;
     private string? _path;
 
@@ -24,6 +29,8 @@ public sealed class QuickView : Grid, IDisposable
         Children.Add(_text);
         Children.Add(_image);
         Children.Add(_message);
+        _plainScroll.Content = _plain;
+        Children.Add(_plainScroll);
         ApplyTheme();
     }
 
@@ -31,6 +38,7 @@ public sealed class QuickView : Grid, IDisposable
     {
         Background = PanelPalette.Background;
         _message.Foreground = PanelPalette.DescriptionForeground;
+        _plain.Foreground = PanelPalette.Foreground;
         _text.InvalidateVisual();
     }
 
@@ -46,7 +54,7 @@ public sealed class QuickView : Grid, IDisposable
         _document = null;
         _text.Document = null;
         _image.Source = null;
-        _text.Visibility = _image.Visibility = _message.Visibility = Visibility.Collapsed;
+        _text.Visibility = _image.Visibility = _message.Visibility = _plainScroll.Visibility = Visibility.Collapsed;
         if (path is null)
         {
             return;
@@ -84,6 +92,19 @@ public sealed class QuickView : Grid, IDisposable
             _message.Text = ex.Message;
             _message.Visibility = Visibility.Visible;
         }
+    }
+
+    /// <summary>A plugin's text for the entry under the cursor (null: empty), kept scrolled where it was on a refresh.</summary>
+    public void ShowText(string? text)
+    {
+        _path = null;
+        _document?.Dispose();
+        _document = null;
+        _text.Document = null;
+        _image.Source = null;
+        _text.Visibility = _image.Visibility = _message.Visibility = Visibility.Collapsed;
+        _plain.Text = text ?? string.Empty;
+        _plainScroll.Visibility = text is null ? Visibility.Collapsed : Visibility.Visible;
     }
 
     public void Dispose()

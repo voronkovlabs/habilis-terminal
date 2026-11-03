@@ -25,6 +25,7 @@ public sealed partial class FilePanel : Border
     private readonly FileListView _list = new();
     private readonly InfoPanelView _info = new();
     private readonly QuickView _quickView = new() { Visibility = Visibility.Collapsed };
+    private int _quickViewVersion;
     private FilePanel? _quickViewSource;
     private readonly TextBlock _title = new();
     private readonly TextBlock _path = new();
@@ -225,9 +226,18 @@ public sealed partial class FilePanel : Border
             return;
         }
 
+        var version = ++_quickViewVersion;
         if (source.IsPlugin)
         {
-            _quickView.Show(null, false, null);
+            if (source.Provider is HabilisTerminal.Plugins.IQuickViewEntry viewer && source.EntryOf(source.State.Current) is { } entry)
+            {
+                _ = ShowPluginQuickViewAsync(source.Plugin!, viewer, entry, version);
+            }
+            else
+            {
+                _quickView.ShowText(null);
+            }
+
             return;
         }
 
@@ -240,6 +250,25 @@ public sealed partial class FilePanel : Border
 
         var path = System.IO.Path.Combine(source.CurrentPath, item.Name);
         _quickView.Show(path, item.Entry.IsDirectory, source.State.FolderSizeOf(item.Name) is { IsFinal: true } size ? size.Bytes : null);
+    }
+
+    /// <summary>The plugin's quick view text (issue #70); an answer that arrives after the cursor moved on is dropped.</summary>
+    private async Task ShowPluginQuickViewAsync(Core.Plugins.LoadedPlugin plugin, HabilisTerminal.Plugins.IQuickViewEntry viewer, HabilisTerminal.Plugins.PanelEntry entry, int version)
+    {
+        string? text;
+        try
+        {
+            text = await viewer.QuickViewAsync(entry, CancellationToken.None);
+        }
+        catch (Exception ex) when (ex is not OutOfMemoryException)
+        {
+            text = Plugins.PluginManager.Describe(plugin, ex);
+        }
+
+        if (version == _quickViewVersion)
+        {
+            _quickView.ShowText(text);
+        }
     }
 
     public bool IsActive
@@ -1059,8 +1088,11 @@ public sealed partial class FilePanel : Border
         _statusRight.Text = item.IsParent ? string.Empty
             : item.Entry.IsDirectory && State.FolderSizeOf(item.Name) is { } size
                 ? (size.IsPartial ? SizeFormat.AtLeast : string.Empty) + FormatTotals(size.Totals.Files, size.Bytes, culture)
-            : item.Entry.IsDirectory ? item.Entry.LastWriteTimeUtc.ToLocalTime().ToString("g", culture)
-            : $"{PanelColumns.FormatCompactSize(item.Entry.Length, culture)}   {item.Entry.LastWriteTimeUtc.ToLocalTime().ToString("g", culture)}";
+            : item.Entry.IsDirectory ? Time(item.Entry)
+            : $"{PanelColumns.FormatCompactSize(item.Entry.Length, culture)}   {Time(item.Entry)}".TrimEnd();
+
+        // A plugin row without a time (GPU monitor, archive folders) shows none.
+        string Time(FileEntry entry) => entry.LastWriteTimeUtc == DateTime.MinValue ? string.Empty : entry.LastWriteTimeUtc.ToLocalTime().ToString("g", culture);
     }
 
     private static string FormatTotals(int files, long bytes, CultureInfo culture) =>

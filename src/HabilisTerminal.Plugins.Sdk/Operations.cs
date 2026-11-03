@@ -90,6 +90,17 @@ public interface IViewEntry
     Task<(string Title, string Text)?> ViewAsync(PanelEntry entry, CancellationToken cancellationToken);
 }
 
+/// <summary>
+/// Ctrl+Q for a plugin panel (SDK 1.1): the text the other panel shows for the entry under the cursor, in a monospace
+/// font (block characters such as ▁▂▃▄▅▆▇█ draw charts). Asked on every cursor move and listing refresh, so it should
+/// come from data the panel already has.
+/// </summary>
+public interface IQuickViewEntry
+{
+    /// <summary>The text, or null for an empty quick view.</summary>
+    Task<string?> QuickViewAsync(PanelEntry entry, CancellationToken cancellationToken);
+}
+
 /// <summary>Commands of a panel: F9 > Panel lists them; a <see cref="PanelCommand.Key"/> runs one directly.</summary>
 public interface IPanelCommands
 {

@@ -1,0 +1,7 @@
+{
+  "id": "gpu.monitor",
+  "name": "GPU Monitor",
+  "version": "1.0.0",
+  "assembly": "Habilis.Gpu.dll",
+  "sdk": "1.1"
+}

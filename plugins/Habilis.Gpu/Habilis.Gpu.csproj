@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <Description>Habilis Terminal plugin: a GPU monitor like nvtop, for this computer's NVIDIA GPUs and SageMaker training jobs (read-only).</Description>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="HabilisTerminal.Plugins.Sdk" PrivateAssets="all" ExcludeAssets="runtime" />
+    <PackageReference Include="AWSSDK.SageMaker" />
+    <PackageReference Include="AWSSDK.CloudWatch" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\Habilis.Aws.Common\Habilis.Aws.Common.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <InternalsVisibleTo Include="Habilis.Gpu.Tests" />
+  </ItemGroup>
+</Project>

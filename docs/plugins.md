@@ -130,6 +130,7 @@ Optional capabilities, by interface:
 | `IDeleteEntries` | F8 / Del | The host confirms with the item list, then the plugin deletes. |
 | `IMakeFolder` | F7 | |
 | `IViewEntry` | F3 | A plugin-made view (text or a local file), e.g. a job summary. |
+| `IQuickViewEntry` | Ctrl+Q | SDK 1.1: text for the other panel's quick view (monospace; block characters draw charts). Asked on every cursor move and refresh. |
 | `IPanelCommands` | plugin keys, F9 > Panel, F11 | Commands with a title and an optional key: purge, filter, switch profile, show the full record. |
 
 Every operation gets an `IOperationProgress` (current item, items and bytes done / total) and a cancellation token
