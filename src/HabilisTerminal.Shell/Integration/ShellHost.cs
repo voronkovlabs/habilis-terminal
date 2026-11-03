@@ -78,6 +78,12 @@ public sealed class ShellHost : IDisposable
     public event Action<string>? AddressEntered;
 
     /// <summary>
+    /// A command was accepted: the console row its output starts at and the console's rows and columns (issue #82).
+    /// Raised from the output thread before the command's output reaches <see cref="Output"/>.
+    /// </summary>
+    public event Action<int, int, int>? CommandOutputStarted;
+
+    /// <summary>
     /// Plugin prefixes ("s3", "sqs"): Enter on "s3:..." is reported through <see cref="AddressEntered"/> instead of
     /// running. Kept as a file in the channel, which the integration script reads when Enter is pressed.
     /// </summary>
@@ -263,6 +269,11 @@ public sealed class ShellHost : IDisposable
 
             case ShellEvent.Message { Name: "ack" } ack when ack.Arguments.Count >= 2:
                 CompleteInFlight(ack.Arguments[0], string.Join(';', ack.Arguments.Skip(1)));
+                break;
+
+            case ShellEvent.Message { Name: "command-start" } start when start.Arguments.Count == 3
+                && int.TryParse(start.Arguments[0], System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out var row) && int.TryParse(start.Arguments[1], System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out var rows) && int.TryParse(start.Arguments[2], System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out var columns):
+                CommandOutputStarted?.Invoke(row, rows, columns);
                 break;
 
             case ShellEvent.Message { Name: "focus-panel" }:

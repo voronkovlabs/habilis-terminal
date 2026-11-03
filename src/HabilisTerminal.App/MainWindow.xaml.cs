@@ -79,6 +79,7 @@ public partial class MainWindow : Window
             panel.ShellMenuRequested += OnPanelShellMenuRequested;
             panel.Changed += OnPanelChanged;
             panel.GotKeyboardFocus += (_, _) => OnPanelFocused(panel);
+            panel.GotKeyboardFocus += (_, _) => CollapseConsole(stopGrowing: true); // issue #82
         }
 
         LoadPlugins();
@@ -109,6 +110,7 @@ public partial class MainWindow : Window
         host.RequestCompleted += (_, op, status) => Dispatcher.BeginInvoke(() => OnShellRequestCompleted(op, status));
         host.AddressEntered += address => Dispatcher.BeginInvoke(() => OnPluginAddress(address));
         host.AddressPrefixes = _plugins.Prefixes();
+        WireOverflow(host);
         _shell = new ShellConnection(host);
         UpdateTabToPanel(); // the layout was restored before the shell existed
 
@@ -330,6 +332,7 @@ public partial class MainWindow : Window
     /// </param>
     private void SetPanelVisibility(bool left, bool right, bool keepReveal = false)
     {
+        CollapseConsole(stopGrowing: false); // any layout change ends the console grown over the panels (issue #82)
         (bool Left, bool Right) before = (Workspace.LeftVisible, Workspace.RightVisible);
         if (!keepReveal)
         {

@@ -1,4 +1,5 @@
 using System.Windows;
+using System.Windows.Media;
 using System.Windows.Controls;
 using System.Windows.Input;
 
@@ -37,6 +38,10 @@ public sealed class WorkspaceLayout : Panel
         nameof(TerminalRows), typeof(int), typeof(WorkspaceLayout),
         new FrameworkPropertyMetadata(10, FrameworkPropertyMetadataOptions.AffectsMeasure));
 
+    public static readonly DependencyProperty OverlayRowsProperty = DependencyProperty.Register(
+        nameof(OverlayRows), typeof(int), typeof(WorkspaceLayout),
+        new FrameworkPropertyMetadata(0, FrameworkPropertyMetadataOptions.AffectsMeasure));
+
     public static readonly DependencyProperty SinglePanelRatioProperty = DependencyProperty.Register(
         nameof(SinglePanelRatio), typeof(double), typeof(WorkspaceLayout),
         new FrameworkPropertyMetadata(0.5, FrameworkPropertyMetadataOptions.AffectsMeasure));
@@ -69,6 +74,26 @@ public sealed class WorkspaceLayout : Panel
     {
         get => (int)GetValue(TerminalRowsProperty);
         set => SetValue(TerminalRowsProperty, value);
+    }
+
+    /// <summary>
+    /// Both panels shown: rows the terminal's top edge rises over the panels, which stay where they are underneath
+    /// (issue #82, experiment). Clamped to the top of the workspace.
+    /// </summary>
+    public int OverlayRows
+    {
+        get => (int)GetValue(OverlayRowsProperty);
+        set => SetValue(OverlayRowsProperty, value);
+    }
+
+    /// <summary>The most <see cref="OverlayRows"/> can be now: the panels' height in whole rows.</summary>
+    public int MaxOverlayRows
+    {
+        get
+        {
+            var (left, _, _) = ComputeRects(RenderSize, overlay: false);
+            return LeftVisible && RightVisible && CellSize.Height > 0 ? (int)Math.Floor(left.Height / CellSize.Height) : 0;
+        }
     }
 
     public double SinglePanelRatio
@@ -130,6 +155,12 @@ public sealed class WorkspaceLayout : Panel
 
             child.Visibility = rect.IsEmpty ? Visibility.Collapsed : Visibility.Visible;
             child.Arrange(rect.IsEmpty ? new Rect(0, 0, 0, 0) : rect);
+
+            // Under the console grown over the panels (issue #82), the panels' covered part is clipped away: the
+            // terminal is snapped to whole cells and would leave the panels showing in the few pixels beside it.
+            child.Clip = GetRole(child) != WorkspaceRole.Terminal && !rect.IsEmpty && OverlayRows > 0 && LeftVisible && RightVisible
+                ? new RectangleGeometry(new Rect(0, 0, rect.Width, Math.Max(0, terminal.Top - rect.Top)))
+                : null;
         }
 
         return finalSize;
@@ -234,7 +265,7 @@ public sealed class WorkspaceLayout : Panel
         }
     }
 
-    private (Rect Left, Rect Right, Rect Terminal) ComputeRects(Size size)
+    private (Rect Left, Rect Right, Rect Terminal) ComputeRects(Size size, bool overlay = true)
     {
         var cell = CellSize;
         var full = new Rect(size);
@@ -251,10 +282,11 @@ public sealed class WorkspaceLayout : Panel
             var terminalHeight = Math.Min(size.Height, rows * cell.Height);
             var panelsHeight = size.Height - terminalHeight;
             var half = Math.Floor(size.Width * Math.Clamp(SplitRatio, 0.1, 0.9));
+            var rise = overlay ? Math.Min(panelsHeight, Math.Clamp(OverlayRows, 0, int.MaxValue) * cell.Height) : 0;
             return (
                 new Rect(0, 0, half, panelsHeight),
                 new Rect(half, 0, size.Width - half, panelsHeight),
-                new Rect(0, panelsHeight, size.Width, terminalHeight));
+                new Rect(0, panelsHeight - rise, size.Width, terminalHeight + rise));
         }
 
         // One panel: the terminal takes the place of the hidden one, snapped to whole columns.

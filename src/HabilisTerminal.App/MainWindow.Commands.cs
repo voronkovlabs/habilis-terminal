@@ -24,6 +24,10 @@ public partial class MainWindow
         Trace($"key {modifiers}+{key} focusedPanel={FocusedPanel()?.Side ?? "-"} wpfLeft={_left.IsKeyboardFocused} wpfRight={_right.IsKeyboardFocused} win32={GetFocus():X}");
         switch (key)
         {
+            // The console grown over the panels (issue #82): Esc at the prompt only collapses it.
+            case Key.Escape when modifiers == KeyModifiers.None && CollapseConsoleOnEscape():
+                return true;
+
             case Key.O when modifiers == KeyModifiers.Control && !IsPageOpen:
                 TogglePanels();
                 return true;
