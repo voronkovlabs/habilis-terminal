@@ -10,8 +10,12 @@ internal sealed record SystemSample(double? CpuPercent, double? RamUsedMiB, doub
     public double? RamPercent => RamUsedMiB is { } used && RamTotalMiB is > 0 ? used * 100 / RamTotalMiB : null;
 }
 
-/// <summary>A process using a GPU, as nvtop lists it: GPU load and memory, CPU load and RAM.</summary>
-internal sealed record ProcessUse(int Pid, string Name, string Kind, double? GpuPercent, double? GpuMemoryMiB, double? CpuPercent, double? RamMiB);
+/// <summary>A process using a GPU, as nvtop lists it: GPU load and memory, CPU load and RAM, and its full command line.</summary>
+internal sealed record ProcessUse(int Pid, string Name, string Kind, double? GpuPercent, double? GpuMemoryMiB, double? CpuPercent, double? RamMiB)
+{
+    /// <summary>The full command line (path and arguments), or null when Windows does not give it (protected processes).</summary>
+    public string? CommandLine { get; init; }
+}
 
 /// <summary>Everything the nvtop view shows at one moment.</summary>
 internal sealed record LocalSample(GpuSnapshot Gpus, SystemSample System, IReadOnlyList<ProcessUse> Processes);
@@ -32,6 +36,7 @@ internal sealed partial class WindowsSystem : ISystemSource
 {
     private readonly Dictionary<string, CounterSample> _engines = [];
     private readonly Dictionary<int, (TimeSpan Cpu, DateTime At)> _processCpu = [];
+    private readonly Dictionary<int, string?> _commandLines = [];
     private (long Idle, long Total)? _cpu;
 
     public (SystemSample System, IReadOnlyList<ProcessUse> Processes) Sample(IReadOnlyList<GpuProcess> nvidiaProcesses)
@@ -58,12 +63,16 @@ internal sealed partial class WindowsSystem : ISystemSource
                 gpuLoad.TryGetValue(pid, out var load) ? load : null,
                 gpuMemory.TryGetValue(pid, out var memory) ? memory : nvidia?.MemoryMiB,
                 process.Cpu,
-                process.Ram));
+                process.Ram)
+            {
+                CommandLine = CommandLineOf(pid),
+            });
         }
 
         foreach (var gone in _processCpu.Keys.Where(k => processes.All(p => p.Pid != k)).ToList())
         {
             _processCpu.Remove(gone);
+            _commandLines.Remove(gone);
         }
 
         return (system, processes.OrderByDescending(p => p.GpuPercent ?? 0).ThenByDescending(p => p.GpuMemoryMiB ?? 0).ToList());
@@ -200,6 +209,70 @@ internal sealed partial class WindowsSystem : ISystemSource
             return null; // the process ended
         }
     }
+
+    /// <summary>A process's command line, read once per process (issue #80).</summary>
+    private string? CommandLineOf(int pid)
+    {
+        if (!_commandLines.TryGetValue(pid, out var line))
+        {
+            line = ReadCommandLine(pid);
+            _commandLines[pid] = line;
+        }
+
+        return line;
+    }
+
+    /// <summary>NtQueryInformationProcess(ProcessCommandLineInformation): a UNICODE_STRING followed by its text.</summary>
+    private static string? ReadCommandLine(int pid)
+    {
+        const uint QueryLimitedInformation = 0x1000;
+        const int ProcessCommandLineInformation = 60;
+        var process = OpenProcess(QueryLimitedInformation, false, pid);
+        if (process == IntPtr.Zero)
+        {
+            return null;
+        }
+
+        try
+        {
+            _ = NtQueryInformationProcess(process, ProcessCommandLineInformation, IntPtr.Zero, 0, out var needed);
+            if (needed <= 0 || needed > 1 << 20)
+            {
+                return null;
+            }
+
+            var buffer = Marshal.AllocHGlobal(needed);
+            try
+            {
+                if (NtQueryInformationProcess(process, ProcessCommandLineInformation, buffer, needed, out _) != 0)
+                {
+                    return null;
+                }
+
+                var length = (ushort)Marshal.ReadInt16(buffer);
+                var text = Marshal.ReadIntPtr(buffer, IntPtr.Size);
+                return length == 0 || text == IntPtr.Zero ? null : Marshal.PtrToStringUni(text, length / 2);
+            }
+            finally
+            {
+                Marshal.FreeHGlobal(buffer);
+            }
+        }
+        finally
+        {
+            CloseHandle(process);
+        }
+    }
+
+    [LibraryImport("kernel32.dll", SetLastError = true)]
+    private static partial IntPtr OpenProcess(uint access, [MarshalAs(UnmanagedType.Bool)] bool inherit, int pid);
+
+    [LibraryImport("kernel32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static partial bool CloseHandle(IntPtr handle);
+
+    [LibraryImport("ntdll.dll")]
+    private static partial int NtQueryInformationProcess(IntPtr process, int informationClass, IntPtr information, int length, out int returnLength);
 
     [GeneratedRegex(@"pid_(\d+)_.*engtype_(\w+)", RegexOptions.IgnoreCase)]
     private static partial Regex EngineName();

@@ -8,6 +8,7 @@ A GPU monitor like nvtop, in a Habilis Terminal panel (issue #70). Read-only.
   memory; bars for CPU and RAM; four separate charts in a 2 × 2 grid (GPU load, GPU memory, CPU, RAM; more rows
   with more GPUs) of the last 120 samples; and the processes using the GPU with PID, type (Compute / Graphic), GPU
   load, GPU memory, CPU load, RAM and command, busiest first.
+- Hovering a process's command shows its full command line (path and arguments) in a tooltip.
 - GPUs come from `nvidia-smi` (installed with the NVIDIA driver); CPU and RAM from Windows; each process's GPU load and
   memory from the Windows "GPU Engine" / "GPU Process Memory" counters, which work where nvidia-smi reports N/A.
 - It samples every 2 seconds (setting); the first values need a few seconds. Shift+F4 pauses and resumes.

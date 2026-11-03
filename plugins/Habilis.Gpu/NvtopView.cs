@@ -21,11 +21,55 @@ internal sealed class NvtopView : FrameworkElement
     private IReadOnlyList<double?> _cpuHistory = [];
     private IReadOnlyList<double?> _ramHistory = [];
     private bool _paused;
+    private readonly List<(Rect Cell, string Text)> _commands = [];
+    private readonly System.Windows.Controls.ToolTip _tip = new() { MaxWidth = 900, Placement = System.Windows.Controls.Primitives.PlacementMode.Mouse };
+    private readonly System.Windows.Threading.DispatcherTimer _hover = new() { Interval = TimeSpan.FromMilliseconds(400) };
+    private string? _pending;
 
     public NvtopView()
     {
         Focusable = false;
         ClipToBounds = true;
+
+        // Hovering a process's COMMAND cell shows its full command line (issue #80). The tooltip is opened by hand:
+        // the cells change with every sample, which WPF's own tooltip handling does not follow.
+        _tip.PlacementTarget = this;
+        _hover.Tick += (_, _) =>
+        {
+            _hover.Stop();
+            if (_pending is { } text)
+            {
+                _tip.Content = new System.Windows.Controls.TextBlock { Text = text, TextWrapping = TextWrapping.Wrap };
+                _tip.IsOpen = true;
+            }
+        };
+    }
+
+    protected override void OnMouseMove(System.Windows.Input.MouseEventArgs e)
+    {
+        base.OnMouseMove(e);
+        var text = TipAt(e.GetPosition(this));
+        if (text == _pending)
+        {
+            return;
+        }
+
+        // Another cell or none: the open tooltip closes and the new one waits for the hover delay.
+        _pending = text;
+        _tip.IsOpen = false;
+        _hover.Stop();
+        if (text is not null)
+        {
+            _hover.Start();
+        }
+    }
+
+    protected override void OnMouseLeave(System.Windows.Input.MouseEventArgs e)
+    {
+        base.OnMouseLeave(e);
+        _pending = null;
+        _hover.Stop();
+        _tip.IsOpen = false;
     }
 
     public double FontSize { get; set; } = 13;
@@ -45,8 +89,11 @@ internal sealed class NvtopView : FrameworkElement
         InvalidateVisual();
     }
 
+    private string? TipAt(Point point) => _commands.FirstOrDefault(c => c.Cell.Contains(point)).Text;
+
     protected override void OnRender(DrawingContext dc)
     {
+        _commands.Clear();
         var background = Brush(HostBrushes.Background, Brushes.Black);
         dc.DrawRectangle(background, null, new Rect(RenderSize));
         if (_sample is not { } sample)
@@ -185,6 +232,7 @@ internal sealed class NvtopView : FrameworkElement
             }
 
             var tone = process.GpuPercent >= 50 ? Brush(HostBrushes.Warning, Brushes.Gold) : foreground;
+            _commands.Add((new Rect(columns[^1], y, Math.Max(0, Gap + width - columns[^1]), line), process.CommandLine ?? process.Name));
             Row(dc, columns,
             [
                 process.Pid.ToString(CultureInfo.InvariantCulture),
