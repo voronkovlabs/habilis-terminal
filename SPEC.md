@@ -348,7 +348,10 @@ F6 switches between viewer and editor, as in Far. One page at a time (no F12 scr
   column shows the size. With folders selected F3 counts all of them; the status line then shows the
   selection's files and size, the contents of the counted folders included. While counting, the status line
   shows "Counting <folder>…" with the running totals; moving the cursor or leaving the directory stops it.
-- Ctrl+Q shows the same control as quick view in the opposite panel.
+- Ctrl+Q shows the same control as quick view in the opposite panel, by the same rule as F3 (issue #74): text files up
+  to `viewer.textModeMaxMB` in the read-only editor with syntax colours, larger ones in the paged control. Choosing a
+  drive or place in Alt+F1 / Alt+F2 for the panel showing the quick view (or info) turns it back into a file panel
+  there, as in Far (issue #75).
 
 ### Markdown view (Alt+F3, issue #57)
 - `.md`, `.markdown`, `.mdown`, `.mkd`: Markdig (advanced extensions: tables, task lists, footnotes, autolinks) renders

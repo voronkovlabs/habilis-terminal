@@ -467,6 +467,22 @@ public partial class MainWindow
     /// Info or quick view turned on in a hidden panel shows it; turned off, a panel shown only for it hides again and
     /// the layout comes back (issue #38). <see cref="SetPanelVisibility"/> keeps the rule of issue #35.
     /// </summary>
+    /// <summary>The panel shows its files again; a panel shown only for that content stays shown now.</summary>
+    private void LeaveOtherContent(FilePanel panel)
+    {
+        if (panel.QuickViewSource is null && panel.InfoSource is null)
+        {
+            return;
+        }
+
+        panel.QuickViewSource = null;
+        panel.InfoSource = null;
+        if (ReferenceEquals(_reveal.Revealed, panel))
+        {
+            _reveal.Forget();
+        }
+    }
+
     private void RevealOtherContent(FilePanel target, bool on)
     {
         var fromTerminal = TerminalHasFocus;
@@ -732,6 +748,11 @@ public partial class MainWindow
 
     private async Task OnDriveChosenAsync(FilePanel panel, QuickPickResult? result, FilePanel previouslyActive, bool fromTerminal)
     {
+        // A choice turns a quick view or info panel back into a file panel at that place, as in Far (issue #75).
+        if (result?.Item is not null && result.Command is null)
+        {
+            LeaveOtherContent(panel);
+        }
 
         if (result?.Item?.Tag is DriveMenuEntry { Target: ValueTuple<Core.Plugins.LoadedPlugin, HabilisTerminal.Plugins.PluginMenuItem> pluginItem })
         {

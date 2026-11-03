@@ -57,6 +57,8 @@ public partial class MainWindow
             _right.RequestFolderSizes();
         }
 
+        QuickView.Settings = settings;
+        QuickView.Theme = _themes.Current;
         if (previous is null || previous.ViewerFontFamily != settings.ViewerFontFamily || previous.ViewerFontSize != settings.ViewerFontSize)
         {
             ViewerView.SetFont(settings.ViewerFontFamily, settings.ViewerFontSize);

@@ -197,6 +197,7 @@ public partial class MainWindow : Window
     private void OnThemeChanged(Themes.ColorTheme theme)
     {
         Background = PanelPalette.Background;
+        QuickView.Theme = theme;
         IconProvider.OnColorThemeChanged();
         _left.ApplyTheme();
         _right.ApplyTheme();

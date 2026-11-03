@@ -353,7 +353,7 @@ public sealed class ViewerPage : DockPanel, IDisposable, IPage
     }
 
     /// <summary>A text file small enough to load whole into the read-only editor.</summary>
-    private static bool FitsTextMode(string path, int maxMB)
+    internal static bool FitsTextMode(string path, int maxMB)
     {
         try
         {
