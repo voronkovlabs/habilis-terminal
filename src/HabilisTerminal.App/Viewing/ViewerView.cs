@@ -213,7 +213,9 @@ public sealed class ViewerView : FrameworkElement
             var lineStart = offset;
             var text = ExpandTabs(_document.ReadLine(offset, out var next));
             offset = next;
-            var segments = Wrap ? Chunk(text, VisibleColumns) : [text.Length > LeftColumn ? text[LeftColumn..] : string.Empty];
+            // Only what fits on screen is drawn: a minified file is one line split into 16 KB pieces, and drawing
+            // a whole piece per row made the viewer hang and WPF overlap the glyphs (issue #76).
+            var segments = Wrap ? Chunk(text, VisibleColumns) : [Visible(text, LeftColumn, VisibleColumns + 1)];
             foreach (var segment in segments)
             {
                 if (row >= rows)
@@ -308,6 +310,9 @@ public sealed class ViewerView : FrameworkElement
 
         return result.ToString();
     }
+
+    private static string Visible(string text, int start, int count) =>
+        text.Length <= start ? string.Empty : text.Substring(start, Math.Min(count, text.Length - start));
 
     private static List<string> Chunk(string text, int width)
     {
