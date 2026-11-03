@@ -68,8 +68,14 @@ public sealed class ShellHost : IDisposable
 
     public event Action<int>? Exited;
 
-    /// <summary>Tab on an empty command line while <see cref="TabToPanel"/> is on. Background thread.</summary>
+    /// <summary>Esc on an empty command line inside the console while <see cref="PanelsShown"/> is on. Background thread.</summary>
     public event Action? FocusPanelRequested;
+
+    /// <summary>
+    /// A key sent by <see cref="SendPanelKey"/> found the command line empty, so it belongs to the panel (issue #85):
+    /// "Enter", "Left", "Right", "Home", "End", "Delete", "Backspace" or "Escape". Background thread.
+    /// </summary>
+    public event Action<string>? PanelKeyReturned;
 
     /// <summary>
     /// Enter on a command line starting with one of <see cref="AddressPrefixes"/> and a colon: the line, which the
@@ -105,15 +111,15 @@ public sealed class ShellHost : IDisposable
     }
 
     /// <summary>
-    /// One panel shown: Tab on an empty command line asks to focus the panel instead of completing. Kept as a flag
-    /// file in the channel, which the integration script checks when Tab is pressed.
+    /// A panel is shown: Esc on an empty command line inside the console asks to focus the panel instead of
+    /// clearing the line. Kept as a flag file in the channel, which the integration script checks when Esc is pressed.
     /// </summary>
-    public bool TabToPanel
+    public bool PanelsShown
     {
-        get => File.Exists(Path.Combine(ChannelDirectory, "tab-to-panel"));
+        get => File.Exists(Path.Combine(ChannelDirectory, "panels-shown"));
         set
         {
-            var flag = Path.Combine(ChannelDirectory, "tab-to-panel");
+            var flag = Path.Combine(ChannelDirectory, "panels-shown");
             try
             {
                 if (value)
@@ -128,7 +134,7 @@ public sealed class ShellHost : IDisposable
             }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
             {
-                // Without the flag Tab simply completes; nothing else depends on it.
+                // Without the flag Esc simply clears the line; nothing else depends on it.
             }
         }
     }
@@ -165,6 +171,26 @@ public sealed class ShellHost : IDisposable
 
     /// <summary>Inserts text at the command line cursor.</summary>
     public int Insert(string text) => Enqueue("insert", new Dictionary<string, string> { ["text"] = text }, coalesce: false);
+
+    /// <summary>
+    /// A key pressed in a panel whose meaning depends on the command line, as in Far (issue #85): the integration
+    /// script edits or runs the line when it has text, and returns the key through <see cref="PanelKeyReturned"/>
+    /// when it is empty. Sent as F13..F20, so the same keys typed inside the console keep their usual meaning.
+    /// </summary>
+    public bool SendPanelKey(string name)
+    {
+        var index = Array.IndexOf(PanelKeyNames, name);
+        if (index < 0)
+        {
+            return false;
+        }
+
+        SendKey(Win32InputSequence.VkF13 + index);
+        return true;
+    }
+
+    /// <summary>The keys of <see cref="SendPanelKey"/>, in the order of F13..F20 (the integration script's table).</summary>
+    public static readonly string[] PanelKeyNames = ["Enter", "Left", "Right", "Home", "End", "Delete", "Backspace", "Escape"];
 
     /// <summary>Sends a key press to the shell (e.g. history navigation from panel focus).</summary>
     public void SendKey(int virtualKey, char unicodeChar = '\0', int controlKeyState = 0) =>
@@ -274,6 +300,10 @@ public sealed class ShellHost : IDisposable
             case ShellEvent.Message { Name: "command-start" } start when start.Arguments.Count == 3
                 && int.TryParse(start.Arguments[0], System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out var row) && int.TryParse(start.Arguments[1], System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out var rows) && int.TryParse(start.Arguments[2], System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out var columns):
                 CommandOutputStarted?.Invoke(row, rows, columns);
+                break;
+
+            case ShellEvent.Message { Name: "panel-key" } panelKey when panelKey.Arguments.Count == 1:
+                PanelKeyReturned?.Invoke(panelKey.Arguments[0]);
                 break;
 
             case ShellEvent.Message { Name: "focus-panel" }:

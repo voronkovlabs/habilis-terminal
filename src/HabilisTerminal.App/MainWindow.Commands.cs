@@ -32,18 +32,6 @@ public partial class MainWindow
                 TogglePanels();
                 return true;
 
-            case Key.Tab when modifiers == KeyModifiers.Control && AnyPanelVisible && !IsPageOpen:
-                if (PanelHasFocus)
-                {
-                    FocusTerminal();
-                }
-                else
-                {
-                    FocusActivePanel();
-                }
-
-                return true;
-
             case Key.F4 when modifiers == KeyModifiers.Alt:
                 Close();
                 return true;
@@ -93,6 +81,12 @@ public partial class MainWindow
             {
                 return true;
             }
+        }
+
+        // Enter, arrows, Home / End, Del, Backspace and Esc edit a command line that has text (issue #85).
+        if (SendToCommandLine(key, modifiers))
+        {
+            return true;
         }
 
         if (HandleWindowKey(panel, key, modifiers))
@@ -159,17 +153,12 @@ public partial class MainWindow
         switch (key)
         {
             case Key.Tab when modifiers == KeyModifiers.None:
+                // With one panel shown (Ctrl+P) there is nothing to switch to; the console is reached by a click.
                 if (IsShown(Other(panel)))
                 {
                     Activate(Other(panel));
                     FocusActivePanel();
                     SyncShellDirectory();
-                }
-                else if (Workspace.LeftVisible ^ Workspace.RightVisible)
-                {
-                    // One panel shown (Ctrl+P): the terminal stands in for the other panel. Tab on its empty command
-                    // line comes back (integration script).
-                    FocusTerminal();
                 }
 
                 return true;

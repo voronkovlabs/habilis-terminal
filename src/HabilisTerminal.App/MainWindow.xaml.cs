@@ -79,7 +79,13 @@ public partial class MainWindow : Window
             panel.ShellMenuRequested += OnPanelShellMenuRequested;
             panel.Changed += OnPanelChanged;
             panel.GotKeyboardFocus += (_, _) => OnPanelFocused(panel);
-            panel.GotKeyboardFocus += (_, _) => CollapseConsole(stopGrowing: true); // issue #82
+            panel.GotKeyboardFocus += (_, _) =>
+            {
+                if (!_returningFocus)
+                {
+                    CollapseConsole(stopGrowing: true); // issue #82
+                }
+            };
         }
 
         LoadPlugins();
@@ -111,8 +117,9 @@ public partial class MainWindow : Window
         host.AddressEntered += address => Dispatcher.BeginInvoke(() => OnPluginAddress(address));
         host.AddressPrefixes = _plugins.Prefixes();
         WireOverflow(host);
+        WireCommandLine(host);
         _shell = new ShellConnection(host);
-        UpdateTabToPanel(); // the layout was restored before the shell existed
+        UpdatePanelsShown(); // the layout was restored before the shell existed
 
         Loaded += async (_, _) =>
         {
@@ -298,7 +305,7 @@ public partial class MainWindow : Window
             return;
         }
 
-        FocusTerminal();
+        // As in Far, the focus stays on the panel (issue #85).
         _shell?.WriteInput(e.Text);
     }
 
@@ -317,12 +324,12 @@ public partial class MainWindow : Window
         }
     }
 
-    /// <summary>One panel shown: Tab moves focus between the panel and the terminal (see the integration script).</summary>
-    private void UpdateTabToPanel()
+    /// <summary>A panel shown: Esc on an empty line inside the console goes back to it (see the integration script).</summary>
+    private void UpdatePanelsShown()
     {
         if (_shell is not null)
         {
-            _shell.Host.TabToPanel = Workspace.LeftVisible ^ Workspace.RightVisible;
+            _shell.Host.PanelsShown = AnyPanelVisible;
         }
     }
 
@@ -346,7 +353,7 @@ public partial class MainWindow : Window
 
         Workspace.LeftVisible = left;
         Workspace.RightVisible = right;
-        UpdateTabToPanel();
+        UpdatePanelsShown();
 
         if (!AnyPanelVisible)
         {

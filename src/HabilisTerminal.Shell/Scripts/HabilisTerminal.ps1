@@ -7,7 +7,7 @@
 #   OSC 133;A / 133;B        prompt starts / prompt ends, waiting for input
 #   OSC 133;C / 133;D;code   command accepted / command finished
 #   OSC 9;9;"path"           current file system directory
-#   OSC 7731;habi;...        Habilis Terminal messages (ack, restore-pending, focus-panel, command-start)
+#   OSC 7731;habi;...        Habilis Terminal messages (ack, restore-pending, focus-panel, panel-key, command-start)
 
 if ($global:__Habi -or -not $env:HABI_CHANNEL) {
     return
@@ -19,7 +19,7 @@ $global:__Habi = [pscustomobject]@{
     OriginalReadLine = $function:PSConsoleHostReadLine
     CommandRan       = $false
     Restore          = $null
-    TabFunction      = (Get-PSReadLineKeyHandler -Chord Tab | Select-Object -First 1).Function
+    EscapeFunction   = (Get-PSReadLineKeyHandler -Chord Escape | Select-Object -First 1).Function
     EnterFunction    = (Get-PSReadLineKeyHandler -Chord Enter | Select-Object -First 1).Function
 }
 
@@ -129,8 +129,7 @@ Set-PSReadLineKeyHandler -Chord F24 -BriefDescription HabilisTerminalRequest -De
 # Plugin addresses (issue #49): Enter on a line starting with a plugin prefix and a colon ("s3:...", "sqs:...")
 # opens the plugin panel instead of running the line, as Far's command-line prefixes do. Habilis Terminal keeps the
 # prefixes, one per line, in the 'prefixes' file of the channel. Other lines run as before.
-Set-PSReadLineKeyHandler -Chord Enter -BriefDescription HabilisTerminalEnter -Description 'Run the line, or open a plugin address' -ScriptBlock {
-    param($key, $arg)
+function global:__HabiEnter($key, $arg) {
     $state = $global:__Habi
     $line = $null
     $cursor = $null
@@ -157,24 +156,60 @@ Set-PSReadLineKeyHandler -Chord Enter -BriefDescription HabilisTerminalEnter -De
     [Microsoft.PowerShell.PSConsoleReadLine]::$function($key, $arg)
 }
 
-# One panel shown (Ctrl+P): Tab on an empty command line returns focus to the panel, as Tab switches panels in
-# Far. Habilis Terminal creates the 'tab-to-panel' file in the channel while that layout is on. Otherwise Tab
-# does whatever it was bound to before (TabCompleteNext by default, MenuComplete in many profiles).
-Set-PSReadLineKeyHandler -Chord Tab -BriefDescription HabilisTerminalTab -Description 'Complete, or go to the panel on an empty line' -ScriptBlock {
+Set-PSReadLineKeyHandler -Chord Enter -BriefDescription HabilisTerminalEnter -Description 'Run the line, or open a plugin address' -ScriptBlock {
+    param($key, $arg)
+    __HabiEnter $key $arg
+}
+
+# Inside the console (reached by a click), Esc on an empty command line goes back to the panels while they are
+# shown (issue #85). Habilis Terminal creates the 'panels-shown' file in the channel while any panel is shown.
+# Otherwise Esc does whatever it was bound to before (RevertLine by default).
+Set-PSReadLineKeyHandler -Chord Escape -BriefDescription HabilisTerminalEscape -Description 'Clear the line, or go back to the panel on an empty line' -ScriptBlock {
     param($key, $arg)
     $state = $global:__Habi
     $line = $null
     $cursor = $null
     [Microsoft.PowerShell.PSConsoleReadLine]::GetBufferState([ref] $line, [ref] $cursor)
-    if ($line.Length -eq 0 -and (Test-Path -LiteralPath (Join-Path $state.Channel 'tab-to-panel'))) {
+    if ($line.Length -eq 0 -and (Test-Path -LiteralPath (Join-Path $state.Channel 'panels-shown'))) {
         [Console]::Write((__HabiOsc '7731;habi;focus-panel'))
         return
     }
 
-    $function = $state.TabFunction
+    $function = $state.EscapeFunction
     if (-not $function -or -not [Microsoft.PowerShell.PSConsoleReadLine].GetMethod($function)) {
-        $function = 'TabCompleteNext'
+        $function = 'RevertLine'
     }
 
     [Microsoft.PowerShell.PSConsoleReadLine]::$function($key, $arg)
+}
+
+# Keys from a focused panel whose meaning depends on the command line, as in Far (issue #85): with text on the line
+# they edit it (or run it), on an empty line they go back to the panel (OSC 7731;habi;panel-key;<name>). Habilis
+# Terminal sends them as F13..F20, so the same keys typed inside the console keep their usual meaning.
+$global:__Habi | Add-Member -NotePropertyName PanelKeys -NotePropertyValue @{
+    F13 = @('Enter', $null)
+    F14 = @('Left', 'BackwardChar')
+    F15 = @('Right', 'ForwardChar')
+    F16 = @('Home', 'BeginningOfLine')
+    F17 = @('End', 'EndOfLine')
+    F18 = @('Delete', 'DeleteChar')
+    F19 = @('Backspace', 'BackwardDeleteChar')
+    F20 = @('Escape', 'RevertLine')
+}
+
+foreach ($chord in $global:__Habi.PanelKeys.Keys) {
+    Set-PSReadLineKeyHandler -Chord $chord -BriefDescription "HabilisTerminalPanel$chord" -Description 'Habilis Terminal panel key' -ScriptBlock {
+        param($key, $arg)
+        $name, $function = $global:__Habi.PanelKeys[$key.Key.ToString()]
+        $line = $null
+        $cursor = $null
+        [Microsoft.PowerShell.PSConsoleReadLine]::GetBufferState([ref] $line, [ref] $cursor)
+        if ($line.Length -eq 0) {
+            [Console]::Write((__HabiOsc "7731;habi;panel-key;$name"))
+        } elseif ($name -eq 'Enter') {
+            __HabiEnter $key $arg
+        } else {
+            [Microsoft.PowerShell.PSConsoleReadLine]::$function($key, $arg)
+        }
+    }
 }

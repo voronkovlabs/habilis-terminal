@@ -112,28 +112,61 @@ public class ShellHostTests
     }
 
     [Fact]
-    public async Task Tab_on_an_empty_line_asks_for_the_panel_only_while_enabled()
+    public async Task Esc_on_an_empty_line_asks_for_the_panel_only_while_panels_are_shown()
     {
         using var shell = new TestShell();
         var requests = 0;
         shell.Host.FocusPanelRequested += () => Interlocked.Increment(ref requests);
         await shell.WaitIdleAsync();
 
-        shell.Host.Write("\t");
+        shell.Host.SendKey(0x1B, '\x1b');
         await Task.Delay(500, TestContext.Current.CancellationToken);
         Assert.Equal(0, Volatile.Read(ref requests));
 
-        shell.Host.TabToPanel = true;
-        shell.Host.Write("\t");
+        shell.Host.PanelsShown = true;
+        shell.Host.SendKey(0x1B, '\x1b');
         await TestShell.WaitUntilAsync(() => Volatile.Read(ref requests) == 1, "focus-panel request");
 
-        // With text on the line Tab completes as before.
-        shell.Host.Write("Write-Outp\t");
-        await shell.WaitForTextAsync("Write-Output");
+        // With text on the line Esc clears it as before.
+        shell.Host.Write("'NOT-' + 'RUN'");
+        await Task.Delay(300, TestContext.Current.CancellationToken);
+        shell.Host.SendKey(0x1B, '\x1b');
+        shell.Host.Write("'CLEARED-' + 'OK'\r");
+        await shell.WaitForTextAsync("CLEARED-OK");
         Assert.Equal(1, Volatile.Read(ref requests));
+        Assert.DoesNotContain("NOT-RUN", shell.Text);
 
-        shell.Host.TabToPanel = false;
-        Assert.False(shell.Host.TabToPanel);
+        shell.Host.PanelsShown = false;
+        Assert.False(shell.Host.PanelsShown);
+    }
+
+    [Fact]
+    public async Task Panel_keys_edit_a_line_with_text_and_come_back_on_an_empty_line()
+    {
+        using var shell = new TestShell();
+        var returned = new System.Collections.Concurrent.ConcurrentQueue<string>();
+        shell.Host.PanelKeyReturned += returned.Enqueue;
+        await shell.WaitIdleAsync();
+
+        foreach (var name in ShellHost.PanelKeyNames)
+        {
+            Assert.True(shell.Host.SendPanelKey(name));
+            await TestShell.WaitUntilAsync(() => returned.Count == 1, $"{name} returned");
+            Assert.True(returned.TryDequeue(out var back));
+            Assert.Equal(name, back);
+        }
+
+        // With text: Home, Delete, End, Backspace edit the line and Enter runs it; nothing comes back.
+        shell.Host.Write("x'PANEL-' + 'EDITq'z");
+        await Task.Delay(300, TestContext.Current.CancellationToken);
+        foreach (var name in new[] { "Home", "Delete", "End", "Backspace", "Left", "Backspace", "Right", "Enter" })
+        {
+            shell.Host.SendPanelKey(name);
+        }
+
+        await shell.WaitForTextAsync("PANEL-EDIT");
+        Assert.Empty(returned);
+        Assert.False(shell.Host.SendPanelKey("Tab"));
     }
 
     [Fact]

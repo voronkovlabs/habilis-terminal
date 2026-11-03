@@ -218,7 +218,7 @@ public partial class MainWindow
         {
             Workspace.LeftVisible = state.Left.Visible;
             Workspace.RightVisible = state.Right.Visible;
-            UpdateTabToPanel();
+            UpdatePanelsShown();
         }
 
         // A shown panel is always active: a saved active panel that is hidden gives way to the visible one.
