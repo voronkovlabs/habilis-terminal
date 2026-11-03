@@ -1,4 +1,7 @@
+using System.Reflection;
+using System.Runtime.InteropServices;
 using System.Windows.Input;
+using System.Windows.Threading;
 using HabilisTerminal.App.Input;
 using HabilisTerminal.Shell.Integration;
 
@@ -96,6 +99,29 @@ public partial class MainWindow
             panel.HandleKey(key, KeyModifiers.None);
         }
     }
+
+    /// <summary>
+    /// As in Far, the command-line caret shows and blinks while a panel has the focus (issue #87). The terminal control
+    /// draws its cursor only while it believes it has the focus, so it is told so; keys still go to the panel. Real
+    /// focus changes of the terminal set the same state themselves.
+    /// </summary>
+    private void UpdateCommandLineCaret()
+    {
+        if (TerminalHasFocus || FindHwndHost(Terminal) is not { } host
+            || host.GetType().GetField("terminal", BindingFlags.NonPublic | BindingFlags.Instance)?.GetValue(host) is not IntPtr terminal
+            || terminal == IntPtr.Zero)
+        {
+            return;
+        }
+
+        TerminalSetFocused(terminal, PanelHasFocus && !IsPageOpen && IsActive);
+    }
+
+    /// <summary>After WPF and Win32 have finished moving the focus.</summary>
+    private void QueueCommandLineCaret() => Dispatcher.BeginInvoke(DispatcherPriority.Input, UpdateCommandLineCaret);
+
+    [DllImport("Microsoft.Terminal.Control.dll", CallingConvention = CallingConvention.StdCall)]
+    private static extern void TerminalSetFocused(IntPtr terminal, [MarshalAs(UnmanagedType.Bool)] bool focused);
 
     private static string? PanelKeyName(Key key) => key switch
     {

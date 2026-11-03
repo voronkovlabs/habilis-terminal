@@ -85,7 +85,10 @@ public partial class MainWindow : Window
                 {
                     CollapseConsole(stopGrowing: true); // issue #82
                 }
+
+                QueueCommandLineCaret();
             };
+            panel.LostKeyboardFocus += (_, _) => QueueCommandLineCaret();
         }
 
         LoadPlugins();
