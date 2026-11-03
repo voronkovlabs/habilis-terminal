@@ -198,9 +198,11 @@ Drive letter, label, file system, total and free space; summary of the current s
   A disconnected network drive is marked and never blocks the menu.
 - Keys: drive letter selects immediately; Del disconnects a network drive / safely ejects a removable one
   (with confirmation); Ctrl+R refreshes; Esc closes.
-- Plugin items (the "Plugins" group) take hotkeys, as in Far (issue #66): F4 on an item asks for a letter or digit
-  (empty removes it; a drive's letter is refused; a key taken by another item moves). The item shows as `1: S3 buckets`
-  and the key picks it at once. Hotkeys are kept in the state file (`PluginHotkeys`).
+- Every item but the drives (plugin items, places) has a hotkey, as in Far (issues #66, #72): automatically 1, 2,
+  3... 9, 0 in menu order, then letters no drive uses. F4 on an item assigns its own letter or digit (a drive's
+  letter is refused; a key taken by another item moves; empty goes back to automatic), and the automatic keys skip
+  it. Items show as `1: S3 buckets`; the key picks the item at once. Assigned keys are kept in the state file
+  (`PluginHotkeys`, by plugin id or "places" and the title).
 - Cursor starts on the panel's current drive. Choosing a drive opens the last directory the panel
   visited on it, otherwise the root.
 - UNC locations are reached with `cd \\server\share` in the shell; the active panel follows.

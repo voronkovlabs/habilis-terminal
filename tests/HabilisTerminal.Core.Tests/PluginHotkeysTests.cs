@@ -32,4 +32,18 @@ public class PluginHotkeysTests
         Assert.Equal('7', hotkeys.Get("x", "y"));
         Assert.Single(hotkeys.Snapshot());
     }
+
+    [Fact]
+    public void Items_without_an_assigned_key_get_digits_in_order_skipping_taken_keys()
+    {
+        var hotkeys = new PluginHotkeys();
+        hotkeys.Assign("places", "Downloads", '2', ['C']);
+        IReadOnlyList<(string, string)> items = [("aws.s3", "S3 buckets"), ("aws.sqs", "SQS queues"), ("places", "Home"), ("places", "Downloads")];
+
+        Assert.Equal(['1', '3', '4', '2'], hotkeys.Resolve(items, ['C']).Select(k => k!.Value));
+
+        // Past the digits come the letters no drive uses.
+        var many = Enumerable.Range(0, 12).Select(i => ("p", $"item {i}")).ToList();
+        Assert.Equal("1234567890BD", string.Concat(new PluginHotkeys().Resolve(many, ['A', 'C']).Select(k => k!.Value)));
+    }
 }

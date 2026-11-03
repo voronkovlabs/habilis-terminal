@@ -595,44 +595,43 @@ public partial class MainWindow
     {
         var previouslyActive = _active;
         var fromTerminal = TerminalHasFocus;
-        (Core.Plugins.LoadedPlugin, HabilisTerminal.Plugins.PluginMenuItem)? selectPlugin = null;
+        (string Id, string Title)? select = null;
         QuickPickResult? result;
         while (true)
         {
-            result = await PickDriveAsync(panel, fromTerminal, selectPlugin);
+            result = await PickDriveAsync(panel, fromTerminal, select);
             if (result is not { Command: Key.F4 })
             {
                 break;
             }
 
-            // F4 (Far): assign a hotkey to a plugin item, then the menu opens again on it.
-            if (result.Item?.Tag is ValueTuple<Core.Plugins.LoadedPlugin, HabilisTerminal.Plugins.PluginMenuItem> chosen)
+            // F4 (Far): a hotkey for any item but a drive, then the menu opens again on it.
+            select = result.Item?.Tag is DriveMenuEntry entry ? entry.Key : null;
+            if (select is { } key)
             {
-                AssignPluginHotkey(chosen.Item1, chosen.Item2);
-                selectPlugin = chosen;
-            }
-            else
-            {
-                selectPlugin = null;
+                AssignMenuHotkey(key.Id, key.Title);
             }
         }
 
         await OnDriveChosenAsync(panel, result, previouslyActive, fromTerminal);
     }
 
-    /// <summary>F4 in the drive menu: a letter or digit for a plugin item; empty removes it.</summary>
-    private void AssignPluginHotkey(Core.Plugins.LoadedPlugin plugin, HabilisTerminal.Plugins.PluginMenuItem item)
+    /// <summary>A drive menu item that is not a drive: its hotkey identity and what it opens (a plugin item or a path).</summary>
+    private sealed record DriveMenuEntry((string Id, string Title) Key, object Target);
+
+    /// <summary>F4 in the drive menu (issues #66, #72): a letter or digit for an item; empty goes back to the automatic key.</summary>
+    private void AssignMenuHotkey(string id, string title)
     {
-        var current = _pluginHotkeys.Get(plugin.Id, item.Title);
+        var current = _pluginHotkeys.Get(id, title);
         while (true)
         {
             var box = new System.Windows.Controls.TextBox { Text = current?.ToString() ?? string.Empty, MaxLength = 1, Width = 60, HorizontalAlignment = HorizontalAlignment.Left };
             var body = new System.Windows.Controls.StackPanel();
-            var label = new System.Windows.Controls.TextBlock { Text = $"Hotkey for '{item.Title}' (a letter or digit; empty removes it):", Margin = new Thickness(0, 0, 0, 6) };
+            var label = new System.Windows.Controls.TextBlock { Text = $"Hotkey for '{title}' (a letter or digit; empty: the automatic one):", Margin = new Thickness(0, 0, 0, 6) };
             label.SetResourceReference(StyleProperty, "Habi.LabelStyle");
             body.Children.Add(label);
             body.Children.Add(box);
-            var accepted = ThemedDialog.Show(this, "Plugin hotkey", body,
+            var accepted = ThemedDialog.Show(this, "Hotkey", body,
                 [new DialogButton<bool>("OK", true, IsDefault: true), new DialogButton<bool>("Cancel", false, IsCancel: true)], false, box);
             if (!accepted)
             {
@@ -640,17 +639,17 @@ public partial class MainWindow
             }
 
             var text = box.Text.Trim();
-            var error = _pluginHotkeys.Assign(plugin.Id, item.Title, text.Length == 0 ? null : text[0], DriveCatalog.List().Select(d => d.Root[0]));
+            var error = _pluginHotkeys.Assign(id, title, text.Length == 0 ? null : text[0], DriveCatalog.List().Select(d => d.Root[0]));
             if (error is null)
             {
                 return;
             }
 
-            OperationDialogs.Message(this, "Plugin hotkey", error);
+            OperationDialogs.Message(this, "Hotkey", error);
         }
     }
 
-    private async Task<QuickPickResult?> PickDriveAsync(FilePanel panel, bool fromTerminal, (Core.Plugins.LoadedPlugin, HabilisTerminal.Plugins.PluginMenuItem)? selectPlugin)
+    private async Task<QuickPickResult?> PickDriveAsync(FilePanel panel, bool fromTerminal, (string Id, string Title)? select)
     {
         var culture = CultureInfo.CurrentCulture;
         var currentRoot = Path.GetPathRoot(panel.CurrentPath) ?? string.Empty;
@@ -671,7 +670,7 @@ public partial class MainWindow
                 },
                 Hotkey = drive.Root[0],
                 Tag = drive,
-                IsCurrent = selectPlugin is null && string.Equals(drive.Root, currentRoot, StringComparison.OrdinalIgnoreCase),
+                IsCurrent = select is null && string.Equals(drive.Root, currentRoot, StringComparison.OrdinalIgnoreCase),
                 Detail = "…",
             });
         }
@@ -679,36 +678,35 @@ public partial class MainWindow
         var places = DriveCatalog.Places().ToList();
         places.Add(("Other panel", Other(panel).CurrentPath));
 
-        // Plugins' drive-menu items (issue #49), after the drives; F4 assigns them hotkeys (issue #66).
-        var pluginGroup = true;
+        // Everything but the drives gets a hotkey: 1, 2, 3... unless F4 assigned another (issues #66, #72).
+        var extras = new List<(DriveMenuEntry Entry, string Label, string Description, string Icon, string Group)>();
         foreach (var (plugin, entry) in _plugins.DriveMenuItems())
         {
-            var hotkey = _pluginHotkeys.Get(plugin.Id, entry.Title);
-            items.Add(new QuickPickItem
-            {
-                Label = hotkey is { } key ? $"{key}: {entry.Title}" : entry.Title,
-                Description = plugin.Name,
-                Group = pluginGroup ? "Plugins" : null,
-                Icon = Codicon.Folder,
-                Hotkey = hotkey,
-                Tag = (plugin, entry),
-                IsCurrent = selectPlugin is { } selected && selected.Item1 == plugin && selected.Item2 == entry,
-            });
-            pluginGroup = false;
+            extras.Add((new DriveMenuEntry((plugin.Id, entry.Title), (plugin, entry)), entry.Title, plugin.Name, Codicon.Folder, "Plugins"));
         }
 
-        var first = true;
         foreach (var (name, path) in places)
         {
+            var icon = name switch { "Home" => Codicon.Home, "Downloads" => Codicon.Download, "Documents" => Codicon.Document, "Desktop" => Codicon.Desktop, _ => Codicon.Folder };
+            extras.Add((new DriveMenuEntry(("places", name), path), name, path, icon, "Places"));
+        }
+
+        var hotkeys = _pluginHotkeys.Resolve([.. extras.Select(e => e.Entry.Key)], drives.Select(d => d.Root[0]));
+        string? lastGroup = null;
+        for (var i = 0; i < extras.Count; i++)
+        {
+            var (entry, label, description, icon, group) = extras[i];
             items.Add(new QuickPickItem
             {
-                Label = name,
-                Description = path,
-                Group = first ? "Places" : null,
-                Icon = name switch { "Home" => Codicon.Home, "Downloads" => Codicon.Download, "Documents" => Codicon.Document, "Desktop" => Codicon.Desktop, _ => Codicon.Folder },
-                Tag = path,
+                Label = hotkeys[i] is { } key ? $"{key}: {label}" : label,
+                Description = description,
+                Group = group != lastGroup ? group : null,
+                Icon = icon,
+                Hotkey = hotkeys[i],
+                Tag = entry,
+                IsCurrent = select == entry.Key,
             });
-            first = false;
+            lastGroup = group;
         }
 
         // Sizes arrive per drive; slow or disconnected drives never block the menu.
@@ -726,7 +724,7 @@ public partial class MainWindow
         return await QuickPick.ShowAsync(panel, items, new QuickPickOptions
         {
             Title = $"Change drive ({panel.Side.ToLowerInvariant()} panel)",
-            Placeholder = "Drive letter or name · F4 on a plugin item assigns a hotkey",
+            Placeholder = "Drive letter, hotkey or name · F4 changes an item's hotkey",
             OnDelete = item => DisconnectOrEject(item),
             CommandKeys = [Key.F4],
         });
@@ -735,7 +733,7 @@ public partial class MainWindow
     private async Task OnDriveChosenAsync(FilePanel panel, QuickPickResult? result, FilePanel previouslyActive, bool fromTerminal)
     {
 
-        if (result?.Item?.Tag is ValueTuple<Core.Plugins.LoadedPlugin, HabilisTerminal.Plugins.PluginMenuItem> pluginItem)
+        if (result?.Item?.Tag is DriveMenuEntry { Target: ValueTuple<Core.Plugins.LoadedPlugin, HabilisTerminal.Plugins.PluginMenuItem> pluginItem })
         {
             if (!IsShown(panel))
             {
@@ -749,7 +747,7 @@ public partial class MainWindow
         string? target = result?.Item?.Tag switch
         {
             DriveSummary drive => _lastPathPerDrive.TryGetValue(drive.Root, out var last) && Directory.Exists(last) ? last : drive.Root,
-            string path => path,
+            DriveMenuEntry { Target: string path } => path,
             _ => null,
         };
 
