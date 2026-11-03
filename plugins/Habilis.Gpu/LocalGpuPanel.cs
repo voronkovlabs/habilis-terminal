@@ -1,16 +1,19 @@
 using System.Globalization;
+using System.IO;
 using System.Runtime.CompilerServices;
 using System.Text;
+using System.Windows;
 using HabilisTerminal.Plugins;
+using HabilisTerminal.Plugins.Wpf;
 
 namespace Habilis.Gpu;
 
 /// <summary>
-/// This computer's NVIDIA GPUs, like nvtop (issue #70): the GPUs with load, memory, temperature and power, then the
-/// processes using them; Enter on a GPU lists its processes. The panel samples nvidia-smi and refreshes itself every
-/// few seconds; Ctrl+Q in the other panel shows charts of the last minutes. Read-only.
+/// This computer's NVIDIA GPUs, like nvtop (issues #70, #79). The panel draws itself (<see cref="NvtopView"/>): per GPU
+/// load and memory, CPU and RAM, a chart of the recent values and the processes using the GPU. It samples every few
+/// seconds; Shift+F4 pauses. The listing behind it (GPUs, then processes) feeds Ctrl+L, Ctrl+Q and F3. Read-only.
 /// </summary>
-internal sealed class LocalGpuPanel : IPanelProvider, IQuickViewEntry, IViewEntry, IPanelCommands
+internal sealed class LocalGpuPanel : IPanelProvider, IQuickViewEntry, IViewEntry, IPanelCommands, IPanelView
 {
     public const string LoadKey = "load";
     public const string MemoryKey = "memory";
@@ -18,7 +21,7 @@ internal sealed class LocalGpuPanel : IPanelProvider, IQuickViewEntry, IViewEntr
     public const string PowerKey = "power";
     public const string GpuKey = "gpu";
     public const string PidKey = "pid";
-    private const int HistoryLength = 60;
+    private const int HistoryLength = 120;
 
     private static readonly PanelColumn Load = new(LoadKey, "GPU %", 64, AlignRight: true);
     private static readonly PanelColumn Memory = new(MemoryKey, "Memory", 120, AlignRight: true);
@@ -29,17 +32,24 @@ internal sealed class LocalGpuPanel : IPanelProvider, IQuickViewEntry, IViewEntr
 
     private readonly IPluginHost _host;
     private readonly IGpuSource _source;
+    private readonly ISystemSource _system;
     private readonly TimeSpan _interval;
     private readonly CancellationTokenSource _stop = new();
+    private readonly SemaphoreSlim _sampling = new(1, 1);
     private readonly Dictionary<string, (History Load, History Memory, History Temperature, History Power)> _history = [];
+    private readonly History _cpu = new(HistoryLength);
+    private readonly History _ram = new(HistoryLength);
     private GpuSnapshot? _snapshot;
+    private LocalSample? _sample;
     private string? _gpu; // the GPU whose processes are listed, by uuid
     private Task? _timer;
+    private NvtopView? _view;
 
-    public LocalGpuPanel(IPluginHost host, IGpuSource source, TimeSpan interval)
+    public LocalGpuPanel(IPluginHost host, IGpuSource source, ISystemSource system, TimeSpan interval)
     {
         _host = host;
         _source = source;
+        _system = system;
         _interval = interval;
         Commands = [new PanelCommand("Pause or resume refreshing", "Shift+F4", _ => TogglePause())];
     }
@@ -76,12 +86,20 @@ internal sealed class LocalGpuPanel : IPanelProvider, IQuickViewEntry, IViewEntr
         }
     }
 
+    /// <summary>The latest sample (tests).</summary>
+    internal LocalSample? LastSample => _sample;
+
     private GpuSample? Selected => _snapshot?.Gpus.FirstOrDefault(g => g.Uuid == _gpu);
 
     public async IAsyncEnumerable<IReadOnlyList<PanelEntry>> ListAsync([EnumeratorCancellation] CancellationToken cancellationToken)
     {
-        var snapshot = await _source.SampleAsync(cancellationToken).ConfigureAwait(false);
-        Record(snapshot);
+        // The refresh loop samples just before it asks the host to list: a fresh sample is used, not taken again.
+        if (_sample is null || DateTime.UtcNow - _sample.Gpus.TakenUtc > _interval / 2 || _sample.Gpus.TakenUtc > DateTime.UtcNow.AddMinutes(1))
+        {
+            await SampleAsync(cancellationToken).ConfigureAwait(false);
+        }
+
+        var snapshot = _snapshot!;
         _timer ??= RefreshLoopAsync();
         if (_gpu is not null && snapshot.Gpus.All(g => g.Uuid != _gpu))
         {
@@ -120,6 +138,13 @@ internal sealed class LocalGpuPanel : IPanelProvider, IQuickViewEntry, IViewEntr
         return Task.FromResult(true);
     }
 
+    public FrameworkElement CreateView(IPanelViewHost host)
+    {
+        _view = new NvtopView();
+        ShowInView();
+        return _view;
+    }
+
     public Task<string?> QuickViewAsync(PanelEntry entry, CancellationToken cancellationToken) => Task.FromResult<string?>(Describe(entry));
 
     public Task<(string Title, string Text)?> ViewAsync(PanelEntry entry, CancellationToken cancellationToken) =>
@@ -141,6 +166,7 @@ internal sealed class LocalGpuPanel : IPanelProvider, IQuickViewEntry, IViewEntr
         }
 
         _stop.Dispose();
+        _sampling.Dispose();
     }
 
     internal static string GpuName(GpuSample gpu) => $"{gpu.Index}: {gpu.Name}";
@@ -223,6 +249,40 @@ internal sealed class LocalGpuPanel : IPanelProvider, IQuickViewEntry, IViewEntr
         };
     }
 
+    /// <summary>One sample of the GPUs, the system and the processes; recorded for the charts and shown.</summary>
+    private async Task SampleAsync(CancellationToken cancellationToken)
+    {
+        await _sampling.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            var gpus = await _source.SampleAsync(cancellationToken).ConfigureAwait(false);
+            var (system, processes) = await Task.Run(() => _system.Sample(gpus.Processes), cancellationToken).ConfigureAwait(false);
+            Record(gpus);
+            _cpu.Add(system.CpuPercent);
+            _ram.Add(system.RamPercent);
+            _sample = new LocalSample(gpus, system, processes);
+            ShowInView();
+        }
+        finally
+        {
+            _sampling.Release();
+        }
+    }
+
+    private void ShowInView()
+    {
+        if (_view is not { } view || _sample is not { } sample)
+        {
+            return;
+        }
+
+        var charts = _history.ToDictionary(h => h.Key, h => (h.Value.Load.Values, h.Value.Memory.Values));
+        var cpu = _cpu.Values;
+        var ram = _ram.Values;
+        var paused = Paused;
+        _ = view.Dispatcher.BeginInvoke(() => view.Show(sample, charts, cpu, ram, paused));
+    }
+
     private void Record(GpuSnapshot snapshot)
     {
         _snapshot = snapshot;
@@ -245,6 +305,7 @@ internal sealed class LocalGpuPanel : IPanelProvider, IQuickViewEntry, IViewEntr
     {
         Paused = !Paused;
         _host.ShowStatus(Paused ? "GPU monitor paused (Shift+F4 resumes)." : "GPU monitor refreshing again.");
+        ShowInView();
         return Task.CompletedTask;
     }
 
@@ -255,6 +316,15 @@ internal sealed class LocalGpuPanel : IPanelProvider, IQuickViewEntry, IViewEntr
         {
             if (!Paused)
             {
+                try
+                {
+                    await SampleAsync(_stop.Token).ConfigureAwait(false);
+                }
+                catch (PluginException)
+                {
+                    // nvidia-smi failed this once: the listing shows the error.
+                }
+
                 _host.Refresh(this);
             }
         }

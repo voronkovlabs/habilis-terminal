@@ -105,6 +105,7 @@ public static class PluginLoader
     {
         private static readonly Assembly SdkAssembly = typeof(Plugin).Assembly;
         private static readonly string SdkName = SdkAssembly.GetName().Name!;
+        private const string SdkWpfName = "HabilisTerminal.Plugins.Sdk.Wpf";
         private readonly AssemblyDependencyResolver _resolver = new(assemblyPath);
 
         protected override Assembly? Load(AssemblyName assemblyName)
@@ -116,6 +117,12 @@ public static class PluginLoader
                 // refuse a plugin built against a newer minor SDK, and compatibility is already checked through the
                 // manifest's "sdk" (issue #60).
                 return SdkAssembly;
+            }
+
+            // The WPF part of the SDK (issue #78) is shared the same way: the host's copy, by name.
+            if (assemblyName.Name == SdkWpfName)
+            {
+                return Default.LoadFromAssemblyName(new AssemblyName(SdkWpfName));
             }
 
             return _resolver.ResolveAssemblyToPath(assemblyName) is { } path ? LoadFromAssemblyPath(path) : null;

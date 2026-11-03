@@ -47,7 +47,7 @@ public sealed class GpuTests
     {
         var host = new FakeHost();
         var source = new FakeSource();
-        var plugin = new GpuPlugin { Local = () => source, Clock = () => Now };
+        var plugin = new GpuPlugin { Local = () => source, System = () => new FakeSystem(), Clock = () => Now };
         plugin.Initialize(host);
         host.Save(new System.Text.Json.Nodes.JsonObject { ["localIntervalSeconds"] = 1 });
         await using var panel = (LocalGpuPanel)(await plugin.OpenAddressAsync("gpu:", CancellationToken.None))!;
@@ -83,7 +83,7 @@ public sealed class GpuTests
     public async Task Without_nvidia_smi_the_panel_says_so()
     {
         var host = new FakeHost();
-        var plugin = new GpuPlugin { Local = () => new FakeSource { Failure = new PluginException("nvidia-smi was not found: the GPU monitor needs an NVIDIA GPU and its driver.") } };
+        var plugin = new GpuPlugin { System = () => new FakeSystem(), Local = () => new FakeSource { Failure = new PluginException("nvidia-smi was not found: the GPU monitor needs an NVIDIA GPU and its driver.") } };
         plugin.Initialize(host);
         await using var panel = (await plugin.OpenAddressAsync("gpu:", CancellationToken.None))!;
 
@@ -128,6 +128,34 @@ public sealed class GpuTests
 
         var error = await Assert.ThrowsAsync<PluginException>(() => Listing.AllAsync(panel));
         Assert.Contains("training jobs in progress", error.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task The_nvtop_view_gets_cpu_ram_and_process_gpu_use_and_the_cloud_job_list_has_no_parent_row()
+    {
+        var host = new FakeHost();
+        var plugin = new GpuPlugin { Local = () => new FakeSource(), System = () => new FakeSystem(), Clock = () => Now, Cloud = _ => new FakeCloud() };
+        plugin.Initialize(host);
+        await using var panel = (LocalGpuPanel)(await plugin.OpenAddressAsync("gpu:", CancellationToken.None))!;
+        await Listing.AllAsync(panel);
+
+        Assert.IsAssignableFrom<HabilisTerminal.Plugins.Wpf.IPanelView>(panel);
+        var sample = panel.LastSample!;
+        Assert.Equal(37, sample.System.CpuPercent);
+        Assert.Equal(50, sample.System.RamPercent);
+        Assert.Equal(("python", 81.0), (sample.Processes[0].Name, sample.Processes[0].GpuPercent!.Value));
+
+        await using var cloud = (CloudGpuPanel)(await plugin.OpenAddressAsync("gpu:sm:prod/eu-west-1", CancellationToken.None))!;
+        Assert.False(cloud.ShowsParent);
+        var jobs = await Listing.AllAsync(cloud);
+        await cloud.EnterAsync(jobs[0], CancellationToken.None);
+        Assert.True(cloud.ShowsParent);
+    }
+
+    private sealed class FakeSystem : ISystemSource
+    {
+        public (SystemSample System, IReadOnlyList<ProcessUse> Processes) Sample(IReadOnlyList<GpuProcess> nvidiaProcesses) =>
+            (new SystemSample(37, 8192, 16384), [new ProcessUse(4242, "python", "Compute", 81, 17000, 12, 2048)]);
     }
 
     private sealed class FakeSource : IGpuSource

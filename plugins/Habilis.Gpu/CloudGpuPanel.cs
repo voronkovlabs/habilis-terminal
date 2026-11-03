@@ -44,6 +44,9 @@ internal sealed class CloudGpuPanel : IPanelProvider, IQuickViewEntry, IViewEntr
 
     public string Title => $"GPU monitor · SageMaker · {_session.Profile} · {_session.Region}";
 
+    /// <summary>The job list is flat (no ".."); inside a job ".." goes back to it (issue #77).</summary>
+    public bool ShowsParent => _job is not null;
+
     public string Location => $"gpu:sm:{_session.Profile}/{_session.Region}" + (_job is null ? string.Empty : "/" + _job.Name);
 
     public IReadOnlyList<PanelLayout> Layouts { get; } = [new("Monitor", [Instances, Gpu, GpuMemory, Cpu, Memory])];

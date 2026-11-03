@@ -11,11 +11,13 @@ $feed = Join-Path $repo 'artifacts\nuget'
 $packages = Join-Path $repo 'artifacts\packages'
 $output = Join-Path $repo 'artifacts\plugins'
 
-dotnet pack "$repo\src\HabilisTerminal.Plugins.Sdk" -c $Configuration -o $feed -nologo -v q | Out-Host
-if ($LASTEXITCODE -ne 0) { throw 'Packing the SDK failed.' }
+foreach ($sdk in 'HabilisTerminal.Plugins.Sdk', 'HabilisTerminal.Plugins.Sdk.Wpf') {
+    dotnet pack "$repo\src\$sdk" -c $Configuration -o $feed -nologo -v q | Out-Host
+    if ($LASTEXITCODE -ne 0) { throw "Packing $sdk failed." }
 
-# The SDK version stays 1.0.0 while it is developed here: drop the restored copy so the fresh package is used.
-Remove-Item -Recurse -Force (Join-Path $packages 'habilisterminal.plugins.sdk') -ErrorAction Ignore
+    # The SDK version stays the same while it is developed here: drop the restored copy so the fresh package is used.
+    Remove-Item -Recurse -Force (Join-Path $packages $sdk.ToLowerInvariant()) -ErrorAction Ignore
+}
 
 $solution = "$repo\plugins\Plugins.slnx"
 dotnet build $solution -c $Configuration -nologo -v q | Out-Host

@@ -3,5 +3,5 @@
   "name": "GPU Monitor",
   "version": "1.0.0",
   "assembly": "Habilis.Gpu.dll",
-  "sdk": "1.1"
+  "sdk": "1.2"
 }

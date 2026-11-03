@@ -52,6 +52,9 @@ internal sealed class SqsPanel : IPanelProvider, IPanelCommands, IViewEntry
 
     public IReadOnlyList<PanelCommand> Commands { get; }
 
+    /// <summary>A flat list: no ".." row (issue #77); Ctrl+PgUp still leaves the panel.</summary>
+    public bool ShowsParent => false;
+
     public IReadOnlyList<InfoLine> Info
     {
         get

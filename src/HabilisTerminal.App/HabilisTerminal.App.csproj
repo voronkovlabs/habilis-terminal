@@ -46,6 +46,7 @@
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\HabilisTerminal.Core\HabilisTerminal.Core.csproj" />
+    <ProjectReference Include="..\HabilisTerminal.Plugins.Sdk.Wpf\HabilisTerminal.Plugins.Sdk.Wpf.csproj" />
     <ProjectReference Include="..\HabilisTerminal.Shell\HabilisTerminal.Shell.csproj" />
     <ProjectReference Include="..\HabilisTerminal.Themes\HabilisTerminal.Themes.csproj" />
   </ItemGroup>

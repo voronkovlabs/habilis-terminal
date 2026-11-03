@@ -12,6 +12,8 @@ public sealed class GpuPlugin : Plugin
 {
     internal Func<IGpuSource> Local { get; set; }
 
+    internal Func<ISystemSource> System { get; set; } = () => new WindowsSystem();
+
     internal Func<AwsSession, ICloudGpuApi> Cloud { get; set; } = session => new CloudGpuApi(session);
 
     internal Func<DateTime> Clock { get; set; } = () => DateTime.UtcNow;
@@ -56,7 +58,7 @@ public sealed class GpuPlugin : Plugin
     private Task<IPanelProvider?> OpenLocal()
     {
         var settings = GpuSettings.Load(Host.Settings);
-        return Task.FromResult<IPanelProvider?>(new LocalGpuPanel(Host, Local(), TimeSpan.FromSeconds(settings.LocalIntervalSeconds)));
+        return Task.FromResult<IPanelProvider?>(new LocalGpuPanel(Host, Local(), System(), TimeSpan.FromSeconds(settings.LocalIntervalSeconds)));
     }
 
     private Task<IPanelProvider?> OpenCloud(string? profile, string? region)

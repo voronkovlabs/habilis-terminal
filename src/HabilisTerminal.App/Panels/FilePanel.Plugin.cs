@@ -59,6 +59,7 @@ public sealed partial class FilePanel
         SizeWorker.Cancel(this);
         _session = new PluginSession(plugin, provider, returnPath, returnFocus);
         State.SetExtension(_session.Extension);
+        ShowPluginView(plugin, provider);
         _session.ApplyLayout(0, provider);
         if (await ListPluginAsync(focusName: null, opening: true))
         {
@@ -108,7 +109,7 @@ public sealed partial class FilePanel
                 {
                     shownFirst = true;
                     session.Entries = new Dictionary<(string, bool), PanelEntry>(entries);
-                    State.SetListing(location, rows.ToArray(), focusName, hasParent: true);
+                    State.SetListing(location, rows.ToArray(), focusName, hasParent: ShowsParent(session));
                     Refresh();
                     Message = "Loading…";
                 }
@@ -135,7 +136,7 @@ public sealed partial class FilePanel
 
         session.Entries = entries;
         Message = null;
-        State.SetListing(location, rows, focusName, hasParent: true);
+        State.SetListing(location, rows, focusName, hasParent: ShowsParent(session));
         Refresh();
         if (!samePath)
         {
@@ -247,6 +248,8 @@ public sealed partial class FilePanel
         _session = null;
         _loading?.Cancel();
         State.SetExtension(null);
+        _pluginViewHost.Content = null;
+        UpdateBody();
         _ = DisposeQuietlyAsync(session.Provider);
     }
 
@@ -269,6 +272,37 @@ public sealed partial class FilePanel
         var cut = trimmed.LastIndexOfAny(['/', '\\', ':']);
         return cut >= 0 && cut < trimmed.Length - 1 ? trimmed[(cut + 1)..] : null;
     }
+
+    /// <summary>A provider with its own WPF view (issue #78) shows it in place of the list; a failing view leaves the list.</summary>
+    private void ShowPluginView(LoadedPlugin plugin, IPanelProvider provider)
+    {
+        _pluginViewHost.Content = null;
+        if (provider is HabilisTerminal.Plugins.Wpf.IPanelView view)
+        {
+            try
+            {
+                _pluginViewHost.Content = view.CreateView(new PluginViewHost(this));
+            }
+            catch (Exception ex) when (ex is not OutOfMemoryException)
+            {
+                Message = PluginManager.Describe(plugin, ex);
+            }
+        }
+
+        UpdateBody();
+    }
+
+    /// <summary>The host side of a plugin view: refresh and keyboard back to the panel.</summary>
+    private sealed class PluginViewHost(FilePanel panel) : HabilisTerminal.Plugins.Wpf.IPanelViewHost
+    {
+        public void Refresh() => panel.Dispatcher.BeginInvoke(() => _ = panel.ListPluginAsync());
+
+        public void FocusPanel() => panel.Dispatcher.BeginInvoke(() => panel.Focus());
+    }
+
+    /// <summary>The provider's choice of a ".." row (issue #77); a provider that fails to answer keeps it.</summary>
+    private static bool ShowsParent(PluginSession session) =>
+        PluginManager.Guard(session.Plugin, () => session.Provider.ShowsParent, true);
 
     private static (string, bool) RowKey(FileEntry entry) => (entry.Name, entry.IsDirectory);
 

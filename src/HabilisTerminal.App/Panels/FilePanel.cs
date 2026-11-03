@@ -25,6 +25,7 @@ public sealed partial class FilePanel : Border
     private readonly FileListView _list = new();
     private readonly InfoPanelView _info = new();
     private readonly QuickView _quickView = new() { Visibility = Visibility.Collapsed };
+    private readonly ContentControl _pluginViewHost = new() { Focusable = false, Visibility = Visibility.Collapsed, IsTabStop = false };
     private int _quickViewVersion;
     private FilePanel? _quickViewSource;
     private readonly TextBlock _title = new();
@@ -117,6 +118,7 @@ public sealed partial class FilePanel : Border
         _quickSearch.Visibility = Visibility.Collapsed;
 
         _body.Children.Add(_list);
+        _body.Children.Add(_pluginViewHost);
         _body.Children.Add(_info);
         _body.Children.Add(_quickView);
         _body.Children.Add(_quickSearch);
@@ -192,8 +194,7 @@ public sealed partial class FilePanel : Border
         set
         {
             _info.Source = value;
-            _info.Visibility = value is null ? Visibility.Collapsed : Visibility.Visible;
-            _list.Visibility = value is null ? Visibility.Visible : Visibility.Collapsed;
+            UpdateBody();
             _info.InvalidateVisual();
         }
     }
@@ -205,8 +206,7 @@ public sealed partial class FilePanel : Border
         set
         {
             _quickViewSource = value;
-            _quickView.Visibility = value is null ? Visibility.Collapsed : Visibility.Visible;
-            _list.Visibility = value is null && InfoSource is null ? Visibility.Visible : Visibility.Collapsed;
+            UpdateBody();
             if (value is null)
             {
                 _quickView.Dispose();
@@ -216,6 +216,16 @@ public sealed partial class FilePanel : Border
                 UpdateQuickView();
             }
         }
+    }
+
+    /// <summary>What the panel body shows: info or quick view of the other panel, a plugin's own view, or the list.</summary>
+    private void UpdateBody()
+    {
+        var otherContent = InfoSource is not null || _quickViewSource is not null;
+        _info.Visibility = InfoSource is null ? Visibility.Collapsed : Visibility.Visible;
+        _quickView.Visibility = _quickViewSource is null ? Visibility.Collapsed : Visibility.Visible;
+        _pluginViewHost.Visibility = !otherContent && _pluginViewHost.Content is not null ? Visibility.Visible : Visibility.Collapsed;
+        _list.Visibility = !otherContent && _pluginViewHost.Content is null ? Visibility.Visible : Visibility.Collapsed;
     }
 
     /// <summary>Follows the source panel's cursor.</summary>

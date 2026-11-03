@@ -37,6 +37,12 @@ public interface IPanelProvider : IAsyncDisposable
 
     /// <summary>Lines for the info panel (Ctrl+L) and the panel's status line, e.g. profile, region, counts.</summary>
     IReadOnlyList<InfoLine> Info { get; }
+
+    /// <summary>
+    /// Whether the listing starts with ".." (SDK 1.2). Flat lists (queues, jobs) can do without it; the panel is still
+    /// left with Ctrl+PgUp, the drive menu or folder history. Asked after each listing, so it may differ per location.
+    /// </summary>
+    bool ShowsParent => true;
 }
 
 /// <summary>An entry of a plugin panel.</summary>

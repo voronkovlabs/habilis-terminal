@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.IO;
 using HabilisTerminal.Plugins;
 
 namespace Habilis.Gpu;

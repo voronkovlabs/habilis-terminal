@@ -84,6 +84,9 @@ internal sealed class SageMakerPanel : IPanelProvider, IPanelCommands, IViewEntr
     /// <summary>F5 saves job records; there is nothing to move.</summary>
     public bool CanMove => false;
 
+    /// <summary>A flat list: no ".." row (issue #77); Ctrl+PgUp still leaves the panel.</summary>
+    public bool ShowsParent => false;
+
     public IReadOnlyList<InfoLine> Info
     {
         get
