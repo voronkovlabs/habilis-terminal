@@ -337,7 +337,8 @@ F6 switches between viewer and editor, as in Far. One page at a time (no F12 scr
   read-only AvalonEdit with the editor's syntax colours, line numbers, mouse selection and Ctrl+C. The viewer keys
   stay: F2 wrap, F4 hex (the paged control at the caret's line; F4 again returns), F7 / Shift+F7 / Alt+F7 search,
   F8 / Shift+F8 encoding, Alt+F8 go to line or percent (a `0x` offset opens hex there). Larger and binary files
-  use the paged control.
+  use the paged control. The page opens at once in the paged control; the text mode is built in the background and
+  takes over at about the same place when ready (issue #76), so a large file never freezes the window.
 - Text / hex modes, word wrap on/off.
 - Encodings: auto-detection (BOM, UTF-8 heuristic), manual switch to UTF-8, UTF-16 LE/BE, ANSI (1251), OEM (866).
 - Search (F7, Shift+F7 next), go to line / offset.

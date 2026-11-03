@@ -55,7 +55,7 @@ public static class PanelColumns
         state.Extension is { } extension
             ? extension.Columns.Select(c => c.Key switch
             {
-                "size" => Size with { Title = c.Title },
+                "size" => CompactSize with { Title = c.Title }, // "62 MB", as in folder panels (issue #76)
                 "modified" => Modified with { Title = c.Title },
                 _ => new ColumnSpec(ColumnKind.Custom, c.Title, c.Width, c.AlignRight, null, c.Key),
             }).ToArray()

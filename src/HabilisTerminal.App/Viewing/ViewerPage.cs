@@ -36,8 +36,9 @@ public sealed class ViewerPage : DockPanel, IDisposable, IPage
     private readonly TextBlock _info = new();
     private readonly TextBlock _hint = new();
     private readonly ViewerDocument? _document;
-    private readonly TextEditor? _text;
+    private TextEditor? _text;
     private TextFile? _textFile;
+    private bool _closed;
     private string _lastSearch = string.Empty;
 
     public ViewerPage(string path, AppSettings settings, ColorTheme theme)
@@ -87,24 +88,14 @@ public sealed class ViewerPage : DockPanel, IDisposable, IPage
         }
 
         _view.PositionChanged += UpdateInfo;
-        if (_document is not null && FitsTextMode(path, settings.ViewerTextModeMaxMB))
-        {
-            try
-            {
-                _textFile = TextFile.Load(path);
-                _text = CreateTextEditor(_textFile, settings, theme);
-                Children.Add(_text);
-                UpdateInfo();
-                return;
-            }
-            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-            {
-                // The paged view below reads it in parts.
-            }
-        }
-
         Children.Add(_view);
         UpdateInfo();
+        if (_document is not null && FitsTextMode(path, settings.ViewerTextModeMaxMB))
+        {
+            // The paged view shows at once; the text mode is built in the background and takes over when ready, so a
+            // large file never freezes the window (issue #76).
+            _ = LoadTextModeAsync(path, settings, theme);
+        }
     }
 
     /// <summary>Esc / F3 / F10.</summary>
@@ -118,7 +109,11 @@ public sealed class ViewerPage : DockPanel, IDisposable, IPage
     /// <summary>The read-only editor is showing (not hex, not the paged view).</summary>
     private bool ShowingText => _text is not null && _text.Parent == this;
 
-    public void Dispose() => _document?.Dispose();
+    public void Dispose()
+    {
+        _closed = true;
+        _document?.Dispose();
+    }
 
     public void FocusContent()
     {
@@ -373,7 +368,55 @@ public sealed class ViewerPage : DockPanel, IDisposable, IPage
         }
     }
 
-    private TextEditor CreateTextEditor(TextFile file, AppSettings settings, ColorTheme theme)
+    /// <summary>
+    /// Reads and decodes the file and builds the editor's document off the UI thread, then shows the text mode in place
+    /// of the paged view at about the same place; not when the page closed or the user switched to hex meanwhile.
+    /// </summary>
+    private async Task LoadTextModeAsync(string path, AppSettings settings, ColorTheme theme)
+    {
+        var ui = Dispatcher.Thread;
+        (TextFile File, ICSharpCode.AvalonEdit.Document.TextDocument Document) loaded;
+        try
+        {
+            loaded = await Task.Run(() =>
+            {
+                var file = TextFile.Load(path);
+                var document = new ICSharpCode.AvalonEdit.Document.TextDocument(file.Text);
+                document.SetOwnerThread(ui);
+                return (file, document);
+            });
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or OutOfMemoryException)
+        {
+            return; // the paged view stays
+        }
+
+        if (_closed || _view.Hex || !ReferenceEquals(_view.Parent, this))
+        {
+            return;
+        }
+
+        _textFile = loaded.File;
+        _text = CreateTextEditor(loaded.File, loaded.Document, settings, theme);
+        var share = _document!.Length > 0 ? (double)_view.TopOffset / _document.Length : 0;
+        var hadFocus = IsKeyboardFocusWithin;
+        Children.Remove(_view);
+        Children.Add(_text);
+        if (share > 0)
+        {
+            var line = Math.Clamp((int)Math.Round(share * _text.LineCount), 1, _text.LineCount);
+            _text.TextArea.Caret.Line = line;
+            _text.ScrollTo(line, 0);
+        }
+
+        UpdateInfo();
+        if (hadFocus)
+        {
+            _ = Dispatcher.BeginInvoke(() => _text.Focus(), System.Windows.Threading.DispatcherPriority.Input);
+        }
+    }
+
+    private TextEditor CreateTextEditor(TextFile file, ICSharpCode.AvalonEdit.Document.TextDocument document, AppSettings settings, ColorTheme theme)
     {
         var editor = new TextEditor
         {
@@ -382,7 +425,7 @@ public sealed class ViewerPage : DockPanel, IDisposable, IPage
             FontSize = settings.ViewerFontSize,
             ShowLineNumbers = true,
             WordWrap = settings.ViewerWrap,
-            Text = file.Text,
+            Document = document,
             SyntaxHighlighting = settings.EditorSyntaxHighlighting ? HighlightingManager.Instance.GetDefinitionByExtension(Path.GetExtension(file.Path)) : null,
         };
         editor.Options.HighlightCurrentLine = true;
