@@ -64,6 +64,7 @@ public partial class MainWindow
                 MenuCommand.Separator,
                 new MenuCommand("Keyboard help", "F1", ShowHelp),
                 new MenuCommand("Send feedback…", null, ShowFeedback),
+                new MenuCommand("Check for updates", null, () => Fire(CheckForUpdatesAsync())),
                 new MenuCommand("About Habilis Terminal", null, ShowAbout),
             ]),
             PanelMenu(RightMenu, _right),
@@ -226,6 +227,31 @@ public partial class MainWindow
     private void OnUpdateReady(string version) =>
         Toasts.Notify("update", "Update ready", $"Habilis Terminal {version} has been downloaded. It is installed when you exit, or now:",
             ("Restart to update", RestartToUpdate));
+
+    /// <summary>F9 > Options > Check for updates (issue #71): the answer in a notice.</summary>
+    private async Task CheckForUpdatesAsync()
+    {
+        Toasts.Notify("update", "Checking for updates…", $"Habilis Terminal {Updates.UpdateService.RunningVersion}");
+        var check = await App.Updates.CheckNowAsync();
+        switch (check.Kind)
+        {
+            case Updates.UpdateCheckKind.Ready:
+                OnUpdateReady(check.Version);
+                break;
+            case Updates.UpdateCheckKind.Available:
+                Toasts.Notify("update", "Update available",
+                    $"Habilis Terminal {check.Version} is available. This copy is {(App.Paths.IsPortable ? "portable" : "a development build")}, so it does not update itself: download the new version from the releases page.",
+                    ("Open releases page", () => App.OpenInBrowser(Updates.UpdateService.ReleasesUrl)));
+                break;
+            case Updates.UpdateCheckKind.UpToDate:
+                Toasts.Notify("update", "No updates", $"Habilis Terminal {check.Version} is the latest version.");
+                break;
+            default:
+                Toasts.Notify("update", "Cannot check for updates", check.Problem ?? "The check failed.",
+                    ("Open releases page", () => App.OpenInBrowser(Updates.UpdateService.ReleasesUrl)));
+                break;
+        }
+    }
 
     private void RestartToUpdate()
     {

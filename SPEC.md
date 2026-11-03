@@ -469,6 +469,9 @@ Approach:
 
 - Velopack: per-user installer without UAC into `%LOCALAPPDATA%`, background updates from GitHub Releases with a
   "Restart to update" notification. Self-contained .NET 10, x64 and arm64.
+- F9 > Options > Check for updates (issue #71): an installed copy checks at once and downloads a found update (then
+  "Restart to update"); portable and development builds ask GitHub for the latest release and, when it is newer,
+  offer the releases page. The answer is a notice: no updates, update ready, update available, or why it failed.
 - Portable zip with the `portable` marker.
 - winget manifest pointing to the same installer.
 - GitHub Actions on `windows-latest`: build → tests → `dotnet publish` → `vpk pack` → zip → release.
