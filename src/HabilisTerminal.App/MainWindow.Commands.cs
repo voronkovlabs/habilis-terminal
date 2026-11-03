@@ -595,6 +595,63 @@ public partial class MainWindow
     {
         var previouslyActive = _active;
         var fromTerminal = TerminalHasFocus;
+        (Core.Plugins.LoadedPlugin, HabilisTerminal.Plugins.PluginMenuItem)? selectPlugin = null;
+        QuickPickResult? result;
+        while (true)
+        {
+            result = await PickDriveAsync(panel, fromTerminal, selectPlugin);
+            if (result is not { Command: Key.F4 })
+            {
+                break;
+            }
+
+            // F4 (Far): assign a hotkey to a plugin item, then the menu opens again on it.
+            if (result.Item?.Tag is ValueTuple<Core.Plugins.LoadedPlugin, HabilisTerminal.Plugins.PluginMenuItem> chosen)
+            {
+                AssignPluginHotkey(chosen.Item1, chosen.Item2);
+                selectPlugin = chosen;
+            }
+            else
+            {
+                selectPlugin = null;
+            }
+        }
+
+        await OnDriveChosenAsync(panel, result, previouslyActive, fromTerminal);
+    }
+
+    /// <summary>F4 in the drive menu: a letter or digit for a plugin item; empty removes it.</summary>
+    private void AssignPluginHotkey(Core.Plugins.LoadedPlugin plugin, HabilisTerminal.Plugins.PluginMenuItem item)
+    {
+        var current = _pluginHotkeys.Get(plugin.Id, item.Title);
+        while (true)
+        {
+            var box = new System.Windows.Controls.TextBox { Text = current?.ToString() ?? string.Empty, MaxLength = 1, Width = 60, HorizontalAlignment = HorizontalAlignment.Left };
+            var body = new System.Windows.Controls.StackPanel();
+            var label = new System.Windows.Controls.TextBlock { Text = $"Hotkey for '{item.Title}' (a letter or digit; empty removes it):", Margin = new Thickness(0, 0, 0, 6) };
+            label.SetResourceReference(StyleProperty, "Habi.LabelStyle");
+            body.Children.Add(label);
+            body.Children.Add(box);
+            var accepted = ThemedDialog.Show(this, "Plugin hotkey", body,
+                [new DialogButton<bool>("OK", true, IsDefault: true), new DialogButton<bool>("Cancel", false, IsCancel: true)], false, box);
+            if (!accepted)
+            {
+                return;
+            }
+
+            var text = box.Text.Trim();
+            var error = _pluginHotkeys.Assign(plugin.Id, item.Title, text.Length == 0 ? null : text[0], DriveCatalog.List().Select(d => d.Root[0]));
+            if (error is null)
+            {
+                return;
+            }
+
+            OperationDialogs.Message(this, "Plugin hotkey", error);
+        }
+    }
+
+    private async Task<QuickPickResult?> PickDriveAsync(FilePanel panel, bool fromTerminal, (Core.Plugins.LoadedPlugin, HabilisTerminal.Plugins.PluginMenuItem)? selectPlugin)
+    {
         var culture = CultureInfo.CurrentCulture;
         var currentRoot = Path.GetPathRoot(panel.CurrentPath) ?? string.Empty;
         var items = new List<QuickPickItem>();
@@ -614,7 +671,7 @@ public partial class MainWindow
                 },
                 Hotkey = drive.Root[0],
                 Tag = drive,
-                IsCurrent = string.Equals(drive.Root, currentRoot, StringComparison.OrdinalIgnoreCase),
+                IsCurrent = selectPlugin is null && string.Equals(drive.Root, currentRoot, StringComparison.OrdinalIgnoreCase),
                 Detail = "…",
             });
         }
@@ -622,17 +679,20 @@ public partial class MainWindow
         var places = DriveCatalog.Places().ToList();
         places.Add(("Other panel", Other(panel).CurrentPath));
 
-        // Plugins' drive-menu items (issue #49), after the drives.
+        // Plugins' drive-menu items (issue #49), after the drives; F4 assigns them hotkeys (issue #66).
         var pluginGroup = true;
         foreach (var (plugin, entry) in _plugins.DriveMenuItems())
         {
+            var hotkey = _pluginHotkeys.Get(plugin.Id, entry.Title);
             items.Add(new QuickPickItem
             {
-                Label = entry.Title,
+                Label = hotkey is { } key ? $"{key}: {entry.Title}" : entry.Title,
                 Description = plugin.Name,
                 Group = pluginGroup ? "Plugins" : null,
                 Icon = Codicon.Folder,
+                Hotkey = hotkey,
                 Tag = (plugin, entry),
+                IsCurrent = selectPlugin is { } selected && selected.Item1 == plugin && selected.Item2 == entry,
             });
             pluginGroup = false;
         }
@@ -663,12 +723,17 @@ public partial class MainWindow
             TakeFocusFromTerminal();
         }
 
-        var result = await QuickPick.ShowAsync(panel, items, new QuickPickOptions
+        return await QuickPick.ShowAsync(panel, items, new QuickPickOptions
         {
             Title = $"Change drive ({panel.Side.ToLowerInvariant()} panel)",
-            Placeholder = "Drive letter or name",
+            Placeholder = "Drive letter or name · F4 on a plugin item assigns a hotkey",
             OnDelete = item => DisconnectOrEject(item),
+            CommandKeys = [Key.F4],
         });
+    }
+
+    private async Task OnDriveChosenAsync(FilePanel panel, QuickPickResult? result, FilePanel previouslyActive, bool fromTerminal)
+    {
 
         if (result?.Item?.Tag is ValueTuple<Core.Plugins.LoadedPlugin, HabilisTerminal.Plugins.PluginMenuItem> pluginItem)
         {

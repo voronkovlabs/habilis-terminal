@@ -209,6 +209,7 @@ public partial class MainWindow
         }
 
         _fileHistory.AddRange(state.FileHistory.Take(FileHistoryCapacity));
+        _pluginHotkeys = new Core.Plugins.PluginHotkeys(state.PluginHotkeys);
         RestorePanel(_left, state.Left);
         RestorePanel(_right, state.Right);
         if (!state.Left.Visible || !state.Right.Visible)
@@ -251,6 +252,7 @@ public partial class MainWindow
             Window = CaptureWindowPlacement(),
             FolderHistory = _history.RecentFirst,
             FileHistory = [.. _fileHistory],
+            PluginHotkeys = _pluginHotkeys.Snapshot(),
         };
     }
 

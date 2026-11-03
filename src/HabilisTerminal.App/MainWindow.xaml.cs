@@ -26,6 +26,7 @@ public partial class MainWindow : Window
 {
     private readonly ThemeService _themes = new();
     private readonly FolderHistory _history = new();
+    private Core.Plugins.PluginHotkeys _pluginHotkeys = new();
     private readonly Dictionary<string, string> _lastPathPerDrive = new(StringComparer.OrdinalIgnoreCase);
     private readonly ShellConnection? _shell;
     private FilePanel _left = new("Left");

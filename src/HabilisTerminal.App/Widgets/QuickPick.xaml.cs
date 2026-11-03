@@ -18,10 +18,16 @@ public sealed record QuickPickOptions
 
     /// <summary>Del on an item (e.g. disconnect a drive); the item list is not changed automatically.</summary>
     public Action<QuickPickItem>? OnDelete { get; init; }
+
+    /// <summary>Keys that close the pick with the selected item and the key as <see cref="QuickPickResult.Command"/> (F4 in the drive menu).</summary>
+    public IReadOnlyList<Key> CommandKeys { get; init; } = [];
 }
 
-/// <summary>Result: the chosen item, or free text when <see cref="QuickPickOptions.AllowFreeText"/> was used.</summary>
-public sealed record QuickPickResult(QuickPickItem? Item, string Text);
+/// <summary>
+/// Result: the chosen item, or free text when <see cref="QuickPickOptions.AllowFreeText"/> was used; with
+/// <see cref="Command"/> one of <see cref="QuickPickOptions.CommandKeys"/> was pressed on the item.
+/// </summary>
+public sealed record QuickPickResult(QuickPickItem? Item, string Text, Key? Command = null);
 
 /// <summary>A VS Code-like quick pick shown in a popup over its target (drive menu, history, sort menu, input).</summary>
 public sealed partial class QuickPick : UserControl
@@ -150,6 +156,10 @@ public sealed partial class QuickPick : UserControl
                 break;
             case Key.Delete when Filter.Text.Length == 0 && _options.OnDelete is { } onDelete && List.SelectedItem is QuickPickItem item:
                 onDelete(item);
+                e.Handled = true;
+                break;
+            case var key when _options.CommandKeys.Contains(key) && Keyboard.Modifiers == ModifierKeys.None && List.SelectedItem is QuickPickItem selected:
+                Complete(new QuickPickResult(selected, Filter.Text, key));
                 e.Handled = true;
                 break;
         }

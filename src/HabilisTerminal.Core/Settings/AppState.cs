@@ -62,6 +62,9 @@ public sealed record AppState
     public IReadOnlyList<string> FolderHistory { get; init; } = [];
 
     public IReadOnlyList<FileHistoryEntry> FileHistory { get; init; } = [];
+
+    /// <summary>Hotkeys of plugin items in the drive menu ("pluginId/title" → key, issue #66).</summary>
+    public IReadOnlyDictionary<string, string> PluginHotkeys { get; init; } = new Dictionary<string, string>();
 }
 
 /// <summary>Reads and writes state.json atomically; a missing or broken file gives the defaults.</summary>

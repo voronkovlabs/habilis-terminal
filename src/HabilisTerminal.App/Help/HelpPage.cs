@@ -28,7 +28,7 @@ public sealed class HelpPage : DockPanel, IPage
             ("Ctrl+PgUp", "Parent folder"),
             ("Ctrl+PgDn", "Enter the folder under the cursor; on a file: open it as an archive"),
             ("Ctrl+\\", "Root of the drive"),
-            ("Alt+F1 / Alt+F2", "Drive menu for the left / right panel"),
+            ("Alt+F1 / Alt+F2", "Drive menu for the left / right panel (F4 there: hotkey for a plugin item)"),
             ("Alt+F12", "Folder history"),
             ("Alt+F11", "View and edit history"),
             ("Alt+letter", "Quick search"),
