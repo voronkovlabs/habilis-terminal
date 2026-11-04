@@ -1,6 +1,7 @@
 using System.Windows.Input;
 using HabilisTerminal.App.Input;
 using HabilisTerminal.App.Panels;
+using HabilisTerminal.App.Widgets;
 using HabilisTerminal.Shell.Integration;
 
 namespace HabilisTerminal.App;
@@ -21,6 +22,9 @@ public partial class MainWindow
 
     /// <summary>Between a command's start and the next prompt: the console has every key.</summary>
     private bool _commandRunning;
+
+    /// <summary>Keyboard popups open now (one can open as another closes).</summary>
+    private int _openPopups;
 
     /// <summary>The last value given to the shell's panel-mode flag, so the flag file is written only on changes.</summary>
     private bool? _shellPanelMode;
@@ -58,6 +62,43 @@ public partial class MainWindow
             UpdatePanelKeys();
         }, System.Windows.Threading.DispatcherPriority.Input);
         Deactivated += (_, _) => UpdatePanelKeys();
+        PopupFocus.Opening += OnPopupOpening;
+        PopupFocus.Closed += OnPopupClosed;
+        Closed += (_, _) =>
+        {
+            PopupFocus.Opening -= OnPopupOpening;
+            PopupFocus.Closed -= OnPopupClosed;
+        };
+    }
+
+    /// <summary>A popup gets its keys through the window, so the Win32 focus leaves the console (issue #92).</summary>
+    private void OnPopupOpening()
+    {
+        _openPopups++;
+        if (TerminalHasFocus)
+        {
+            TakeFocusFromTerminal();
+        }
+
+        UpdatePanelKeys();
+    }
+
+    /// <summary>
+    /// Back to the console, unless what the popup chose moved the focus on: a page, a dialog, another popup, a panel
+    /// (which sends it back itself). Later than the continuation of the code that awaited the popup.
+    /// </summary>
+    private void OnPopupClosed()
+    {
+        _openPopups--;
+        Dispatcher.BeginInvoke(() =>
+        {
+            if (_openPopups == 0 && !IsPageOpen && OwnedWindows.Count == 0 && !TerminalHasFocus && !_left.IsKeyboardFocused && !_right.IsKeyboardFocused)
+            {
+                PutFocusInTerminal();
+            }
+
+            UpdatePanelKeys();
+        }, System.Windows.Threading.DispatcherPriority.Background);
     }
 
     /// <summary>Shows which panel has the keys, and tells the shell whether an empty line hands keys to a panel.</summary>

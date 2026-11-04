@@ -89,7 +89,7 @@ public sealed partial class QuickPick : UserControl
         };
 
         pick._popup = popup;
-        popup.IsOpen = true;
+        PopupFocus.Open(popup);
         return pick._result.Task;
     }
 

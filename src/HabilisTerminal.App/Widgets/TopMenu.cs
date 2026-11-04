@@ -111,7 +111,7 @@ public sealed class TopMenu
     {
         var menu = new TopMenu(target, groups, Math.Clamp(initialGroup, 0, groups.Count - 1));
         menu.SelectGroup(menu._group);
-        menu._popup.IsOpen = true;
+        PopupFocus.Open(menu._popup);
         return await menu._result.Task;
     }
 

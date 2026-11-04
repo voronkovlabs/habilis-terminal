@@ -733,12 +733,6 @@ public partial class MainWindow
             _ = FillDriveAsync(item, culture);
         }
 
-        if (fromTerminal)
-        {
-            // The popup gets its keys through the window, so Win32 focus must leave the terminal.
-            TakeFocusFromTerminal();
-        }
-
         return await QuickPick.ShowAsync(panel, items, new QuickPickOptions
         {
             Title = $"Change drive ({panel.Side.ToLowerInvariant()} panel)",
