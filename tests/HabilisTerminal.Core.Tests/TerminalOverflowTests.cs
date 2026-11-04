@@ -35,6 +35,41 @@ public class TerminalOverflowTests
     }
 
     [Fact]
+    public void A_progress_bar_redrawing_in_place_does_not_overflow()
+    {
+        var overflow = new TerminalOverflow();
+        overflow.CommandStarted(cursorRow: 5, consoleRows: 10, consoleColumns: 80); // rows 6..9 are free
+        for (var percent = 0; percent < 100; percent++)
+        {
+            overflow.Feed($"\r{percent}%|####|\n\x1b[A"); // tqdm: a line feed and back up
+            overflow.Feed($"\x1b[2K\r{percent}%\x1b[1F\x1b[1E");
+        }
+
+        Assert.Equal(0, overflow.OverflowRows);
+    }
+
+    [Fact]
+    public void Cursor_moves_count_and_clearing_the_screen_gives_the_rows_back()
+    {
+        var overflow = new TerminalOverflow();
+        overflow.CommandStarted(cursorRow: 8, consoleRows: 10, consoleColumns: 80);
+        overflow.Feed("\x1b[2J\x1b[H"); // cls: the cursor goes home
+        overflow.Feed("1\r\n2\r\n3\r\n4\r\n5\r\n");
+        Assert.Equal(0, overflow.OverflowRows);
+
+        overflow.Feed("\x1b[10;1H\n\n");
+        Assert.Equal(2, overflow.OverflowRows);
+
+        // It never gives back what it has grown, and the next row down the grown screen is no overflow.
+        overflow.Feed("\x1b[1;1H");
+        Assert.Equal(2, overflow.OverflowRows);
+        overflow.Feed("\x1b[12;1H");
+        Assert.Equal(2, overflow.OverflowRows);
+        overflow.Feed("\n");
+        Assert.Equal(3, overflow.OverflowRows);
+    }
+
+    [Fact]
     public void The_alternate_screen_is_noticed_and_its_output_is_not_counted()
     {
         var overflow = new TerminalOverflow();

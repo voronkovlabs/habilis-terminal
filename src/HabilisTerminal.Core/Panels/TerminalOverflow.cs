@@ -1,15 +1,17 @@
 namespace HabilisTerminal.Core.Panels;
 
 /// <summary>
-/// How far a running command's output has overflowed the console (issue #82, experiment): the rows written since the
-/// command started, beyond the rows that were free under the prompt. Counts line feeds and the wraps of long lines,
-/// skips escape sequences, and notices the alternate screen (full-screen programs such as vim, less, htop).
+/// How far a running command's output has overflowed the console (issue #82): how many rows the cursor went below the
+/// console's bottom. It follows the cursor (line feeds, wraps of long lines, cursor moves), because progress bars redraw
+/// in place with a line feed and a move back up (issue #102). Skips other escape sequences, and notices the alternate
+/// screen (full-screen programs such as vim, less, htop).
 /// Not thread-safe: fed from the shell's output thread under the caller's lock.
 /// </summary>
 public sealed class TerminalOverflow
 {
-    private int _freeRows;
-    private int _rows;
+    private int _consoleRows;
+    private int _row;
+    private int _overflow;
     private int _column;
     private int _columns = 80;
     private bool _active;
@@ -25,8 +27,8 @@ public sealed class TerminalOverflow
         OscEscape,
     }
 
-    /// <summary>Rows written beyond the free space under the prompt since the command started; 0 between commands.</summary>
-    public int OverflowRows => _active ? Math.Max(0, _rows - _freeRows) : 0;
+    /// <summary>The most rows the cursor went below the console's bottom since the command started; 0 between commands.</summary>
+    public int OverflowRows => _active ? _overflow : 0;
 
     /// <summary>A full-screen program switched to the alternate screen and has not switched back.</summary>
     public bool AlternateScreen { get; private set; }
@@ -35,8 +37,9 @@ public sealed class TerminalOverflow
     public void CommandStarted(int cursorRow, int consoleRows, int consoleColumns)
     {
         _active = true;
-        _freeRows = Math.Max(0, consoleRows - cursorRow - 1);
-        _rows = 0;
+        _consoleRows = Math.Max(1, consoleRows);
+        _row = Math.Clamp(cursorRow, 0, _consoleRows - 1);
+        _overflow = 0;
         _column = 0;
         _columns = Math.Max(1, consoleColumns);
     }
@@ -123,11 +126,24 @@ public sealed class TerminalOverflow
     {
         if (_active && !AlternateScreen)
         {
-            _rows++;
+            _row++;
+            _overflow = Math.Max(_overflow, _row - (_consoleRows - 1));
         }
 
         _column = 0;
     }
+
+    /// <summary>Moves stop at the screen's edges; the screen has grown by the overflow so far (the window grows it).</summary>
+    private void MoveToRow(int row)
+    {
+        if (_active && !AlternateScreen)
+        {
+            _row = Math.Clamp(row, 0, _consoleRows - 1 + _overflow);
+        }
+    }
+
+    private static int Number(string text, int fallback = 1) =>
+        int.TryParse(text, out var value) && value > 0 ? value : fallback;
 
     private void Csi(string parameters, char final)
     {
@@ -142,12 +158,36 @@ public sealed class TerminalOverflow
                 }
             }
         }
-        else if (final == 'G' || final == 'H' || final == 'f')
+        else
         {
-            // Cursor to a column (or home): wrapping restarts from there.
             var parts = parameters.Split(';');
-            var columnText = final == 'G' ? parts[0] : parts.Length > 1 ? parts[1] : "1";
-            _column = int.TryParse(columnText, out var column) && column > 0 ? column - 1 : 0;
+            switch (final)
+            {
+                case 'G':
+                    _column = Number(parts[0]) - 1;
+                    break;
+                case 'H' or 'f':
+                    MoveToRow(Number(parts[0]) - 1);
+                    _column = (parts.Length > 1 ? Number(parts[1]) : 1) - 1;
+                    break;
+                case 'A':
+                    MoveToRow(_row - Number(parts[0]));
+                    break;
+                case 'B':
+                    MoveToRow(_row + Number(parts[0]));
+                    break;
+                case 'F':
+                    MoveToRow(_row - Number(parts[0]));
+                    _column = 0;
+                    break;
+                case 'E':
+                    MoveToRow(_row + Number(parts[0]));
+                    _column = 0;
+                    break;
+                case 'd':
+                    MoveToRow(Number(parts[0]) - 1);
+                    break;
+            }
         }
     }
 }
