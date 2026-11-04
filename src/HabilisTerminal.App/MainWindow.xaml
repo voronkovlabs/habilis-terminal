@@ -2,7 +2,6 @@
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:layout="clr-namespace:HabilisTerminal.App.Layout"
-        xmlns:term="clr-namespace:Microsoft.Terminal.Wpf;assembly=Microsoft.Terminal.Wpf"
         Title="Habilis Terminal"
         Width="1200" Height="800"
         UseLayoutRounding="True"
@@ -15,9 +14,7 @@
         <layout:WorkspaceLayout x:Name="Workspace"
                                 KeyboardNavigation.TabNavigation="None"
                                 KeyboardNavigation.ControlTabNavigation="None"
-                                KeyboardNavigation.DirectionalNavigation="None">
-            <term:TerminalControl x:Name="Terminal" AutoResize="True" layout:WorkspaceLayout.Role="Terminal" />
-        </layout:WorkspaceLayout>
+                                KeyboardNavigation.DirectionalNavigation="None" />
         <!-- Full-window pages (viewer, editor, settings). The workspace is hidden, not collapsed, while a page is
              shown, so the terminal keeps its size and the shell is not resized. -->
         <ContentControl x:Name="PageHost" Visibility="Collapsed" Focusable="False" />

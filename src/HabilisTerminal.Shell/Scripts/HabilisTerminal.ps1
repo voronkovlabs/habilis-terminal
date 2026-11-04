@@ -7,7 +7,7 @@
 #   OSC 133;A / 133;B        prompt starts / prompt ends, waiting for input
 #   OSC 133;C / 133;D;code   command accepted / command finished
 #   OSC 9;9;"path"           current file system directory
-#   OSC 7731;habi;...        Habilis Terminal messages (ack, restore-pending, focus-panel, panel-key, command-start)
+#   OSC 7731;habi;...        Habilis Terminal messages (ack, restore-pending, focus-panel, panel-key, command-start, command-line)
 
 if ($global:__Habi -or -not $env:HABI_CHANNEL) {
     return
@@ -71,6 +71,8 @@ if ($global:__Habi.OriginalReadLine) {
     function global:PSConsoleHostReadLine {
         $line = & $global:__Habi.OriginalReadLine
         $global:__Habi.CommandRan = $true
+        # The line, for the console's tab (issue #119).
+        [Console]::Write((__HabiOsc "7731;habi;command-line;$([Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes([string]$line)))"))
         # Where the output starts and the console size, for the console that grows over the panels (issue #82).
         try {
             [Console]::Write((__HabiOsc "7731;habi;command-start;$([Console]::CursorTop);$([Console]::WindowHeight);$([Console]::WindowWidth)"))

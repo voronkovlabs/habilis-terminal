@@ -77,3 +77,9 @@ dotnet test -c Release --no-build
 ## Known oddities
 - **oh-my-posh prompt after a panel cd.** After a panel-driven `cd`, the prompt is redrawn by `InvokePrompt()` in a different style, and Nerd Font glyphs show as `?`. Plain Windows Terminal does the same with `InvokePrompt()`, so this is an oh-my-posh / PSReadLine interaction (stage 2, issue #15).
 - **Prompt position after hiding panels.** When the terminal grows because panels are hidden, the prompt stays where it was and the space below stays empty, as in Windows Terminal. Far instead shows the console filled up to the prompt (stage 1, issue #15).
+
+## Console tabs (#119)
+- `Hosting/ConsoleTab.cs` holds what belongs to one shell: `ShellHost`, `ShellConnection`, its own `TerminalControl`, the overflow state, `CommandRunning`. `MainWindow.Tabs.cs` keeps the list and `_tab`, the tab in front; `_shell` and `Terminal` follow it. Events of a tab not in front must not touch panels or the layout: check `tab == _tab`.
+- A tab not in front is `Visibility.Hidden` and `WorkspaceLayout` skips it, so it keeps its last size and its shell gets no resize until it is shown. Its control goes on taking output: 20,000 fast lines took 1.5 s hidden and 1.2 s in front, and all arrived.
+- The strip shows only with two or more tabs. With both panels shown its height comes out of the panels, so the console keeps its size.
+- The tab's command line comes from the script (`command-line` over OSC 7731), the exit code from OSC 133;D. Without the integration script a tab has no running state, title or finish card.

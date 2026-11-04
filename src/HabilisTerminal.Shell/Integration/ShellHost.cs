@@ -90,6 +90,12 @@ public sealed class ShellHost : IDisposable
     /// </summary>
     public event Action<int, int, int>? CommandOutputStarted;
 
+    /// <summary>The line of a command that was accepted (issue #119). Background thread.</summary>
+    public event Action<string>? CommandLineAccepted;
+
+    /// <summary>A command finished, with its exit code when known. Background thread.</summary>
+    public event Action<int?>? CommandFinished;
+
     /// <summary>
     /// Plugin prefixes ("s3", "sqs"): Enter on "s3:..." is reported through <see cref="AddressEntered"/> instead of
     /// running. Kept as a file in the channel, which the integration script reads when Enter is pressed.
@@ -302,6 +308,22 @@ public sealed class ShellHost : IDisposable
             case ShellEvent.Message { Name: "command-start" } start when start.Arguments.Count == 3
                 && int.TryParse(start.Arguments[0], System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out var row) && int.TryParse(start.Arguments[1], System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out var rows) && int.TryParse(start.Arguments[2], System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out var columns):
                 CommandOutputStarted?.Invoke(row, rows, columns);
+                break;
+
+            case ShellEvent.CommandFinished finished:
+                CommandFinished?.Invoke(finished.ExitCode);
+                break;
+
+            case ShellEvent.Message { Name: "command-line" } accepted when accepted.Arguments.Count == 1:
+                try
+                {
+                    CommandLineAccepted?.Invoke(Encoding.UTF8.GetString(Convert.FromBase64String(accepted.Arguments[0])));
+                }
+                catch (FormatException)
+                {
+                    // A garbled message: the tab shows the folder instead.
+                }
+
                 break;
 
             case ShellEvent.Message { Name: "panel-key" } panelKey when panelKey.Arguments.Count == 1:

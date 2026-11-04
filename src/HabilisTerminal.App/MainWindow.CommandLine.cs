@@ -1,4 +1,5 @@
 using System.Windows.Input;
+using HabilisTerminal.App.Hosting;
 using HabilisTerminal.App.Input;
 using HabilisTerminal.App.Panels;
 using HabilisTerminal.App.Widgets;
@@ -20,8 +21,8 @@ public partial class MainWindow
     /// <summary>The user clicked into the console: keys are the console's until a panel is chosen again.</summary>
     private bool _consoleMode;
 
-    /// <summary>Between a command's start and the next prompt: the console has every key.</summary>
-    private bool _commandRunning;
+    /// <summary>Between a command's start and the next prompt, in the tab in front: the console has every key.</summary>
+    private bool _commandRunning => _tab?.CommandRunning == true;
 
     /// <summary>
     /// A running command has every key, but the panel keeps its look for this long: otherwise each short command makes
@@ -34,24 +35,37 @@ public partial class MainWindow
     /// <summary>Keyboard popups open now (one can open as another closes).</summary>
     private int _openPopups;
 
-    /// <summary>The last value given to the shell's panel-mode flag, so the flag file is written only on changes.</summary>
-    private bool? _shellPanelMode;
-
     /// <summary>The shell runs the integration script, so the line's state is known (shell.integration, read at start).</summary>
     private bool ShellIntegrated { get; set; }
 
     /// <summary>The user works in the console: it has the Win32 focus and no panel has the keys.</summary>
     private bool ConsoleHasKeys => TerminalHasFocus && FocusedPanel() is null;
 
-    private void WireCommandLine(ShellHost host)
+    private void WireCommandLine(ConsoleTab tab)
     {
-        ShellIntegrated = _settings.ShellIntegration;
-        host.PanelKeyReturned += name => Dispatcher.BeginInvoke(() => OnPanelKeyReturned(name));
+        var host = tab.Host;
+        host.PanelKeyReturned += name => Dispatcher.BeginInvoke(() =>
+        {
+            if (tab == _tab)
+            {
+                OnPanelKeyReturned(name);
+            }
+        });
         host.CommandOutputStarted += (_, _, _) => Dispatcher.BeginInvoke(() =>
         {
-            HoldFrame();
-            _commandRunning = true;
-            UpdatePanelKeys();
+            if (tab == _tab)
+            {
+                HoldFrame();
+            }
+
+            tab.CommandRunning = true;
+            tab.Mark = ConsoleTabMark.Running;
+            if (tab == _tab)
+            {
+                UpdatePanelKeys();
+            }
+
+            UpdateTabStrip();
         });
         host.StateChanged += state =>
         {
@@ -59,12 +73,25 @@ public partial class MainWindow
             {
                 Dispatcher.BeginInvoke(() =>
                 {
-                    _commandRunning = false;
-                    UpdatePanelKeys();
-                    ReleaseFrame();
+                    var ended = tab.CommandRunning;
+                    tab.CommandRunning = false;
+                    if (tab == _tab)
+                    {
+                        UpdatePanelKeys();
+                        ReleaseFrame();
+                    }
+
+                    if (ended)
+                    {
+                        OnTabCommandEnded(tab);
+                    }
                 });
             }
         };
+    }
+
+    private void WireWindowKeys()
+    {
         Activated += (_, _) => Dispatcher.BeginInvoke(() =>
         {
             // Back from another app: the keys go on where they were (WPF remembers no element to restore).
@@ -148,10 +175,10 @@ public partial class MainWindow
         _right.HasKeys = keys == _right;
 
         var panelMode = !_consoleMode && AnyPanelVisible;
-        if (_shell is not null && _shellPanelMode != panelMode)
+        if (_tab is { } tab && tab.ShellPanelMode != panelMode)
         {
-            _shellPanelMode = panelMode;
-            _shell.Host.PanelMode = panelMode;
+            tab.ShellPanelMode = panelMode;
+            tab.Host.PanelMode = panelMode;
         }
     }
 

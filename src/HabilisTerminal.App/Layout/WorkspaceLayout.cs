@@ -10,6 +10,7 @@ public enum WorkspaceRole
     LeftPanel,
     RightPanel,
     Terminal,
+    ConsoleTabs,
 }
 
 /// <summary>
@@ -116,6 +117,30 @@ public sealed class WorkspaceLayout : Panel
         set => SetValue(CellSizeProperty, value);
     }
 
+    /// <summary>The tabs above the console, while there are several consoles (issue #119).</summary>
+    public bool ShowsTabStrip
+    {
+        get => (bool)GetValue(ShowsTabStripProperty);
+        set => SetValue(ShowsTabStripProperty, value);
+    }
+
+    public static readonly DependencyProperty ShowsTabStripProperty = DependencyProperty.Register(
+        nameof(ShowsTabStrip), typeof(bool), typeof(WorkspaceLayout),
+        new FrameworkPropertyMetadata(false, FrameworkPropertyMetadataOptions.AffectsMeasure));
+
+    private double StripHeight => ShowsTabStrip ? Widgets.ConsoleTabStrip.StripHeight : 0;
+
+    private Rect SlotOf(UIElement child, Rect left, Rect right, Rect terminal) => GetRole(child) switch
+    {
+        WorkspaceRole.LeftPanel => left,
+        WorkspaceRole.RightPanel => right,
+        WorkspaceRole.ConsoleTabs => ShowsTabStrip ? new Rect(terminal.Left, terminal.Top - StripHeight, terminal.Width, StripHeight) : Rect.Empty,
+        _ => terminal,
+    };
+
+    /// <summary>A console not in front keeps its last size, so its shell gets no resize until it is shown.</summary>
+    private static bool IsHiddenConsole(UIElement child) => GetRole(child) == WorkspaceRole.Terminal && child.Visibility != Visibility.Visible;
+
     protected override Size MeasureOverride(Size availableSize)
     {
         var size = new Size(
@@ -128,13 +153,11 @@ public sealed class WorkspaceLayout : Panel
         var (left, right, terminal) = ComputeRects(size);
         foreach (UIElement child in InternalChildren)
         {
-            var rect = GetRole(child) switch
+            if (!IsHiddenConsole(child))
             {
-                WorkspaceRole.LeftPanel => left,
-                WorkspaceRole.RightPanel => right,
-                _ => terminal,
-            };
-            child.Measure(rect.IsEmpty ? new Size(0, 0) : rect.Size);
+                var rect = SlotOf(child, left, right, terminal);
+                child.Measure(rect.IsEmpty ? new Size(0, 0) : rect.Size);
+            }
         }
 
         return size;
@@ -144,22 +167,28 @@ public sealed class WorkspaceLayout : Panel
     {
         var (left, right, terminal) = ComputeRects(finalSize);
 
+        var consoleTop = terminal.Top - StripHeight;
         foreach (UIElement child in InternalChildren)
         {
-            var rect = GetRole(child) switch
+            if (IsHiddenConsole(child))
             {
-                WorkspaceRole.LeftPanel => left,
-                WorkspaceRole.RightPanel => right,
-                _ => terminal,
-            };
+                continue;
+            }
 
-            child.Visibility = rect.IsEmpty ? Visibility.Collapsed : Visibility.Visible;
+            var rect = SlotOf(child, left, right, terminal);
+
+            // A console is never empty, and those of tabs not in front stay hidden (issue #119).
+            if (GetRole(child) != WorkspaceRole.Terminal)
+            {
+                child.Visibility = rect.IsEmpty ? Visibility.Collapsed : Visibility.Visible;
+            }
+
             child.Arrange(rect.IsEmpty ? new Rect(0, 0, 0, 0) : rect);
 
             // Under the console grown over the panels (issue #82), the panels' covered part is clipped away: the
             // terminal is snapped to whole cells and would leave the panels showing in the few pixels beside it.
-            child.Clip = GetRole(child) != WorkspaceRole.Terminal && !rect.IsEmpty && OverlayRows > 0 && LeftVisible && RightVisible
-                ? new RectangleGeometry(new Rect(0, 0, rect.Width, Math.Max(0, terminal.Top - rect.Top)))
+            child.Clip = GetRole(child) is WorkspaceRole.LeftPanel or WorkspaceRole.RightPanel && !rect.IsEmpty && OverlayRows > 0 && LeftVisible && RightVisible
+                ? new RectangleGeometry(new Rect(0, 0, rect.Width, Math.Max(0, consoleTop - rect.Top)))
                 : null;
         }
 
@@ -230,12 +259,13 @@ public sealed class WorkspaceLayout : Panel
         var (left, right, terminal) = ComputeRects(RenderSize);
         if (LeftVisible && RightVisible)
         {
-            if (Math.Abs(point.Y - terminal.Top) <= Grip)
+            var consoleTop = terminal.Top - StripHeight;
+            if (Math.Abs(point.Y - consoleTop) <= Grip)
             {
                 return Splitter.TerminalTop;
             }
 
-            return point.Y < terminal.Top && Math.Abs(point.X - right.Left) <= Grip ? Splitter.Panels : Splitter.None;
+            return point.Y < consoleTop && Math.Abs(point.X - right.Left) <= Grip ? Splitter.Panels : Splitter.None;
         }
 
         if (LeftVisible ^ RightVisible)
@@ -256,7 +286,7 @@ public sealed class WorkspaceLayout : Panel
                 SplitRatio = Math.Clamp(point.X / size.Width, 0.1, 0.9);
                 break;
             case Splitter.TerminalTop:
-                TerminalRows = Math.Max(MinTerminalRows, (int)Math.Round((size.Height - point.Y) / CellSize.Height));
+                TerminalRows = Math.Max(MinTerminalRows, (int)Math.Round((size.Height - point.Y - StripHeight) / CellSize.Height));
                 break;
             case Splitter.TerminalSide:
                 var ratio = LeftVisible ? point.X / size.Width : 1 - (point.X / size.Width);
@@ -268,25 +298,33 @@ public sealed class WorkspaceLayout : Panel
     private (Rect Left, Rect Right, Rect Terminal) ComputeRects(Size size, bool overlay = true)
     {
         var cell = CellSize;
-        var full = new Rect(size);
+        var strip = StripHeight;
 
         if (!LeftVisible && !RightVisible)
         {
-            return (Rect.Empty, Rect.Empty, full);
+            return (Rect.Empty, Rect.Empty, new Rect(0, strip, size.Width, Math.Max(0, size.Height - strip)));
         }
 
         if (LeftVisible && RightVisible)
         {
-            var maxRows = Math.Max(MinTerminalRows, (int)Math.Floor((size.Height - (MinPanelRows * cell.Height)) / cell.Height));
+            // The strip comes out of the panels, so a console keeps its size when the strip appears or goes.
+            var maxRows = Math.Max(MinTerminalRows, (int)Math.Floor((size.Height - strip - (MinPanelRows * cell.Height)) / cell.Height));
             var rows = Math.Clamp(TerminalRows, MinTerminalRows, maxRows);
             var terminalHeight = Math.Min(size.Height, rows * cell.Height);
-            var panelsHeight = size.Height - terminalHeight;
+            var panelsHeight = Math.Max(0, size.Height - terminalHeight - strip);
             var half = Math.Floor(size.Width * Math.Clamp(SplitRatio, 0.1, 0.9));
             var rise = overlay ? Math.Min(panelsHeight, Math.Clamp(OverlayRows, 0, int.MaxValue) * cell.Height) : 0;
+
+            // Grown all the way, no sliver of the panels stays above it.
+            if (overlay && cell.Height > 0 && OverlayRows >= Math.Floor(panelsHeight / cell.Height))
+            {
+                rise = panelsHeight;
+            }
+
             return (
                 new Rect(0, 0, half, panelsHeight),
                 new Rect(half, 0, size.Width - half, panelsHeight),
-                new Rect(0, panelsHeight - rise, size.Width, terminalHeight + rise));
+                new Rect(0, panelsHeight + strip - rise, size.Width, terminalHeight + rise));
         }
 
         // One panel: the terminal takes the place of the hidden one, snapped to whole columns.
@@ -296,7 +334,7 @@ public sealed class WorkspaceLayout : Panel
         panelWidth = size.Width - terminalWidth;
 
         return LeftVisible
-            ? (new Rect(0, 0, panelWidth, size.Height), Rect.Empty, new Rect(panelWidth, 0, terminalWidth, size.Height))
-            : (Rect.Empty, new Rect(terminalWidth, 0, panelWidth, size.Height), new Rect(0, 0, terminalWidth, size.Height));
+            ? (new Rect(0, 0, panelWidth, size.Height), Rect.Empty, new Rect(panelWidth, strip, terminalWidth, Math.Max(0, size.Height - strip)))
+            : (Rect.Empty, new Rect(terminalWidth, 0, panelWidth, size.Height), new Rect(0, strip, terminalWidth, Math.Max(0, size.Height - strip)));
     }
 }

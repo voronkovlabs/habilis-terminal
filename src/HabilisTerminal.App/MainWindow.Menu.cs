@@ -48,6 +48,8 @@ public partial class MainWindow
                 MenuCommand.Separator,
                 Command("Swap panels", "Ctrl+U", Key.U, KeyModifiers.Control),
                 new MenuCommand("Panels on / off", "Ctrl+O", TogglePanels),
+                new MenuCommand("New console", "Ctrl+Shift+T", NewTab),
+                new MenuCommand("Next console", "Ctrl+Tab", () => NextTab(1)),
                 Command("Inactive panel on / off", "Ctrl+P", Key.P, KeyModifiers.Control),
                 new MenuCommand("Compare folders", null, CompareFolders),
                 MenuCommand.Separator,

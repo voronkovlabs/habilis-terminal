@@ -28,6 +28,21 @@ public partial class MainWindow
             case Key.Escape when modifiers == KeyModifiers.None && CollapseConsoleOnEscape():
                 return true;
 
+            // Console tabs work while a program runs, as in Windows Terminal (issue #119).
+            case Key.T when modifiers == (KeyModifiers.Control | KeyModifiers.Shift) && !IsPageOpen:
+                NewTab();
+                return true;
+
+            case Key.Tab when modifiers == KeyModifiers.Control && !IsPageOpen:
+                return NextTab(1);
+
+            case Key.Tab when modifiers == (KeyModifiers.Control | KeyModifiers.Shift) && !IsPageOpen:
+                return NextTab(-1);
+
+            case Key.W when modifiers == (KeyModifiers.Control | KeyModifiers.Shift) && !IsPageOpen && _tabs.Count > 1 && _tab is not null:
+                CloseTab(_tab);
+                return true;
+
             case Key.O when modifiers == KeyModifiers.Control && !IsPageOpen:
                 TogglePanels();
                 return true;

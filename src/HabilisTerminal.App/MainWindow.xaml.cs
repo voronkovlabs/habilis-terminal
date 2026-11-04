@@ -28,7 +28,6 @@ public partial class MainWindow : Window
     private readonly FolderHistory _history = new();
     private Core.Plugins.PluginHotkeys _pluginHotkeys = new();
     private readonly Dictionary<string, string> _lastPathPerDrive = new(StringComparer.OrdinalIgnoreCase);
-    private readonly ShellConnection? _shell;
     private FilePanel _left = new("Left");
     private FilePanel _right = new("Right");
     private FilePanel _active;
@@ -90,33 +89,12 @@ public partial class MainWindow : Window
         RestoreLayout(state);
 
         var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
-        // App checks for pwsh before creating the window; this only guards against it disappearing in between.
-        var pwsh = App.FindPwsh() ?? throw new InvalidOperationException("PowerShell 7 (pwsh.exe) was not found.");
-
         var leftStart = StartPath(state.Left, home);
         var rightStart = StartPath(state.Right, home);
-        var host = new ShellHost(new ShellHostOptions(
-            pwsh,
-            ShellScripts.IntegrationScriptPath,
-            _active == _right ? rightStart : leftStart,
-            NullIfEmpty(_settings.ShellInitCommand),
-            ExtraArguments: NullIfEmpty(_settings.ShellArgs),
-            Integration: _settings.ShellIntegration));
-        host.Exited += _ => Dispatcher.BeginInvoke(Close);
-        host.DirectoryChanged += path => Dispatcher.BeginInvoke(() => OnShellDirectoryChanged(path));
-        host.FocusPanelRequested += () => Dispatcher.BeginInvoke(() =>
-        {
-            if (!IsPageOpen && ConsoleHasKeys && IsShown(_active))
-            {
-                FocusActivePanel();
-            }
-        });
-        host.RequestCompleted += (_, op, status) => Dispatcher.BeginInvoke(() => OnShellRequestCompleted(op, status));
-        host.AddressEntered += address => Dispatcher.BeginInvoke(() => OnPluginAddress(address));
-        host.AddressPrefixes = _plugins.Prefixes();
-        WireOverflow(host);
-        WireCommandLine(host);
-        _shell = new ShellConnection(host);
+        InitTabs();
+        ShellIntegrated = _settings.ShellIntegration;
+        WireWindowKeys();
+        ShowTab(CreateTab(_active == _right ? rightStart : leftStart));
         UpdatePanelsShown(); // the layout was restored before the shell existed
 
         Loaded += async (_, _) =>
@@ -147,6 +125,12 @@ public partial class MainWindow : Window
                 return;
             }
 
+            if (!ConfirmCloseConsoles())
+            {
+                e.Cancel = true;
+                return;
+            }
+
             SaveState();
         };
         Closed += (_, _) =>
@@ -159,7 +143,11 @@ public partial class MainWindow : Window
             }
 
             _keyHook?.Dispose();
-            _shell?.Dispose();
+            foreach (var tab in _tabs)
+            {
+                tab.Dispose();
+            }
+
             _themes.Dispose();
         };
     }
@@ -226,8 +214,16 @@ public partial class MainWindow : Window
 
     private void ApplyTerminalTheme(Themes.ColorTheme theme)
     {
+        foreach (var tab in _tabs)
+        {
+            ApplyTerminalTheme(tab, theme);
+        }
+    }
+
+    private void ApplyTerminalTheme(ConsoleTab tab, Themes.ColorTheme theme)
+    {
         var background = theme.GetOpaque("terminal.background");
-        Terminal.SetTheme(ThemeService.ToTerminalTheme(theme), TerminalFontFamily, (short)TerminalFontSize, Color.FromRgb(background.R, background.G, background.B));
+        tab.Terminal.SetTheme(ThemeService.ToTerminalTheme(theme), TerminalFontFamily, (short)TerminalFontSize, Color.FromRgb(background.R, background.G, background.B));
     }
 
     private void UpdateTitleBar()
@@ -241,18 +237,7 @@ public partial class MainWindow : Window
         _keyHook = new GlobalKeyHook(OnGlobalKey, OnTerminalMouse, window => TerminalHandle is var terminal && terminal != IntPtr.Zero && IsChildOrSelf(terminal, window), CaptureQuickSearchText);
         UpdateCellSize();
 
-        ApplyTerminalTheme(_themes.Current);
-        Terminal.Connection = _shell;
-
-        // The control sizes the connection only when its own size changes later, so the shell started at the
-        // connection's default 120x30 and kept it until the layout changed (found in issue #82). Tell it the real size.
-        Dispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.Loaded, () =>
-        {
-            if (Terminal.Rows > 0 && Terminal.Columns > 0)
-            {
-                _shell?.Resize((uint)Terminal.Rows, (uint)Terminal.Columns);
-            }
-        });
+        StartTab(_tab!);
         FocusActivePanel();
     }
 
