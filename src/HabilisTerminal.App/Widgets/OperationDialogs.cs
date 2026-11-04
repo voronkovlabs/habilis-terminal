@@ -72,6 +72,18 @@ public static class OperationDialogs
         return accepted && !string.IsNullOrWhiteSpace(name.Text) ? (name.Text, multiple.IsChecked == true) : null;
     }
 
+    /// <summary>Shift+F4: the name of the file to edit; null when cancelled.</summary>
+    public static string? NewFile(Window owner)
+    {
+        var name = new TextBox();
+        var body = new StackPanel();
+        body.Children.Add(name);
+        body.Children.Add(Description("The file is created when you save it. An existing file opens as it is.", top: 6));
+        var accepted = ThemedDialog.Show(owner, "New file", body,
+            [new DialogButton<bool>("Edit", true, IsDefault: true), new DialogButton<bool>("Cancel", false, IsCancel: true)], false, name);
+        return accepted && !string.IsNullOrWhiteSpace(name.Text) ? name.Text.Trim().Trim('"') : null;
+    }
+
     /// <summary>F8 / Shift+Del confirmation.</summary>
     public static bool ConfirmDelete(Window owner, IReadOnlyList<string> names, bool permanent)
     {

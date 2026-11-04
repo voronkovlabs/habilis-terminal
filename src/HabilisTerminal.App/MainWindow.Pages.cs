@@ -159,6 +159,40 @@ public partial class MainWindow
         Edit(Path.Combine(panel.CurrentPath, item.Name), panel);
     }
 
+    /// <summary>Shift+F4, as in Far: asks for a name and edits that file, which is created by the first save (issue #93).</summary>
+    private void NewFile(FilePanel panel)
+    {
+        var name = Widgets.OperationDialogs.NewFile(this);
+        panel.Focus();
+        if (name is null)
+        {
+            return;
+        }
+
+        var invalid = Path.GetInvalidFileNameChars();
+        if (Path.GetFileName(name) is not { Length: > 0 } fileName || fileName.IndexOfAny(invalid) >= 0 || name.IndexOfAny(Path.GetInvalidPathChars()) >= 0)
+        {
+            Widgets.OperationDialogs.Message(this, "New file", $"'{name}' is not a valid file name.");
+            panel.Focus();
+            return;
+        }
+
+        var path = Path.GetFullPath(Path.Combine(panel.CurrentPath, name));
+        if (Directory.Exists(path))
+        {
+            Widgets.OperationDialogs.Message(this, "New file", $"'{name}' is a folder.");
+            panel.Focus();
+        }
+        else if (File.Exists(path))
+        {
+            Edit(path, panel);
+        }
+        else
+        {
+            OpenEditor(Core.Editing.TextFile.New(path), panel, followFile: true);
+        }
+    }
+
     /// <summary>
     /// Text files open in the built-in editor; binary files go to the system editor (shell "edit", else "open");
     /// very large text files ask first (SPEC §9).
@@ -198,28 +232,40 @@ public partial class MainWindow
                 }
             }
 
-            var page = new Editing.EditorPage(this, Core.Editing.TextFile.Load(path), _themes.Current, _settings);
-            RememberFile(path, edited: true);
-            page.CloseRequested += () =>
-            {
-                if (followFile)
-                {
-                    ReturnToPanel(returnTo, path);
-                }
-                else
-                {
-                    ClosePage();
-                }
-            };
-            page.ShowInPanelRequested += file => ReturnToPanel(returnTo, file);
-            page.ViewRequested += file => OpenViewer(file, returnTo);
-            ShowPage(page);
-            Dispatcher.BeginInvoke(page.FocusContent, System.Windows.Threading.DispatcherPriority.Input);
+            OpenEditor(Core.Editing.TextFile.Load(path), returnTo, followFile);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
             Widgets.OperationDialogs.Message(this, "Edit", ex.Message);
         }
+    }
+
+    private void OpenEditor(Core.Editing.TextFile file, FilePanel returnTo, bool followFile)
+    {
+        var path = file.Path;
+        if (File.Exists(path))
+        {
+            RememberFile(path, edited: true);
+        }
+
+        var page = new Editing.EditorPage(this, file, _themes.Current, _settings);
+        page.CloseRequested += () =>
+        {
+            // A new file that was never saved has nothing to follow, and its folder may not exist.
+            if (followFile && File.Exists(path))
+            {
+                RememberFile(path, edited: true);
+                ReturnToPanel(returnTo, path);
+            }
+            else
+            {
+                ClosePage();
+            }
+        };
+        page.ShowInPanelRequested += saved => ReturnToPanel(returnTo, saved);
+        page.ViewRequested += saved => OpenViewer(saved, returnTo);
+        ShowPage(page);
+        Dispatcher.BeginInvoke(page.FocusContent, System.Windows.Threading.DispatcherPriority.Input);
     }
 
     private void ReturnToPanel(FilePanel panel, string file)

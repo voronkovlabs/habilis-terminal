@@ -28,6 +28,7 @@ public partial class MainWindow
             [
                 Command("View", "F3", Key.F3),
                 Command("Edit", "F4", Key.F4),
+                Command("New file", "Shift+F4", Key.F4, KeyModifiers.Shift),
                 Command("Copy", "F5", Key.F5),
                 Command("Rename or move", "F6", Key.F6),
                 Command("Make folder", "F7", Key.F7),

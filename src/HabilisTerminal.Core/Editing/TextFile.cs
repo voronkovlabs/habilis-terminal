@@ -33,10 +33,14 @@ public sealed record TextFile(string Path, string Text, TextEncoding Encoding, b
         return new TextFile(path, text, encoding, encoding.DetectedBom, DominantLineEnding(text), info.LastWriteTimeUtc, info.Length);
     }
 
-    /// <summary>Re-reads the bytes with another encoding (Shift+F8 before editing).</summary>
+    /// <summary>A file that does not exist yet (Shift+F4): empty, UTF-8 without a BOM, created by the first save.</summary>
+    public static TextFile New(string path) =>
+        new(path, string.Empty, TextEncoding.Utf8, false, DominantLineEnding(string.Empty), DateTime.MinValue, 0);
+
+    /// <summary>Re-reads the bytes with another encoding (Shift+F8 before editing); a file not saved yet has none.</summary>
     public TextFile Reinterpret(TextEncoding encoding)
     {
-        var bytes = File.ReadAllBytes(Path);
+        var bytes = File.Exists(Path) ? File.ReadAllBytes(Path) : [];
         var bom = HasBom && encoding.BomLength > 0 && encoding.UnitSize == Encoding.UnitSize ? encoding.BomLength : 0;
         var text = encoding.Encoding.GetString(bytes, bom, bytes.Length - bom);
         return this with { Text = text, Encoding = encoding, HasBom = bom > 0, LineEnding = DominantLineEnding(text) };
@@ -61,6 +65,7 @@ public sealed record TextFile(string Path, string Text, TextEncoding Encoding, b
         var targetEncoding = encoding ?? Encoding;
         var bom = withBom ?? (HasBom && targetEncoding.BomLength > 0);
         var directory = System.IO.Path.GetDirectoryName(target)!;
+        Directory.CreateDirectory(directory); // a new file may name folders that do not exist yet
         var temporary = System.IO.Path.Combine(directory, $".{System.IO.Path.GetFileName(target)}.{Guid.NewGuid():N}.habi-tmp");
 
         using (var stream = new FileStream(temporary, FileMode.CreateNew, FileAccess.Write, FileShare.None))

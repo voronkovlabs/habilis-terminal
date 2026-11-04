@@ -6,6 +6,31 @@ namespace HabilisTerminal.Core.Tests;
 
 public class TextFileTests
 {
+    [Fact]
+    public void A_new_file_exists_only_after_the_first_save_and_creates_its_folders()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "habi-tests", Guid.NewGuid().ToString("N"));
+        var path = Path.Combine(root, "sub", "new.txt");
+        try
+        {
+            var file = TextFile.New(path);
+            Assert.False(File.Exists(path));
+            Assert.False(file.ChangedOnDisk());
+            Assert.Equal(string.Empty, file.Reinterpret(TextEncoding.Utf8).Text);
+
+            var saved = file.Save("héllo");
+            Assert.Equal(Encoding.UTF8.GetBytes("héllo"), File.ReadAllBytes(path));
+            Assert.False(saved.ChangedOnDisk());
+        }
+        finally
+        {
+            if (Directory.Exists(root))
+            {
+                Directory.Delete(root, recursive: true);
+            }
+        }
+    }
+
     public static TheoryData<string, byte[]> RoundTripFiles()
     {
         Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
