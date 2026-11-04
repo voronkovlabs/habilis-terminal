@@ -81,5 +81,5 @@ dotnet test -c Release --no-build
 ## Console tabs (#119)
 - `Hosting/ConsoleTab.cs` holds what belongs to one shell: `ShellHost`, `ShellConnection`, its own `TerminalControl`, the overflow state, `CommandRunning`. `MainWindow.Tabs.cs` keeps the list and `_tab`, the tab in front; `_shell` and `Terminal` follow it. Events of a tab not in front must not touch panels or the layout: check `tab == _tab`.
 - A tab not in front is `Visibility.Hidden` and `WorkspaceLayout` skips it, so it keeps its last size and its shell gets no resize until it is shown. Its control goes on taking output: 20,000 fast lines took 1.5 s hidden and 1.2 s in front, and all arrived.
-- The strip shows only with two or more tabs. With both panels shown its height comes out of the panels, so the console keeps its size.
+- The strip sits below the console, which grows upwards over the panels, and shows only with two or more tabs. With both panels shown its height comes out of the panels, so the console keeps its size.
 - The tab's command line comes from the script (`command-line` over OSC 7731), the exit code from OSC 133;D. Without the integration script a tab has no running state, title or finish card.

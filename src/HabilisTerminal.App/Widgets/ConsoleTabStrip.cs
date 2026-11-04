@@ -8,7 +8,7 @@ using HabilisTerminal.App.Hosting;
 namespace HabilisTerminal.App.Widgets;
 
 /// <summary>
-/// The tabs above the console (issue #119), shown only while there are two or more. Nothing here takes the keyboard
+/// The tabs below the console (issue #119), shown only while there are two or more. Nothing here takes the keyboard
 /// focus: the Win32 focus stays in the console.
 /// </summary>
 internal sealed class ConsoleTabStrip : Border
