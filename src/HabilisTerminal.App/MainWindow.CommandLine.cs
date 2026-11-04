@@ -141,6 +141,25 @@ public partial class MainWindow
     }
 
     /// <summary>
+    /// While quick search is open, text goes to it and not to the console, whatever produced it (issue #107):
+    /// <paramref name="typed"/> is '\0' when only asking, else a typed character.
+    /// </summary>
+    private bool CaptureQuickSearchText(char typed)
+    {
+        if (FocusedPanel() is not { HasKeys: true, IsQuickSearchActive: true } panel)
+        {
+            return false;
+        }
+
+        if (typed != '\0' && !char.IsControl(typed))
+        {
+            panel.AppendQuickSearch(typed.ToString());
+        }
+
+        return true;
+    }
+
+    /// <summary>
     /// Keys that reach the shell while a panel has the keys: line editing with Shift selection, and the keys an empty
     /// line hands back to the panel.
     /// </summary>

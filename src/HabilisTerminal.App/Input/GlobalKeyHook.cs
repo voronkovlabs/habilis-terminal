@@ -21,6 +21,7 @@ public sealed class GlobalKeyHook : IDisposable
 {
     private const int WM_KEYFIRST = 0x0100;
     private const int WM_KEYDOWN = 0x0100;
+    private const int WM_CHAR = 0x0102;
     private const int WM_SYSKEYDOWN = 0x0104;
     private const int WM_KEYLAST = 0x0109;
     private const int VK_SHIFT = 0x10;
@@ -34,6 +35,7 @@ public sealed class GlobalKeyHook : IDisposable
     private readonly Func<Key, KeyModifiers, bool> _handler;
     private readonly Func<MSG, KeyModifiers, bool>? _mouseHandler;
     private readonly Func<IntPtr, bool>? _isConsole;
+    private readonly Func<char, bool>? _capturesText;
 
     /// <param name="handler">Returns true when the key is consumed and must not reach its target.</param>
     /// <param name="mouseHandler">Left and right button down and wheel messages; returns true when consumed.</param>
@@ -42,11 +44,18 @@ public sealed class GlobalKeyHook : IDisposable
     /// the console WPF has no focused element, and its keyboard navigation would move the focus to a panel on an
     /// arrow key. They go to the handler first and are then dispatched to the console as the message loop would.
     /// </param>
+    /// <param name="capturesText">
+    /// Whether text is captured instead of going to the console (quick search). Called with '\0' to ask, and with each
+    /// typed character, whatever produced it: a key in any layout, a dead key, injected text. Nothing reaches the
+    /// console meanwhile.
+    /// </param>
     public GlobalKeyHook(
         Func<Key, KeyModifiers, bool> handler,
         Func<MSG, KeyModifiers, bool>? mouseHandler = null,
-        Func<IntPtr, bool>? isConsole = null)
+        Func<IntPtr, bool>? isConsole = null,
+        Func<char, bool>? capturesText = null)
     {
+        _capturesText = capturesText;
         _handler = handler;
         _mouseHandler = mouseHandler;
         _isConsole = isConsole;
@@ -76,6 +85,18 @@ public sealed class GlobalKeyHook : IDisposable
             }
 
             TranslateMessage(ref msg);
+        }
+
+        if (msg.message == WM_CHAR)
+        {
+            if (_capturesText?.Invoke((char)msg.wParam) == true)
+            {
+                return;
+            }
+        }
+        else if (_capturesText?.Invoke('\0') == true)
+        {
+            return;
         }
 
         DispatchMessage(ref msg);

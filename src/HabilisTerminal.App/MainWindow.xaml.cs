@@ -250,7 +250,7 @@ public partial class MainWindow : Window
 
     private void OnLoaded()
     {
-        _keyHook = new GlobalKeyHook(OnGlobalKey, OnTerminalMouse, window => TerminalHandle is var terminal && terminal != IntPtr.Zero && IsChildOrSelf(terminal, window));
+        _keyHook = new GlobalKeyHook(OnGlobalKey, OnTerminalMouse, window => TerminalHandle is var terminal && terminal != IntPtr.Zero && IsChildOrSelf(terminal, window), CaptureQuickSearchText);
         UpdateCellSize();
 
         ApplyTerminalTheme(_themes.Current);

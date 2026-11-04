@@ -63,18 +63,12 @@ public partial class MainWindow
         }
 
         // Quick search sees its keys first (Backspace, Esc, Ctrl+Enter...); no key binding may take a typed character
-        // meanwhile (issue #39). With the keys in the console (#90) the character is appended here; a panel holding the
-        // WPF focus for a moment gets it as text input (OnPreviewTextInput).
+        // meanwhile (issue #39). It arrives as a character (CaptureQuickSearchText), or as text input when a panel
+        // holds the WPF focus for a moment (OnPreviewTextInput).
         if (panel.IsQuickSearchActive)
         {
             if (panel.IsQuickSearchTyping(key, modifiers))
             {
-                if (panel.HasKeys && KeyText.CharOf(key, modifiers == KeyModifiers.Shift) is { } typed)
-                {
-                    panel.AppendQuickSearch(typed.ToString());
-                    return true;
-                }
-
                 return false;
             }
 
