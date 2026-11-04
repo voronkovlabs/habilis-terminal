@@ -591,6 +591,43 @@ public partial class MainWindow : Window
         _shell.Host.Run("& " + ShellQuote.Quote(".\\" + item.Name));
     }
 
+    /// <summary>
+    /// Shift+Enter, as in Far (issue #103): a program or script in a new console of its own, which goes on when the app
+    /// closes. Any other file opens in its associated program, as Enter does.
+    /// </summary>
+    private static void RunDetached(FilePanel panel)
+    {
+        var item = panel.State.Current;
+        if (panel.IsPlugin || item.IsParent || item.Entry.IsDirectory || panel.State.Count == 0)
+        {
+            return;
+        }
+
+        if (!Core.FileSystem.RunnableFiles.IsRunnable(item.Name))
+        {
+            OpenWithAssociation(panel, item.Name);
+            return;
+        }
+
+        var path = Path.Combine(panel.CurrentPath, item.Name);
+        var script = Path.GetExtension(path).Equals(".ps1", StringComparison.OrdinalIgnoreCase);
+        try
+        {
+            // A script would open in its editor through the shell, so PowerShell runs it. A console program started
+            // through the shell from this window, which has no console, gets a new one.
+            using var process = System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(script ? App.FindPwsh() ?? "pwsh.exe" : path)
+            {
+                UseShellExecute = true,
+                WorkingDirectory = panel.CurrentPath,
+                Arguments = script ? $"-File \"{path}\"" : string.Empty,
+            });
+        }
+        catch (Exception ex) when (ex is System.ComponentModel.Win32Exception or InvalidOperationException)
+        {
+            panel.Message = ex.Message;
+        }
+    }
+
     /// <summary>The file's default shell verb; with no associated program Windows asks which one to use.</summary>
     private static void OpenWithAssociation(FilePanel panel, string name)
     {

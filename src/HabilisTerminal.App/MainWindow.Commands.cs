@@ -300,6 +300,10 @@ public partial class MainWindow
                 Fire(ShowFileHistoryAsync());
                 return true;
 
+            case Key.Enter when modifiers == KeyModifiers.Shift:
+                RunDetached(panel);
+                return true;
+
             // Command line from panel focus, as in Far.
             case Key.Enter when modifiers == KeyModifiers.Control:
                 InsertIntoCommandLine(ShellQuote.Quote(panel.State.Current.Name));

@@ -28,6 +28,7 @@ public sealed class HelpPage : DockPanel, IPage
         ("Navigation",
         [
             ("Enter", "Open a folder or archive; run a program in the shell; open other files in their program"),
+            ("Shift+Enter", "Run a program in a new console of its own"),
             ("Ctrl+PgUp", "Parent folder"),
             ("Ctrl+PgDn", "Enter the folder under the cursor; on a file: open it as an archive"),
             ("Ctrl+\\", "Root of the drive"),
