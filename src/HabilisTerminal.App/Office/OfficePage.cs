@@ -20,6 +20,8 @@ public sealed class OfficePage : DockPanel, IPage, ILeavePage, IDisposable
 {
     private const int WH_KEYBOARD_LL = 13;
     private const int WM_KEYDOWN = 0x0100;
+    private const int WM_SYSKEYDOWN = 0x0104;
+    private const int VK_MENU = 0x12;
     private const int VK_ESCAPE = 0x1B;
     private const int VK_F4 = 0x73;
     private const int VK_CONTROL = 0x11;
@@ -36,6 +38,7 @@ public sealed class OfficePage : DockPanel, IPage, ILeavePage, IDisposable
     private OfficeSession? _session;
     private IntPtr _hook;
     private bool _closed;
+    private bool _closingApp;
 
     public OfficePage(Window owner, string path, OfficeApp kind, bool readOnly, bool create)
     {
@@ -66,6 +69,9 @@ public sealed class OfficePage : DockPanel, IPage, ILeavePage, IDisposable
         Loaded += OnLoaded;
     }
 
+    /// <summary>Set before the page is disposed with the app.</summary>
+    public bool AppExiting { get; set; }
+
     /// <summary>The page is done; the window closes it.</summary>
     public event Action? CloseRequested;
 
@@ -76,6 +82,22 @@ public sealed class OfficePage : DockPanel, IPage, ILeavePage, IDisposable
     public event Action<Exception>? Failed;
 
     public void FocusContent() => _host.FocusDocked();
+
+    /// <summary>
+    /// The window is being closed. Office's own close button asks the top-level window to close, which is the app's now:
+    /// a request made with the pointer over the document only closes the page. True: the window must stay open.
+    /// </summary>
+    public bool InterceptWindowClose()
+    {
+        if (_closingApp || !GetCursorPos(out var pointer) || !GetWindowRect(_host.Handle, out var area)
+            || pointer.X < area.Left || pointer.X >= area.Right || pointer.Y < area.Top || pointer.Y >= area.Bottom)
+        {
+            return false;
+        }
+
+        Dispatcher.BeginInvoke(RequestClose);
+        return true;
+    }
 
     /// <summary>Unsaved changes: Save / Don't save / Cancel. False means stay. Office in a dialog of its own keeps the page.</summary>
     public bool ConfirmLeave()
@@ -121,8 +143,14 @@ public sealed class OfficePage : DockPanel, IPage, ILeavePage, IDisposable
         // Still opening: OnLoaded closes the session when it arrives.
         if (_session is { } session)
         {
-            // The window is out of the app by now, so waiting here cannot block Office. Bounded: a stuck Office stays behind.
-            Task.Run(session.CloseAsync).Wait(TimeSpan.FromSeconds(5));
+            // Office may take seconds: the window goes on meanwhile, unless the app is ending and would take the
+            // automation thread with it. The window is out of the app by now, so waiting cannot block Office; bounded,
+            // because a stuck Office stays behind.
+            var closing = Task.Run(session.CloseAsync);
+            if (AppExiting)
+            {
+                closing.Wait(TimeSpan.FromSeconds(5));
+            }
         }
 
         _host.Dispose();
@@ -198,6 +226,19 @@ public sealed class OfficePage : DockPanel, IPage, ILeavePage, IDisposable
 
     private IntPtr OnKeyboard(int code, IntPtr message, IntPtr data)
     {
+        if (code >= 0 && message == WM_SYSKEYDOWN && Marshal.ReadInt32(data) == VK_F4 && (GetAsyncKeyState(VK_MENU) & 0x8000) != 0
+            && GetForegroundWindow() == new WindowInteropHelper(_owner).Handle)
+        {
+            // Alt+F4 would go to the document window, which has no frame to close: it means the app, which asks first.
+            _closingApp = true;
+            Dispatcher.BeginInvoke(() =>
+            {
+                _owner.Close();
+                _closingApp = false; // the user chose to stay
+            });
+            return new IntPtr(1);
+        }
+
         if (code >= 0 && message == WM_KEYDOWN && GetForegroundWindow() == new WindowInteropHelper(_owner).Handle)
         {
             var key = Marshal.ReadInt32(data);
@@ -227,6 +268,28 @@ public sealed class OfficePage : DockPanel, IPage, ILeavePage, IDisposable
             _hook = IntPtr.Zero;
         }
     }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct NativePoint
+    {
+        public int X;
+        public int Y;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct NativeRect
+    {
+        public int Left;
+        public int Top;
+        public int Right;
+        public int Bottom;
+    }
+
+    [DllImport("user32.dll")]
+    private static extern bool GetCursorPos(out NativePoint point);
+
+    [DllImport("user32.dll")]
+    private static extern bool GetWindowRect(IntPtr window, out NativeRect rect);
 
     private delegate IntPtr LowLevelKeyboardProc(int code, IntPtr message, IntPtr data);
 

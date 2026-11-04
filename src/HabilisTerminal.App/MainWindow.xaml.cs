@@ -141,6 +141,12 @@ public partial class MainWindow : Window
         Closing += (_, e) =>
         {
             // Unsaved edits are never lost silently, whatever closes the window (F10, Alt+F4, the close button).
+            if (PageHost.Content is Office.OfficePage office && office.InterceptWindowClose())
+            {
+                e.Cancel = true;
+                return;
+            }
+
             if (PageHost.Content is ILeavePage page && !page.ConfirmLeave())
             {
                 e.Cancel = true;
@@ -156,6 +162,12 @@ public partial class MainWindow : Window
             if (App.Settings is { } settings)
             {
                 settings.Changed -= OnSettingsFileChanged;
+            }
+
+            if (PageHost.Content is Office.OfficePage office)
+            {
+                office.AppExiting = true;
+                ClosePage(refocus: false);
             }
 
             _keyHook?.Dispose();
