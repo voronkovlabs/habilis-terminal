@@ -3,5 +3,5 @@
   "name": "Demo",
   "version": "1.0.0",
   "assembly": "Habilis.Samples.Demo.dll",
-  "sdk": "1.2"
+  "sdk": "1.3"
 }

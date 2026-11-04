@@ -43,6 +43,12 @@ public interface IPanelProvider : IAsyncDisposable
     /// left with Ctrl+PgUp, the drive menu or folder history. Asked after each listing, so it may differ per location.
     /// </summary>
     bool ShowsParent => true;
+
+    /// <summary>
+    /// How many columns the names flow in (SDK 1.3). Above 1 a location shows names only, like a file panel's brief
+    /// view, for lists where the layout's columns say nothing (buckets). Asked after each listing.
+    /// </summary>
+    int NameColumns => 1;
 }
 
 /// <summary>An entry of a plugin panel.</summary>

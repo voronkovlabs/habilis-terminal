@@ -57,6 +57,18 @@ public class NavigationTests
     }
 
     [Fact]
+    public async Task The_bucket_list_has_no_parent_row_and_two_name_columns_while_a_bucket_is_a_normal_list()
+    {
+        var panel = await S3Test.OpenAsync(new FakeS3().AddBucket("logs", "EU").Add("logs", "a.txt", "x"));
+        Assert.False(panel.ShowsParent);
+        Assert.Equal(2, panel.NameColumns);
+
+        Assert.True(await panel.EnterAsync(await S3Test.EntryAsync(panel, "logs"), CancellationToken.None));
+        Assert.True(panel.ShowsParent);
+        Assert.Equal(1, panel.NameColumns);
+    }
+
+    [Fact]
     public async Task Listing_shows_prefixes_as_folders_and_objects_as_files_without_the_folder_marker()
     {
         var api = new FakeS3()

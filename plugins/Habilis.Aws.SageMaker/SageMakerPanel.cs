@@ -66,7 +66,7 @@ internal sealed class SageMakerPanel : IPanelProvider, IPanelCommands, IViewEntr
 
     public IReadOnlyList<PanelLayout> Layouts { get; } =
     [
-        new("Console", [Created, Duration, Status, Secondary, WarmPool, WarmPoolLeft, Cost]),
+        new("Console", [Created, Duration, Status, Secondary, Cost]),
         new("Brief", [Created, Status, Cost]),
         new("Status", [Status, Secondary, WarmPool, WarmPoolLeft]),
     ];

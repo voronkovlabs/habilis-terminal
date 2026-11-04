@@ -109,6 +109,7 @@ public sealed partial class FilePanel
                 {
                     shownFirst = true;
                     session.Entries = new Dictionary<(string, bool), PanelEntry>(entries);
+                    session.Extension.NameColumns = NameColumns(session);
                     State.SetListing(location, rows.ToArray(), focusName, hasParent: ShowsParent(session));
                     Refresh();
                     Message = "Loading…";
@@ -136,6 +137,7 @@ public sealed partial class FilePanel
 
         session.Entries = entries;
         Message = null;
+        session.Extension.NameColumns = NameColumns(session);
         State.SetListing(location, rows, focusName, hasParent: ShowsParent(session));
         Refresh();
         if (!samePath)
@@ -303,6 +305,10 @@ public sealed partial class FilePanel
     /// <summary>The provider's choice of a ".." row (issue #77); a provider that fails to answer keeps it.</summary>
     private static bool ShowsParent(PluginSession session) =>
         PluginManager.Guard(session.Plugin, () => session.Provider.ShowsParent, true);
+
+    /// <summary>The provider's name columns (issue #97); a provider that fails to answer keeps one.</summary>
+    private static int NameColumns(PluginSession session) =>
+        PluginManager.Guard(session.Plugin, () => session.Provider.NameColumns, 1);
 
     private static (string, bool) RowKey(FileEntry entry) => (entry.Name, entry.IsDirectory);
 

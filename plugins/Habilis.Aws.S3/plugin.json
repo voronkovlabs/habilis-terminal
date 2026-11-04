@@ -3,5 +3,5 @@
   "name": "S3 Browser",
   "version": "1.0.0",
   "assembly": "Habilis.Aws.S3.dll",
-  "sdk": "1.1"
+  "sdk": "1.3"
 }

@@ -71,7 +71,8 @@ public sealed class SageMakerTests : IDisposable
         var panel = await OpenAsync(new FakeHost(), new FakeSageMaker([]), "sm:prod/eu-west-1");
 
         Assert.Equal(["Console", "Brief", "Status"], panel.Layouts.Select(l => l.Title));
-        Assert.Equal(7, panel.Layouts[0].Columns.Count);
+        Assert.Equal([SageMakerPanel.CreatedKey, SageMakerPanel.DurationKey, SageMakerPanel.StatusKey, SageMakerPanel.SecondaryKey, SageMakerPanel.CostKey], panel.Layouts[0].Columns.Select(c => c.Key));
+        Assert.False(panel.ShowsParent);
         Assert.Equal([SageMakerPanel.CreatedKey, SageMakerPanel.StatusKey, SageMakerPanel.CostKey], panel.Layouts[1].Columns.Select(c => c.Key));
         Assert.Equal([SageMakerPanel.StatusKey, SageMakerPanel.SecondaryKey, SageMakerPanel.WarmPoolKey, SageMakerPanel.WarmPoolLeftKey], panel.Layouts[2].Columns.Select(c => c.Key));
         Assert.Equal([SageMakerPanel.CreatedKey, SageMakerPanel.DurationKey, SageMakerPanel.StatusKey, SageMakerPanel.CostKey], panel.SortKeys.Select(k => k.Key));

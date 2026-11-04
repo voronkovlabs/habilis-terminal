@@ -18,6 +18,9 @@ internal sealed class NvtopView : FrameworkElement
 
     private LocalSample? _sample;
     private IReadOnlyDictionary<string, (IReadOnlyList<double?> Load, IReadOnlyList<double?> Memory)> _gpuHistory = new Dictionary<string, (IReadOnlyList<double?>, IReadOnlyList<double?>)>();
+    /// <summary>A chart bar and the gap after it, in pixels.</summary>
+    private const double ChartBarSlot = 4;
+
     private IReadOnlyList<double?> _cpuHistory = [];
     private IReadOnlyList<double?> _ramHistory = [];
     private bool _paused;
@@ -170,46 +173,23 @@ internal sealed class NvtopView : FrameworkElement
             dc.DrawLine(grid, new Point(area.Left, y), new Point(area.Right, y));
         }
 
-        Line(dc, values, area, colour);
+        Bars(dc, values, area, colour);
     }
 
-    /// <summary>A series of 0–100 values, newest at the right edge, one step per sample.</summary>
-    private static void Line(DrawingContext dc, IReadOnlyList<double?> values, Rect area, Brush colour)
+    /// <summary>A series of 0–100 values as bars (issue #98), newest at the right edge, as many of the latest samples as fit; a missing value leaves a gap.</summary>
+    private static void Bars(DrawingContext dc, IReadOnlyList<double?> values, Rect area, Brush colour)
     {
-        if (values.Count < 2)
+        dc.PushClip(new RectangleGeometry(area));
+        var x = Math.Floor(area.Right) - ChartBarSlot;
+        for (var i = values.Count - 1; i >= 0 && x >= area.Left; i--, x -= ChartBarSlot)
         {
-            return;
-        }
-
-        var step = area.Width / Math.Max(1, values.Count - 1);
-        var geometry = new StreamGeometry();
-        using (var context = geometry.Open())
-        {
-            var open = false;
-            for (var i = 0; i < values.Count; i++)
+            if (values[i] is { } value && value > 0)
             {
-                if (values[i] is not { } value)
-                {
-                    open = false;
-                    continue;
-                }
-
-                var point = new Point(area.Left + (i * step), area.Bottom - (area.Height * Math.Clamp(value, 0, 100) / 100));
-                if (!open)
-                {
-                    context.BeginFigure(point, isFilled: false, isClosed: false);
-                    open = true;
-                }
-                else
-                {
-                    context.LineTo(point, isStroked: true, isSmoothJoin: true);
-                }
+                var height = Math.Ceiling(area.Height * Math.Clamp(value, 0, 100) / 100);
+                dc.DrawRectangle(colour, null, new Rect(x, area.Bottom - height, ChartBarSlot - 1, height));
             }
         }
 
-        geometry.Freeze();
-        dc.PushClip(new RectangleGeometry(area));
-        dc.DrawGeometry(null, new Pen(colour, 1.6), geometry);
         dc.Pop();
     }
 

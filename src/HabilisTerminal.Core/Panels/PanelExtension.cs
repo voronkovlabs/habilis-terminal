@@ -15,6 +15,9 @@ public sealed class PanelExtension
     /// <summary>The current layout's columns.</summary>
     public IReadOnlyList<ExtensionColumn> Columns { get; set; } = [];
 
+    /// <summary>The columns names flow in, from the provider; above 1 the layout's columns are not drawn.</summary>
+    public int NameColumns { get; set; } = 1;
+
     /// <summary>A custom cell: text and sort value, or null when the entry has no value for the column.</summary>
     public Func<FileEntry, string, (string Text, IComparable? SortValue)?> Cell { get; init; } = (_, _) => null;
 

@@ -47,13 +47,13 @@ public static class PanelColumns
         _ => 1,
     };
 
-    /// <summary>Name columns of a panel: one for a plugin panel (issue #49), else by view mode.</summary>
-    public static int NameColumnCount(PanelState state) => state.Extension is null ? NameColumnCount(state.ViewMode) : 1;
+    /// <summary>Name columns of a panel: the plugin panel's choice (issues #49, #97), else by view mode.</summary>
+    public static int NameColumnCount(PanelState state) => state.Extension is { } extension ? Math.Max(1, extension.NameColumns) : NameColumnCount(state.ViewMode);
 
     /// <summary>Detail columns of a panel: a plugin panel's layout (issue #49), else by view mode.</summary>
     public static IReadOnlyList<ColumnSpec> DetailColumns(PanelState state) =>
         state.Extension is { } extension
-            ? extension.Columns.Select(c => c.Key switch
+            ? extension.NameColumns > 1 ? [] : extension.Columns.Select(c => c.Key switch
             {
                 "size" => CompactSize with { Title = c.Title }, // "62 MB", as in folder panels (issue #76)
                 "modified" => Modified with { Title = c.Title },

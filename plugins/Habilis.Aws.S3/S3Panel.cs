@@ -77,6 +77,12 @@ internal sealed partial class S3Panel : IPanelProvider, IPanelCommands, IGetFile
 
     public bool CanMove => false;
 
+    /// <summary>The bucket list is the top: no ".." (issue #97), Ctrl+PgUp leaves the panel. Inside a bucket it goes up.</summary>
+    public bool ShowsParent => _location.Bucket is not null;
+
+    /// <summary>Buckets show in two columns of names (issue #97); objects keep the layout's columns.</summary>
+    public int NameColumns => _location.Bucket is null ? 2 : 1;
+
     public IReadOnlyList<InfoLine> Info
     {
         get

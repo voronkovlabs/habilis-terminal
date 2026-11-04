@@ -156,6 +156,9 @@ internal sealed class DemoPanel(IPluginHost host, DemoNode folder) : IPanelProvi
     /// <summary>SDK 1.2: no ".." at the top (Ctrl+PgUp leaves the panel), as flat plugin lists do; folders keep it.</summary>
     public bool ShowsParent => _folder.Parent is not null;
 
+    /// <summary>SDK 1.3: the top shows names in two columns, the way S3 shows its buckets.</summary>
+    public int NameColumns => _folder.Parent is null ? 2 : 1;
+
     public IReadOnlyList<InfoLine> Info => [new("Folder", _folder.Path), new("Entries", _folder.Children.Count.ToString("N0", CultureInfo.CurrentCulture)), new("Storage", "in memory")];
 
     public bool CanMove => true;

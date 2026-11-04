@@ -9,7 +9,7 @@ public sealed partial record PluginManifest(string Id, string Name, string Versi
     public const string FileName = "plugin.json";
 
     /// <summary>The SDK version this host implements.</summary>
-    public static Version HostSdkVersion { get; } = new(1, 2);
+    public static Version HostSdkVersion { get; } = new(1, 3);
 
     /// <summary>Reads and checks a manifest; the exception message is shown to the user.</summary>
     /// <exception cref="InvalidDataException">Missing or invalid fields.</exception>
