@@ -27,6 +27,9 @@ public sealed record ShellHostOptions(
     string? ExtraArguments = null,
     bool Integration = true);
 
+/// <summary>What a shell's host passes to the host in another process (issue #122). Handles are valid there.</summary>
+public sealed record ShellHostHandoff(ConPtyTransfer Console, string ChannelDirectory, string? CurrentDirectory, ShellState State, string Output);
+
 /// <summary>
 /// pwsh in a pseudo console with Habilis Terminal shell integration (SPEC §7): tracks prompt state and the
 /// current directory from OSC sequences, and sends requests (cd, run, insert) to PSReadLine key handlers
@@ -48,6 +51,11 @@ public sealed class ShellHost : IDisposable
     private Request? _inFlight;
     private DateTime _inFlightSince;
     private int _nextId;
+    private const int MaxReplayChars = 16 * 1024 * 1024;
+    private readonly Queue<string> _replay = new();
+    private long _replayChars;
+    private readonly ShellHostHandoff? _adopted;
+    private bool _handedOff;
 
     public ShellHost(ShellHostOptions options)
     {
@@ -55,6 +63,37 @@ public sealed class ShellHost : IDisposable
         ChannelDirectory = Path.Combine(Path.GetTempPath(), "HabilisTerminal", $"{Environment.ProcessId}-{Guid.NewGuid():N}");
         _timeoutTimer = new Timer(_ => CheckTimeout());
     }
+
+    /// <summary>A shell handed over by another process (issue #122): <see cref="Start"/> takes it over.</summary>
+    public ShellHost(ShellHostOptions options, ShellHostHandoff adopted)
+        : this(options)
+    {
+        _adopted = adopted;
+        ChannelDirectory = adopted.ChannelDirectory;
+        CurrentDirectory = adopted.CurrentDirectory;
+        State = adopted.State;
+    }
+
+    /// <summary>The console was taken over and output flows here: the old process may let go.</summary>
+    public event Action? Adopted;
+
+    /// <summary>Stops reading and prepares everything for the new process; the shell goes on here until completed.</summary>
+    public ShellHostHandoff PrepareHandoff(IntPtr targetProcess)
+    {
+        var console = (_session ?? throw new InvalidOperationException("The shell has not started.")).PrepareHandoff(targetProcess);
+        lock (_replay)
+        {
+            return new ShellHostHandoff(console, ChannelDirectory, CurrentDirectory, State, string.Concat(_replay));
+        }
+    }
+
+    public void CompleteHandoff()
+    {
+        _handedOff = true;
+        _session?.CompleteHandoff();
+    }
+
+    public void CancelHandoff() => _session?.CancelHandoff();
 
     /// <summary>Raw output for the terminal control; nothing is filtered out. Background thread.</summary>
     public event Action<string>? Output;
@@ -167,6 +206,20 @@ public sealed class ShellHost : IDisposable
 
     public void Start(int columns, int rows)
     {
+        if (_adopted is { } adopted)
+        {
+            // The control first gets all it would have had, then the console goes on from where the old process stopped.
+            Remember(adopted.Output);
+            _modes.Feed(adopted.Output);
+            _scanner.Scan(adopted.Output.Length > 8192 ? adopted.Output[^8192..] : adopted.Output, _ => { });
+            Output?.Invoke(adopted.Output);
+            _session = ConPtySession.Adopt(adopted.Console, OnOutput, OnExited);
+            _session.Resize(columns, rows);
+            Adopted?.Invoke();
+            Pump();
+            return;
+        }
+
         Directory.CreateDirectory(ChannelDirectory);
         var startInfo = new ConPtyStartInfo(
             BuildCommandLine(),
@@ -208,6 +261,11 @@ public sealed class ShellHost : IDisposable
     {
         _timeoutTimer.Dispose();
         _session?.Dispose();
+        if (_handedOff)
+        {
+            return; // the channel is the new process's now
+        }
+
         try
         {
             if (Directory.Exists(ChannelDirectory))
@@ -253,8 +311,27 @@ public sealed class ShellHost : IDisposable
     /// <summary>Clipboard text as it must be written for a paste (CR line breaks, bracketed when the shell asked).</summary>
     public string PrepareForPaste(string text) => _modes.Wrap(text);
 
+    private void Remember(string text)
+    {
+        lock (_replay)
+        {
+            _replay.Enqueue(text);
+            _replayChars += text.Length;
+            while (_replayChars > MaxReplayChars && _replay.Count > 1)
+            {
+                _replayChars -= _replay.Dequeue().Length;
+            }
+        }
+    }
+
     private void OnOutput(string text)
     {
+        Remember(text);
+        if (Environment.GetEnvironmentVariable("HABI_OUTPUT_LOG") is { Length: > 0 } outputLog)
+        {
+            File.AppendAllText(Path.Combine(outputLog, $"output-{Environment.ProcessId}.log"), text);
+        }
+
         _modes.Feed(text);
         _scanner.Scan(text, payload =>
         {

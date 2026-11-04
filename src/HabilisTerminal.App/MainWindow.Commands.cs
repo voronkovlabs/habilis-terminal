@@ -43,6 +43,10 @@ public partial class MainWindow
                 CloseTab(_tab);
                 return true;
 
+            case Key.M when modifiers == (KeyModifiers.Control | KeyModifiers.Shift) && !IsPageOpen && ConsoleHandoff.Enabled:
+                Fire(HandOffTabAsync());
+                return true;
+
             case Key.O when modifiers == KeyModifiers.Control && !IsPageOpen:
                 TogglePanels();
                 return true;

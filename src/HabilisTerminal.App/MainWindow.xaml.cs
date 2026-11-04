@@ -89,12 +89,24 @@ public partial class MainWindow : Window
         RestoreLayout(state);
 
         var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
-        var leftStart = StartPath(state.Left, home);
+        var adopted = ConsoleHandoff.PipeToAdopt() is { } pipe ? ConsoleHandoff.Receive(pipe) : null;
+        var leftStart = adopted?.Message.Shell.CurrentDirectory ?? StartPath(state.Left, home);
         var rightStart = StartPath(state.Right, home);
         InitTabs();
         ShellIntegrated = _settings.ShellIntegration;
         WireWindowKeys();
-        ShowTab(CreateTab(_active == _right ? rightStart : leftStart));
+        var first = CreateTab(_active == _right ? rightStart : leftStart, adopted?.Message.Shell);
+        if (adopted is { } taken)
+        {
+            first.Host.Adopted += () => taken.Confirm();
+            first.CommandRunning = taken.Message.Tab.CommandRunning;
+            first.CommandLine = taken.Message.Tab.CommandLine;
+            first.CommandStartedAt = taken.Message.Tab.CommandStartedAt;
+            first.ColorIndex = taken.Message.Tab.ColorIndex;
+            first.Mark = first.CommandRunning ? ConsoleTabMark.Running : ConsoleTabMark.None;
+        }
+
+        ShowTab(first);
         UpdatePanelsShown(); // the layout was restored before the shell existed
 
         Loaded += async (_, _) =>

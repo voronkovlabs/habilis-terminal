@@ -72,6 +72,33 @@ internal static class ConPtyNative
     [DllImport("conpty.dll", ExactSpelling = true)]
     public static extern void ClosePseudoConsole(IntPtr hPC);
 
+    /// <summary>Builds a pseudo console handle from the handles behind one (issue #122); it takes them over.</summary>
+    [DllImport("conpty.dll", ExactSpelling = true)]
+    public static extern int ConptyPackPseudoConsole(IntPtr hServerProcess, IntPtr hRef, IntPtr hSignal, out IntPtr phPC);
+
+    public const uint DUPLICATE_SAME_ACCESS = 2;
+    public const uint THREAD_TERMINATE = 1;
+
+    [DllImport("kernel32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static extern bool DuplicateHandle(IntPtr hSourceProcess, IntPtr hSource, IntPtr hTargetProcess, out IntPtr lpTarget, uint dwDesiredAccess, [MarshalAs(UnmanagedType.Bool)] bool bInheritHandle, uint dwOptions);
+
+    [DllImport("kernel32.dll")]
+    public static extern IntPtr GetCurrentProcess();
+
+    [DllImport("kernel32.dll")]
+    public static extern uint GetCurrentThreadId();
+
+    [DllImport("kernel32.dll", SetLastError = true)]
+    public static extern IntPtr OpenThread(uint dwDesiredAccess, [MarshalAs(UnmanagedType.Bool)] bool bInheritHandle, uint dwThreadId);
+
+    [DllImport("kernel32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static extern bool CancelSynchronousIo(IntPtr hThread);
+
+    [DllImport("kernel32.dll", SetLastError = true)]
+    public static extern int GetProcessId(IntPtr hProcess);
+
     [DllImport("kernel32.dll", SetLastError = true)]
     [return: MarshalAs(UnmanagedType.Bool)]
     public static extern bool CreatePipe(out SafeFileHandle hReadPipe, out SafeFileHandle hWritePipe, IntPtr lpPipeAttributes, int nSize);

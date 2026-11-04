@@ -37,16 +37,17 @@ public partial class MainWindow
         Workspace.LayoutUpdated += (_, _) => UpdateHintButton();
     }
 
-    private ConsoleTab CreateTab(string folder)
+    private ConsoleTab CreateTab(string folder, ShellHostHandoff? adopted = null)
     {
         var pwsh = App.FindPwsh() ?? throw new InvalidOperationException("PowerShell 7 (pwsh.exe) was not found.");
-        var host = new ShellHost(new ShellHostOptions(
+        var options = new ShellHostOptions(
             pwsh,
             ShellScripts.IntegrationScriptPath,
             folder,
             NullIfEmpty(_settings.ShellInitCommand),
             ExtraArguments: NullIfEmpty(_settings.ShellArgs),
-            Integration: _settings.ShellIntegration));
+            Integration: _settings.ShellIntegration);
+        var host = adopted is null ? new ShellHost(options) : new ShellHost(options, adopted);
         var tab = new ConsoleTab(host) { ColorIndex = Core.Panels.ConsoleTabRules.FreeColor(_tabs.Select(t => t.ColorIndex).ToList(), ConsoleTabStrip.ColorCount) };
         host.Exited += _ => Dispatcher.BeginInvoke(() => OnShellExited(tab));
         host.DirectoryChanged += path => Dispatcher.BeginInvoke(() =>
@@ -110,6 +111,32 @@ public partial class MainWindow
                 PutFocusInTerminal();
             }
         });
+    }
+
+    /// <summary>
+    /// Prototype (issue #122), Ctrl+Shift+M under HABI_HANDOFF_TEST: the tab in front moves to a new process. With no
+    /// tab left this window closes, as there is nothing here to go back to.
+    /// </summary>
+    private async Task HandOffTabAsync()
+    {
+        if (_tab is not { } tab)
+        {
+            return;
+        }
+
+        if (await ConsoleHandoff.SendAsync(tab, tab.Host.CurrentDirectory).ConfigureAwait(true))
+        {
+            tab.CommandRunning = false;
+            if (_tabs.Count < 2)
+            {
+                _lastShellExited = true;
+                Close();
+            }
+            else
+            {
+                CloseTab(tab, ask: false);
+            }
+        }
     }
 
     /// <summary>Ctrl+Shift+T: a new shell in the active panel's folder.</summary>
