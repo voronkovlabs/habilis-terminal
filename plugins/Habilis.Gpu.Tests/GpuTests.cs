@@ -104,6 +104,10 @@ public sealed class GpuTests
         var jobs = await Listing.AllAsync(panel);
         Assert.Equal(["train-1"], jobs.Select(j => j.Name));
         Assert.Equal("2 × ml.g5.12xlarge", jobs[0].Cells!["instances"].Text);
+        Assert.Equal("380%", jobs[0].Cells![LocalGpuPanel.LoadKey].Text); // the numbers are on the job's row too (issue #99)
+        Assert.Equal("250%", jobs[0].Cells![LocalGpuPanel.MemoryKey].Text);
+        Assert.Equal("900%", jobs[0].Cells!["cpu"].Text);
+        Assert.Equal("40%", jobs[0].Cells!["ram"].Text);
 
         Assert.True(await panel.EnterAsync(jobs[0], CancellationToken.None));
         var hosts = await Listing.AllAsync(panel);
@@ -115,6 +119,22 @@ public sealed class GpuTests
         var view = await panel.QuickViewAsync(hosts[0], CancellationToken.None);
         Assert.Contains("now 380%", view, StringComparison.Ordinal);
         Assert.Contains("summed over the host's GPUs", view, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Without_cloudwatch_the_job_list_still_works_and_says_why_there_are_no_numbers()
+    {
+        var host = new FakeHost();
+        var cloud = new FakeCloud { MetricsFailure = new Amazon.CloudWatch.AmazonCloudWatchException("User is not authorized") { ErrorCode = "AccessDenied" } };
+        var plugin = new GpuPlugin { Cloud = _ => cloud, Clock = () => Now };
+        plugin.Initialize(host);
+        await using var panel = (CloudGpuPanel)(await plugin.OpenAddressAsync("gpu:sm:prod/eu-west-1", CancellationToken.None))!;
+
+        var jobs = await Listing.AllAsync(panel);
+
+        Assert.Equal(["train-1"], jobs.Select(j => j.Name));
+        Assert.Equal("n/a", jobs[0].Cells![LocalGpuPanel.LoadKey].Text);
+        Assert.Contains(host.Messages, m => m.Item2.Contains("metrics", StringComparison.OrdinalIgnoreCase));
     }
 
     [Fact]
@@ -169,6 +189,8 @@ public sealed class GpuTests
 
     private sealed class FakeCloud : ICloudGpuApi
     {
+        public Exception? MetricsFailure { get; init; }
+
         public Exception? Failure { get; init; }
 
         public (string Job, int Minutes, DateTime Now) Asked { get; private set; }
@@ -179,6 +201,11 @@ public sealed class GpuTests
 
         public Task<IReadOnlyList<HostMetrics>> MetricsAsync(CloudJob job, int minutes, DateTime now, CancellationToken cancellationToken)
         {
+            if (MetricsFailure is { } failure)
+            {
+                return Task.FromException<IReadOnlyList<HostMetrics>>(failure);
+            }
+
             Asked = (job.Name, minutes, now);
             IReadOnlyList<double?> Busy(double value) => [.. Enumerable.Repeat<double?>(null, minutes - 3), value - 20, value - 10, value];
             IReadOnlyList<double?> None() => [.. Enumerable.Repeat<double?>(null, minutes)];

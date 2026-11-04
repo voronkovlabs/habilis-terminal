@@ -17,7 +17,7 @@ A GPU monitor like nvtop, in a Habilis Terminal panel (issue #70). Read-only.
 ## SageMaker (`gpu:sm`, `gpu:sm:profile/region`)
 
 - The training jobs in progress, with their instances. Enter on a job lists its hosts (`algo-1`, `algo-2`...) with
-  GPU, GPU memory, CPU and memory load from CloudWatch (`/aws/sagemaker/TrainingJobs`, dimension Host).
+  GPU, GPU memory, CPU and memory load from CloudWatch (`/aws/sagemaker/TrainingJobs`, dimension Host). A job's row shows the average over its hosts.
 - GPU and CPU values are summed over the host's GPUs and cores, as SageMaker reports them: 4 GPUs at full load show
   400%. CloudWatch has one value per minute, about a minute late; the panel refreshes every 60 seconds (setting).
 - Ctrl+Q shows the last 30 minutes of a host as charts.

@@ -73,7 +73,8 @@ internal sealed class CloudGpuPanel : IPanelProvider, IQuickViewEntry, IViewEntr
             if (_job is null)
             {
                 _jobs = await Api.RunningJobsAsync(cancellationToken).ConfigureAwait(false);
-                entries = [.. _jobs.Select(JobEntry)];
+                var metrics = await JobMetricsAsync(cancellationToken).ConfigureAwait(false);
+                entries = [.. _jobs.Select((job, i) => JobEntry(job, metrics[i]))];
             }
             else
             {
@@ -87,6 +88,24 @@ internal sealed class CloudGpuPanel : IPanelProvider, IQuickViewEntry, IViewEntr
         }
 
         yield return entries;
+    }
+
+    /// <summary>
+    /// The numbers of the job rows (issue #99). Without them the list still works: a profile that may list jobs but not
+    /// read CloudWatch gets the list and a status message.
+    /// </summary>
+    private async Task<IReadOnlyList<HostMetrics>[]> JobMetricsAsync(CancellationToken cancellationToken)
+    {
+        try
+        {
+            var now = _clock();
+            return await Task.WhenAll(_jobs.Select(job => Api.MetricsAsync(job, Minutes, now, cancellationToken))).ConfigureAwait(false);
+        }
+        catch (Exception ex) when (!cancellationToken.IsCancellationRequested && ex is not PluginException)
+        {
+            _host.ShowStatus(AwsErrors.Describe(ex, "Reading the metrics of the running jobs", _session).Message);
+            return [.. _jobs.Select(_ => (IReadOnlyList<HostMetrics>)[])];
+        }
     }
 
     public Task<bool> EnterAsync(PanelEntry entry, CancellationToken cancellationToken)
@@ -139,7 +158,7 @@ internal sealed class CloudGpuPanel : IPanelProvider, IQuickViewEntry, IViewEntr
     {
         if (entry.Tag is CloudJob job)
         {
-            return $"{job.Name}\n\nInstances     {job.InstanceCount} × {job.InstanceType}\nStarted       {job.Started?.ToLocalTime().ToString("g", CultureInfo.CurrentCulture) ?? "not yet"}\n\nEnter lists the hosts with their GPU load.\n";
+            return $"{job.Name}\n\nInstances     {job.InstanceCount} × {job.InstanceType}\nStarted       {job.Started?.ToLocalTime().ToString("g", CultureInfo.CurrentCulture) ?? "not yet"}\n\nThe row shows the average over the job's hosts. Enter lists the hosts with their charts.\n";
         }
 
         if (entry.Tag is not HostMetrics host)
@@ -162,26 +181,38 @@ internal sealed class CloudGpuPanel : IPanelProvider, IQuickViewEntry, IViewEntr
         return text.ToString();
     }
 
-    private static PanelEntry JobEntry(CloudJob job) => new(job.Name, IsFolder: true)
+    /// <summary>A job's row: the average over its hosts that have data, so it reads like a host's row.</summary>
+    private static PanelEntry JobEntry(CloudJob job, IReadOnlyList<HostMetrics> hosts)
     {
-        Tag = job,
-        Icon = PanelIcons.Gpu,
-        Modified = job.Started,
-        Cells = new Dictionary<string, CellValue> { ["instances"] = $"{job.InstanceCount} × {job.InstanceType}" },
-    };
+        double? Average(Func<HostMetrics, IReadOnlyList<double?>> series) =>
+            hosts.Select(h => HostMetrics.Last(series(h))).Where(v => v is not null).Average();
+
+        var gpu = Average(h => h.Gpu);
+        var cells = Cells(gpu, Average(h => h.GpuMemory), Average(h => h.Cpu), Average(h => h.Memory));
+        cells["instances"] = $"{job.InstanceCount} × {job.InstanceType}";
+        return new PanelEntry(job.Name, IsFolder: true)
+        {
+            Tag = job,
+            Icon = PanelIcons.Gpu,
+            Modified = job.Started,
+            Cells = cells,
+        };
+    }
 
     private static PanelEntry HostEntry(HostMetrics host) => new(host.Host[(host.Host.LastIndexOf('/') + 1)..])
     {
         Tag = host,
         Icon = PanelIcons.Gpu,
         Tone = HostMetrics.Last(host.Gpu) is null ? RowTone.Dim : RowTone.Normal,
-        Cells = new Dictionary<string, CellValue>
-        {
-            [LocalGpuPanel.LoadKey] = new(TextChart.Value(HostMetrics.Last(host.Gpu), "%"), HostMetrics.Last(host.Gpu)),
-            [LocalGpuPanel.MemoryKey] = new(TextChart.Value(HostMetrics.Last(host.GpuMemory), "%"), HostMetrics.Last(host.GpuMemory)),
-            ["cpu"] = new(TextChart.Value(HostMetrics.Last(host.Cpu), "%"), HostMetrics.Last(host.Cpu)),
-            ["ram"] = new(TextChart.Value(HostMetrics.Last(host.Memory), "%"), HostMetrics.Last(host.Memory)),
-        },
+        Cells = Cells(HostMetrics.Last(host.Gpu), HostMetrics.Last(host.GpuMemory), HostMetrics.Last(host.Cpu), HostMetrics.Last(host.Memory)),
+    };
+
+    private static Dictionary<string, CellValue> Cells(double? gpu, double? gpuMemory, double? cpu, double? memory) => new()
+    {
+        [LocalGpuPanel.LoadKey] = new(TextChart.Value(gpu, "%"), gpu),
+        [LocalGpuPanel.MemoryKey] = new(TextChart.Value(gpuMemory, "%"), gpuMemory),
+        ["cpu"] = new(TextChart.Value(cpu, "%"), cpu),
+        ["ram"] = new(TextChart.Value(memory, "%"), memory),
     };
 
     private async Task RefreshLoopAsync()
