@@ -14,8 +14,7 @@ namespace HabilisTerminal.App.Widgets;
 internal sealed class ConsoleHintButton
 {
     private const double Size = 30;
-    private const double RightGap = 26; // clear of the console's scroll bar
-    private const double BottomGap = 8;
+    private const double CornerGap = 24; // the same from both edges, and clear of the console's scroll bar
     private const double RestOpacity = 0.5;
 
     private readonly Window _owner;
@@ -83,8 +82,8 @@ internal sealed class ConsoleHintButton
         _wanted = console is not null;
         if (console is { } area)
         {
-            var x = Math.Max(0, area.Right - Size - RightGap);
-            var y = Math.Max(0, area.Bottom - Size - BottomGap);
+            var x = Math.Max(0, area.Right - Size - CornerGap);
+            var y = Math.Max(0, area.Bottom - Size - CornerGap);
             if (_popup.HorizontalOffset != x || _popup.VerticalOffset != y)
             {
                 _popup.HorizontalOffset = x;
