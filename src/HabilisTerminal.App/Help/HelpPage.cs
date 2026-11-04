@@ -47,7 +47,7 @@ public sealed class HelpPage : DockPanel, IPage
         ]),
         ("Files",
         [
-            ("F3", "View (on a folder: compute its size; a PDF opens in the Edge viewer)"),
+            ("F3", "View (on a folder: compute its size; a PDF opens in the Edge viewer, from 50 MB in a fast page view without search)"),
             ("Alt+F3", "Markdown rendered; other files in their associated program"),
             ("F4 / Shift+F4", "Edit / new file: asks for a name, created when saved"),
             ("F5 / Shift+F5", "Copy / copy the item under the cursor"),

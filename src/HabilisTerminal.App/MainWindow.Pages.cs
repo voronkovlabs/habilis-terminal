@@ -92,14 +92,24 @@ public partial class MainWindow
 
     private void OpenPdf(string path, FilePanel returnTo)
     {
-        var page = new PdfViewerPage(path, _themes.Current);
-        RememberFile(path, edited: false);
-        page.CloseRequested += () =>
+        void Close()
         {
             ClosePage();
             returnTo.State.TrySetCursor(Path.GetFileName(path));
             returnTo.Refresh();
-        };
+        }
+
+        RememberFile(path, edited: false);
+        if (PdfImagePage.IsLarge(path))
+        {
+            var images = new PdfImagePage(path);
+            images.CloseRequested += Close;
+            ShowPage(images);
+            return;
+        }
+
+        var page = new PdfViewerPage(path, _themes.Current);
+        page.CloseRequested += Close;
         ShowPage(page);
     }
 
