@@ -11,6 +11,7 @@ public static class ThemeDefaults
 {
     private static readonly IReadOnlyDictionary<string, DefaultColor> Dark = Build(
         ("foreground", "#CCCCCC"), ("descriptionForeground", "#CCCCCCB3"),
+        ("titleBar.activeBackground", "#3C3C3C"), ("titleBar.activeForeground", "#CCCCCC"),
         ("button.background", "#0E639C"), ("button.foreground", "#FFFFFF"), ("button.border", "#00000000"),
         ("button.secondaryBackground", "#3A3D41"), ("button.secondaryForeground", "#FFFFFF"), ("errorForeground", "#F48771"),
         ("focusBorder", "#007FD4"), ("icon.foreground", "#C5C5C5"), ("widget.border", "#454545"),
@@ -38,6 +39,7 @@ public static class ThemeDefaults
 
     private static readonly IReadOnlyDictionary<string, DefaultColor> Light = Build(
         ("foreground", "#616161"), ("descriptionForeground", "#717171"),
+        ("titleBar.activeBackground", "#DDDDDD"), ("titleBar.activeForeground", "#333333"),
         ("button.background", "#007ACC"), ("button.foreground", "#FFFFFF"), ("button.border", "#00000000"),
         ("button.secondaryBackground", "#5F6A79"), ("button.secondaryForeground", "#FFFFFF"), ("errorForeground", "#A1260D"),
         ("focusBorder", "#0090F1"), ("icon.foreground", "#424242"), ("widget.border", "#C8C8C8"),
@@ -65,6 +67,7 @@ public static class ThemeDefaults
 
     private static readonly IReadOnlyDictionary<string, DefaultColor> HighContrast = Build(
         ("foreground", "#FFFFFF"), ("descriptionForeground", "#FFFFFFB3"),
+        ("titleBar.activeBackground", "#000000"), ("titleBar.activeForeground", "#FFFFFF"),
         ("button.background", "#00000000"), ("button.foreground", "#FFFFFF"), ("button.border", "=contrastBorder"),
         ("button.secondaryBackground", "#00000000"), ("button.secondaryForeground", "#FFFFFF"), ("errorForeground", "#F48771"),
         ("focusBorder", "#F38518"), ("contrastBorder", "#6FC3DF"), ("icon.foreground", "#FFFFFF"), ("widget.border", "=contrastBorder"),
@@ -92,6 +95,7 @@ public static class ThemeDefaults
 
     private static readonly IReadOnlyDictionary<string, DefaultColor> HighContrastLight = Build(
         ("foreground", "#292929"), ("descriptionForeground", "#292929B3"),
+        ("titleBar.activeBackground", "#FFFFFF"), ("titleBar.activeForeground", "#292929"),
         ("button.background", "#0F4A85"), ("button.foreground", "#FFFFFF"), ("button.border", "=contrastBorder"),
         ("button.secondaryBackground", "#FFFFFF"), ("button.secondaryForeground", "#292929"), ("errorForeground", "#B5200D"),
         ("focusBorder", "#006BBD"), ("contrastBorder", "#0F4A85"), ("icon.foreground", "#292929"), ("widget.border", "=contrastBorder"),

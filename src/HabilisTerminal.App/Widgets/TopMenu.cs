@@ -123,7 +123,7 @@ public sealed class TopMenu
             var header = (Border)_bar.Children[i];
             if (i == _group)
             {
-                header.SetResourceReference(Border.BackgroundProperty, "Habi.Hover");
+                header.SetResourceReference(Border.BackgroundProperty, "Habi.TitleBarHover");
             }
             else
             {

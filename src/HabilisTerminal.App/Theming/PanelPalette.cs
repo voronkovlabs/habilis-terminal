@@ -134,9 +134,44 @@ internal static class PanelPalette
             resources["Habi.ToneBad"] = s_tones[4];
             resources["Habi.ToneDim"] = s_tones[5];
             resources["Habi.TitleBarBackground"] = Freeze(Opaque("titleBar.activeBackground"));
-            resources["Habi.TitleBarForeground"] = Freeze(Opaque("titleBar.activeForeground"));
+
+            // A theme may set only the background: the menu must stay readable on it (issue #109).
+            var titleForeground = Readable(Opaque("titleBar.activeForeground"), Opaque("titleBar.activeBackground"));
+            var titleBackground = Opaque("titleBar.activeBackground");
+            resources["Habi.TitleBarForeground"] = Freeze(titleForeground);
+
+            // The title bar's own colours: a list's hover colour can hide the text (the Far theme's dark blue).
+            resources["Habi.TitleBarHover"] = Freeze(Mix(titleBackground, titleForeground, 0.18));
         }
     }
+
+    private static double Luminance(Color color)
+    {
+        static double Channel(byte value)
+        {
+            var c = value / 255.0;
+            return c <= 0.03928 ? c / 12.92 : Math.Pow((c + 0.055) / 1.055, 2.4);
+        }
+
+        return (0.2126 * Channel(color.R)) + (0.7152 * Channel(color.G)) + (0.0722 * Channel(color.B));
+    }
+
+    /// <summary>The colour itself when it can be read on the background, else black or white, whichever reads better.</summary>
+    private static Color Readable(Color color, Color background)
+    {
+        double Contrast(Color a)
+        {
+            var (x, y) = (Luminance(a), Luminance(background));
+            return (Math.Max(x, y) + 0.05) / (Math.Min(x, y) + 0.05);
+        }
+
+        return Contrast(color) >= 3 ? color : Contrast(Colors.White) >= Contrast(Colors.Black) ? Colors.White : Colors.Black;
+    }
+
+    private static Color Mix(Color from, Color to, double share) => Color.FromRgb(
+        (byte)(from.R + ((to.R - from.R) * share)),
+        (byte)(from.G + ((to.G - from.G) * share)),
+        (byte)(from.B + ((to.B - from.B) * share)));
 
     public static Color ToColor(ThemeColor color) => Color.FromArgb(color.A, color.R, color.G, color.B);
 

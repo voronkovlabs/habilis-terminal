@@ -65,7 +65,7 @@ public sealed class TitleBar : DockPanel
                 e.Handled = true;
                 MenuRequested?.Invoke(index);
             };
-            header.MouseEnter += (_, _) => header.SetResourceReference(Border.BackgroundProperty, "Habi.Hover");
+            header.MouseEnter += (_, _) => header.SetResourceReference(Border.BackgroundProperty, "Habi.TitleBarHover");
             header.MouseLeave += (_, _) => header.Background = Brushes.Transparent;
             WindowChrome.SetIsHitTestVisibleInChrome(header, true);
             _headers.Add(header);
@@ -178,7 +178,7 @@ public sealed class TitleBar : DockPanel
         icon.SetResourceReference(System.Windows.Shapes.Shape.FillProperty, "Habi.TitleBarForeground");
         var button = new Border { Width = 40, Background = Brushes.Transparent, Child = icon, ToolTip = "Send feedback" };
         WindowChrome.SetIsHitTestVisibleInChrome(button, true);
-        button.MouseEnter += (_, _) => button.SetResourceReference(Border.BackgroundProperty, "Habi.Hover");
+        button.MouseEnter += (_, _) => button.SetResourceReference(Border.BackgroundProperty, "Habi.TitleBarHover");
         button.MouseLeave += (_, _) => button.Background = Brushes.Transparent;
         button.MouseLeftButtonUp += (_, e) =>
         {
@@ -203,7 +203,7 @@ public sealed class TitleBar : DockPanel
         }
         else
         {
-            button.SetResourceReference(Border.BackgroundProperty, "Habi.Hover");
+            button.SetResourceReference(Border.BackgroundProperty, "Habi.TitleBarHover");
         }
     }
 

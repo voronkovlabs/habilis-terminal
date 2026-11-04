@@ -151,6 +151,12 @@ public sealed class OfficePage : DockPanel, IPage, ILeavePage, IDisposable
             {
                 closing.Wait(TimeSpan.FromSeconds(5));
             }
+            else if (_owner.IsActive)
+            {
+                // Office's window leaves the app before it closes, and Windows may activate another program afterwards.
+                var owner = _owner;
+                closing.ContinueWith(_ => owner.Dispatcher.BeginInvoke(() => owner.Activate()), TaskScheduler.Default);
+            }
         }
 
         _host.Dispose();

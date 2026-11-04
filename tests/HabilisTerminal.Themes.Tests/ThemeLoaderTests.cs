@@ -2,6 +2,58 @@ namespace HabilisTerminal.Themes.Tests;
 
 public class ThemeLoaderTests
 {
+    /// <summary>Text and its background as the app draws them; each must be readable in every built-in theme (issue #109).</summary>
+    public static TheoryData<string, string, string> ColourPairs()
+    {
+        (string Text, string Background)[] pairs =
+        [
+            ("titleBar.activeForeground", "titleBar.activeBackground"),
+            ("sideBar.foreground", "sideBar.background"),
+            ("descriptionForeground", "sideBar.background"),
+            ("list.activeSelectionForeground", "list.activeSelectionBackground"),
+            ("input.foreground", "input.background"),
+            ("quickInput.foreground", "quickInput.background"),
+            ("button.foreground", "button.background"),
+            ("button.secondaryForeground", "button.secondaryBackground"),
+            ("terminal.foreground", "terminal.background"),
+            ("editor.foreground", "editor.background"),
+        ];
+        var data = new TheoryData<string, string, string>();
+        foreach (var theme in ThemeLoader.BuiltInThemes)
+        {
+            foreach (var (text, background) in pairs)
+            {
+                data.Add(theme, text, background);
+            }
+        }
+
+        return data;
+    }
+
+    [Theory]
+    [MemberData(nameof(ColourPairs))]
+    public void Every_built_in_theme_keeps_text_readable(string themeName, string text, string background)
+    {
+        var theme = ThemeLoader.LoadBuiltIn(themeName);
+        var under = theme.GetOpaque(background, "sideBar.background");
+        var over = theme.Get(text);
+        Assert.NotNull(over);
+        var (a, b) = (Luminance(over.Value.Over(under)), Luminance(under));
+        var contrast = (Math.Max(a, b) + 0.05) / (Math.Min(a, b) + 0.05);
+        Assert.True(contrast >= 3, $"{themeName}: {text} on {background} has contrast {contrast:0.0}");
+    }
+
+    private static double Luminance(ThemeColor color)
+    {
+        static double Channel(byte value)
+        {
+            var c = value / 255.0;
+            return c <= 0.03928 ? c / 12.92 : Math.Pow((c + 0.055) / 1.055, 2.4);
+        }
+
+        return (0.2126 * Channel(color.R)) + (0.7152 * Channel(color.G)) + (0.0722 * Channel(color.B));
+    }
+
     [Theory]
     [InlineData("#abc", 0xAA, 0xBB, 0xCC, 0xFF)]
     [InlineData("#abcd", 0xAA, 0xBB, 0xCC, 0xDD)]
