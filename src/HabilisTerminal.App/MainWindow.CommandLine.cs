@@ -23,6 +23,14 @@ public partial class MainWindow
     /// <summary>Between a command's start and the next prompt: the console has every key.</summary>
     private bool _commandRunning;
 
+    /// <summary>
+    /// A running command has every key, but the panel keeps its look for this long: otherwise each short command makes
+    /// the frame and the cursor bar blink (issue #118).
+    /// </summary>
+    private static readonly TimeSpan FrameHoldTime = TimeSpan.FromSeconds(2);
+
+    private System.Windows.Threading.DispatcherTimer? _frameHold;
+
     /// <summary>Keyboard popups open now (one can open as another closes).</summary>
     private int _openPopups;
 
@@ -41,6 +49,7 @@ public partial class MainWindow
         host.PanelKeyReturned += name => Dispatcher.BeginInvoke(() => OnPanelKeyReturned(name));
         host.CommandOutputStarted += (_, _, _) => Dispatcher.BeginInvoke(() =>
         {
+            HoldFrame();
             _commandRunning = true;
             UpdatePanelKeys();
         });
@@ -52,6 +61,7 @@ public partial class MainWindow
                 {
                     _commandRunning = false;
                     UpdatePanelKeys();
+                    ReleaseFrame();
                 });
             }
         };
@@ -73,6 +83,31 @@ public partial class MainWindow
             PopupFocus.Opening -= OnPopupOpening;
             PopupFocus.Closed -= OnPopupClosed;
         };
+    }
+
+    private void HoldFrame()
+    {
+        if (FocusedPanel() is not { } panel)
+        {
+            return;
+        }
+
+        panel.HoldsFrame = true;
+        if (_frameHold is null)
+        {
+            _frameHold = new System.Windows.Threading.DispatcherTimer { Interval = FrameHoldTime };
+            _frameHold.Tick += (_, _) => ReleaseFrame();
+        }
+
+        _frameHold.Stop();
+        _frameHold.Start();
+    }
+
+    private void ReleaseFrame()
+    {
+        _frameHold?.Stop();
+        _left.HoldsFrame = false;
+        _right.HoldsFrame = false;
     }
 
     /// <summary>A popup gets its keys through the window, so the Win32 focus leaves the console (issue #92).</summary>

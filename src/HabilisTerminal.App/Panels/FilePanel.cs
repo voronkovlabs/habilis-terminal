@@ -733,6 +733,22 @@ public sealed partial class FilePanel : Border
 
     private bool _hasKeys;
 
+    /// <summary>Drawn as having the keys although it has none: a command has just started (issue #118).</summary>
+    public bool HoldsFrame
+    {
+        get => _holdsFrame;
+        set
+        {
+            if (_holdsFrame != value)
+            {
+                _holdsFrame = value;
+                UpdateFocusVisuals();
+            }
+        }
+    }
+
+    private bool _holdsFrame;
+
     protected override void OnGotKeyboardFocus(KeyboardFocusChangedEventArgs e)
     {
         base.OnGotKeyboardFocus(e);
@@ -1140,7 +1156,7 @@ public sealed partial class FilePanel : Border
 
     private void UpdateFocusVisuals()
     {
-        var focused = IsKeyboardFocused || HasKeys;
+        var focused = IsKeyboardFocused || HasKeys || HoldsFrame;
         BorderBrush = focused ? PanelPalette.FocusOutline : PanelPalette.Border;
         _title.Opacity = _isActive ? 1.0 : 0.6;
         _list.IsActivePanel = _isActive;
