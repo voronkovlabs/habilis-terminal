@@ -90,7 +90,7 @@ public sealed class HelpPage : DockPanel, IPage
         ]),
         ("Editor (F4)",
         [
-            ("F2 / Shift+F2", "Save / save as"),
+            ("F2, Ctrl+S / Shift+F2", "Save / save as"),
             ("F7 / Shift+F7", "Find / find next"),
             ("Ctrl+F7", "Replace"),
             ("Shift+F8", "Encoding"),

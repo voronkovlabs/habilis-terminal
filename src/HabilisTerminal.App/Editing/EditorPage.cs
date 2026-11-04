@@ -44,7 +44,7 @@ public sealed class EditorPage : DockPanel, IPage, ILeavePage
         }
 
         _title.FontWeight = FontWeights.SemiBold;
-        var hint = new TextBlock { Text = "F2 save · Shift+F2 save as · F7 find · Ctrl+F7 replace · Shift+F8 encoding · Esc close", FontFamily = new FontFamily("Segoe UI"), FontSize = 12, VerticalAlignment = VerticalAlignment.Center };
+        var hint = new TextBlock { Text = "F2 or Ctrl+S save · Shift+F2 save as · F7 find · Ctrl+F7 replace · Shift+F8 encoding · Esc close", FontFamily = new FontFamily("Segoe UI"), FontSize = 12, VerticalAlignment = VerticalAlignment.Center };
         var header = new DockPanel { Margin = new Thickness(10, 6, 10, 6) };
         DockPanel.SetDock(hint, Dock.Right);
         header.Children.Add(hint);
@@ -110,6 +110,7 @@ public sealed class EditorPage : DockPanel, IPage, ILeavePage
         switch (key)
         {
             case Key.F2 when modifiers == ModifierKeys.None:
+            case Key.S when modifiers == ModifierKeys.Control:
                 Save(null);
                 break;
             case Key.F2 when modifiers == ModifierKeys.Shift:
