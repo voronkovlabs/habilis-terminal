@@ -27,6 +27,13 @@ function global:__HabiOsc([string] $Payload) {
     "$([char]0x1b)]$Payload$([char]7)"
 }
 
+# PSReadLine draws in UTF-8, but gives a script key handler the console's original code page. A handler that changes the
+# line would draw every character outside that code page as '?' (Cyrillic under 437), so it switches first. PSReadLine
+# sets its own encoding again after the handler, and the original one when the line is done.
+function global:__HabiDrawUnicode {
+    [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+}
+
 function global:prompt {
     # Must be the first statement: the status of the user's last command.
     $commandSucceeded = $global:?
@@ -76,6 +83,7 @@ if ($global:__Habi.OriginalReadLine) {
 }
 
 Set-PSReadLineKeyHandler -Chord F24 -BriefDescription HabilisTerminalRequest -Description 'Habilis Terminal request' -ScriptBlock {
+    __HabiDrawUnicode
     $state = $global:__Habi
     $file = Join-Path $state.Channel 'request.json'
     if (-not (Test-Path -LiteralPath $file)) {
@@ -130,6 +138,7 @@ Set-PSReadLineKeyHandler -Chord F24 -BriefDescription HabilisTerminalRequest -De
 # opens the plugin panel instead of running the line, as Far's command-line prefixes do. Habilis Terminal keeps the
 # prefixes, one per line, in the 'prefixes' file of the channel. Other lines run as before.
 function global:__HabiEnter($key, $arg) {
+    __HabiDrawUnicode
     $state = $global:__Habi
     $line = $null
     $cursor = $null
@@ -199,7 +208,26 @@ foreach ($entry in @(
         param($key, $arg)
         $name, $function = $global:__Habi.PanelKeys[$key.Key.ToString()]
         if (-not (__HabiPanelKey $name)) {
+            __HabiDrawUnicode
             [Microsoft.PowerShell.PSConsoleReadLine]::$function($key, $arg)
+        }
+    }
+}
+
+# Gray +, - and *: select files on an empty line, typed on a line with text, as in Far. PSReadLine cannot tell them
+# from the main keyboard's, so Habilis Terminal sends them as F13..F15 while a panel has the keys.
+$global:__Habi | Add-Member -NotePropertyName GrayKeys -NotePropertyValue @{
+    F13 = @('Add', '+')
+    F14 = @('Subtract', '-')
+    F15 = @('Multiply', '*')
+}
+foreach ($chord in $global:__Habi.GrayKeys.Keys) {
+    Set-PSReadLineKeyHandler -Chord $chord -BriefDescription "HabilisTerminalGray$chord" -Description 'Habilis Terminal gray key' -ScriptBlock {
+        param($key, $arg)
+        $name, $text = $global:__Habi.GrayKeys[$key.Key.ToString()]
+        if (-not (__HabiPanelKey $name)) {
+            __HabiDrawUnicode
+            [Microsoft.PowerShell.PSConsoleReadLine]::Insert($text)
         }
     }
 }
@@ -221,6 +249,7 @@ Set-PSReadLineKeyHandler -Chord Escape -BriefDescription HabilisTerminalEscape -
         return
     }
 
+    __HabiDrawUnicode
     $function = $state.EscapeFunction
     if (-not $function -or -not [Microsoft.PowerShell.PSConsoleReadLine].GetMethod($function)) {
         $function = 'RevertLine'

@@ -141,6 +141,24 @@ public class ShellHostTests
     }
 
     [Fact]
+    public async Task Keys_handled_by_the_script_draw_cyrillic_text()
+    {
+        using var shell = new TestShell();
+        await shell.WaitIdleAsync();
+
+        // A script key handler runs in the console's code page; drawing the changed line must still be Unicode.
+        shell.Host.Write("'\u043f\u0440\u0438\u0432\u0435\u0442' + 'x'zz");
+        await Task.Delay(300, TestContext.Current.CancellationToken);
+        var before = shell.Text.Length;
+        shell.Host.SendKey(0x08, '\b');
+        await Task.Delay(500, TestContext.Current.CancellationToken);
+        shell.Host.SendKey(0x24);
+        shell.Host.SendKey(0x2E);
+        await Task.Delay(500, TestContext.Current.CancellationToken);
+        Assert.DoesNotContain("???", shell.Text[before..]);
+    }
+
+    [Fact]
     public async Task Line_keys_come_back_to_the_panel_on_an_empty_line_only_in_panel_mode()
     {
         using var shell = new TestShell();
@@ -163,6 +181,22 @@ public class ShellHostTests
             Assert.True(returned.TryDequeue(out var back));
             Assert.Equal(name, back);
         }
+
+        foreach (var name in new[] { "Add", "Subtract", "Multiply" })
+        {
+            shell.Host.SendGrayKey(name);
+            await TestShell.WaitUntilAsync(() => returned.Count == 1, $"{name} returned");
+            Assert.True(returned.TryDequeue(out var back));
+            Assert.Equal(name, back);
+        }
+
+        // Gray keys are typed on a line with text (as in Far).
+        shell.Host.Write("'GRAY' + '");
+        await Task.Delay(300, TestContext.Current.CancellationToken);
+        shell.Host.SendGrayKey("Add");
+        shell.Host.SendGrayKey("Subtract");
+        shell.Host.Write("'\r");
+        await shell.WaitForTextAsync("GRAY+-");
 
         // With text the keys edit the line and Enter runs it; Tab completes; nothing comes back.
         shell.Host.Write("x'PANEL-' + 'EDITq'z");

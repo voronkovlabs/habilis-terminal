@@ -19,6 +19,7 @@ public static class Win32InputSequence
     public const int VkSpace = 0x20;
     public const int VkUp = 0x26;
     public const int VkDown = 0x28;
+    public const int VkF13 = 0x7C;
     public const int VkF23 = 0x86;
     public const int VkF24 = 0x87;
 

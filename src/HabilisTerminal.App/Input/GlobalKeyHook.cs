@@ -135,6 +135,7 @@ public sealed class GlobalKeyHook : IDisposable
     [DllImport("user32.dll")]
     private static extern bool TranslateMessage(ref MSG msg);
 
-    [DllImport("user32.dll")]
+    // The Unicode entry point: the ANSI one cuts typed characters down to one byte.
+    [DllImport("user32.dll", EntryPoint = "DispatchMessageW")]
     private static extern IntPtr DispatchMessage(ref MSG msg);
 }

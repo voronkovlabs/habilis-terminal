@@ -74,7 +74,7 @@ public sealed class ShellHost : IDisposable
     /// <summary>
     /// While <see cref="PanelMode"/> is on, a key whose meaning depends on the command line found it empty, so it
     /// belongs to the panel (issues #85, #90): "Enter", "Left", "Right", "Home", "End", "Delete", "Backspace",
-    /// "Escape" or "Tab". Background thread.
+    /// "Escape", "Tab", or a key of <see cref="SendGrayKey"/>. Background thread.
     /// </summary>
     public event Action<string>? PanelKeyReturned;
 
@@ -185,6 +185,14 @@ public sealed class ShellHost : IDisposable
 
     /// <summary>Inserts text at the command line cursor.</summary>
     public int Insert(string text) => Enqueue("insert", new Dictionary<string, string> { ["text"] = text }, coalesce: false);
+
+    /// <summary>
+    /// Gray + ("Add"), - ("Subtract") or * ("Multiply") while a panel has the keys: typed on a line with text, returned
+    /// through <see cref="PanelKeyReturned"/> on an empty one. Sent as F13..F15, the integration script's table.
+    /// </summary>
+    public void SendGrayKey(string name) => SendKey(Win32InputSequence.VkF13 + Array.IndexOf(GrayKeys, name));
+
+    private static readonly string[] GrayKeys = ["Add", "Subtract", "Multiply"];
 
     /// <summary>Sends a key press to the shell (e.g. history navigation from panel focus).</summary>
     public void SendKey(int virtualKey, char unicodeChar = '\0', int controlKeyState = 0) =>

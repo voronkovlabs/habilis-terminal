@@ -29,11 +29,15 @@ public partial class MainWindow
     /// <summary>The last value given to the shell's panel-mode flag, so the flag file is written only on changes.</summary>
     private bool? _shellPanelMode;
 
+    /// <summary>The shell runs the integration script, so the line's state is known (shell.integration, read at start).</summary>
+    private bool ShellIntegrated { get; set; }
+
     /// <summary>The user works in the console: it has the Win32 focus and no panel has the keys.</summary>
     private bool ConsoleHasKeys => TerminalHasFocus && FocusedPanel() is null;
 
     private void WireCommandLine(ShellHost host)
     {
+        ShellIntegrated = _settings.ShellIntegration;
         host.PanelKeyReturned += name => Dispatcher.BeginInvoke(() => OnPanelKeyReturned(name));
         host.CommandOutputStarted += (_, _, _) => Dispatcher.BeginInvoke(() =>
         {
@@ -142,11 +146,18 @@ public partial class MainWindow
     /// </summary>
     private static bool IsCommandLineKey(Key key, KeyModifiers modifiers) => modifiers switch
     {
-        KeyModifiers.None => PanelKeyName(key) is not null,
+        KeyModifiers.None => PanelKeyName(key) is not null && GrayKeyName(key, modifiers) is null,
         KeyModifiers.Shift => key is Key.Left or Key.Right or Key.Home or Key.End,
         KeyModifiers.Control | KeyModifiers.Shift => key is Key.Left or Key.Right,
         _ => false,
     };
+
+    /// <summary>
+    /// Keys that are always the panel's: while the console is grown over the panels (issue #82) they collapse it first,
+    /// so nothing acts on a panel that cannot be seen.
+    /// </summary>
+    private static bool IsPanelOnlyKey(Key key) =>
+        key is >= Key.F1 and <= Key.F12 or Key.Up or Key.Down or Key.PageUp or Key.PageDown or Key.Insert;
 
     /// <summary>The command line was empty: the key acts in the panel after all.</summary>
     private void OnPanelKeyReturned(string name)
@@ -156,11 +167,15 @@ public partial class MainWindow
             return;
         }
 
-        // Esc on an empty line collapses the console grown over the panels first (issue #82).
-        if (key == Key.Escape && OverflowExpanded)
+        // The console grown over the panels hides them, so these keys only collapse it (issue #82): Esc by design, and
+        // Enter and Del must not run or delete an item nobody can see. The others collapse it and act.
+        if (OverflowExpanded)
         {
             CollapseConsole(stopGrowing: false);
-            return;
+            if (key is Key.Escape or Key.Enter or Key.Delete)
+            {
+                return;
+            }
         }
 
         if (FocusedPanel() is not { } panel)
@@ -186,9 +201,24 @@ public partial class MainWindow
         ("Backspace", Key.Back),
         ("Escape", Key.Escape),
         ("Tab", Key.Tab),
+        ("Add", Key.Add),
+        ("Subtract", Key.Subtract),
+        ("Multiply", Key.Multiply),
     ];
 
     private static string? PanelKeyName(Key key) => PanelKeys.FirstOrDefault(k => k.Key == key).Name;
+
+    /// <summary>
+    /// Gray +, - and * select files on an empty line and are typed on a line with text, as in Far. PSReadLine cannot
+    /// tell them from the main keyboard's, so they are sent as keys of their own (<see cref="ShellHost.SendGrayKey"/>).
+    /// </summary>
+    private static string? GrayKeyName(Key key, KeyModifiers modifiers) => modifiers != KeyModifiers.None ? null : key switch
+    {
+        Key.Add => "Add",
+        Key.Subtract => "Subtract",
+        Key.Multiply => "Multiply",
+        _ => null,
+    };
 
     private static Key? PanelKey(string name) =>
         PanelKeys.FirstOrDefault(k => k.Name == name) is { Name: not null } found ? found.Key : null;

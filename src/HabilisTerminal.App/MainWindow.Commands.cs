@@ -86,24 +86,44 @@ public partial class MainWindow
 
         // Enter, arrows, Home / End, Del, Backspace, Esc and Tab act on a command line with text, and an empty line hands
         // them back (OnPanelKeyReturned); Shift selects in the line (issues #85, #88, #89).
-        if (panel.HasKeys && IsCommandLineKey(key, modifiers))
+        if (panel.HasKeys && ShellIntegrated)
         {
-            return false;
+            if (GrayKeyName(key, modifiers) is { } gray)
+            {
+                _shell?.Host.SendGrayKey(gray);
+                return true;
+            }
+
+            if (IsCommandLineKey(key, modifiers))
+            {
+                return false;
+            }
+        }
+
+        if (OverflowExpanded && IsPanelOnlyKey(key))
+        {
+            CollapseConsole(stopGrowing: false);
         }
 
         // Plugin panels and F11 first: a plugin's command key takes precedence over the host's key (issue #49).
-        if (!panel.IsQuickSearchActive && HandlePluginKey(panel, key, modifiers))
+        if ((!panel.IsQuickSearchActive && HandlePluginKey(panel, key, modifiers)) || HandleWindowKey(panel, key, modifiers) || panel.HandleKey(key, modifiers))
         {
+            if (OverflowExpanded)
+            {
+                CollapseConsole(stopGrowing: false); // a Ctrl or Alt command of the panel
+            }
+
             return true;
         }
 
-        if (HandleWindowKey(panel, key, modifiers))
+        // Without the integration script an Enter can only belong to one of them: typing goes into the console, as
+        // a click does. Anything else the panel does not take goes on to the console as well.
+        if (panel.HasKeys && !ShellIntegrated && modifiers is KeyModifiers.None or KeyModifiers.Shift && (key is Key.None or Key.ImeProcessed || (KeyText.CharOf(key, modifiers == KeyModifiers.Shift) is { } typedChar && !char.IsControl(typedChar))))
         {
-            return true;
+            FocusTerminal();
         }
 
-        // Anything the panel does not take (typing, the profile's other bindings) goes on to the console.
-        return panel.HandleKey(key, modifiers);
+        return false;
     }
 
     /// <summary>
