@@ -31,7 +31,7 @@ public sealed class OfficePage : DockPanel, IPage, ILeavePage, IDisposable
     private readonly OfficeApp _kind;
     private readonly bool _readOnly;
     private readonly bool _create;
-    private readonly OfficeWindowHost _host = new();
+    private readonly OfficeWindowHost _host = new((PanelPalette.HeaderBackground as SolidColorBrush)?.Color ?? Colors.Black);
     private readonly TextBlock _status = new() { FontFamily = new FontFamily("Segoe UI"), FontSize = 12, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 16, 0) };
     private readonly DispatcherTimer _watch = new() { Interval = TimeSpan.FromSeconds(1) };
     private readonly LowLevelKeyboardProc _hookProc;
@@ -177,6 +177,9 @@ public sealed class OfficePage : DockPanel, IPage, ILeavePage, IDisposable
 
         // From the start: an Office that hangs while opening must not trap the user on this page.
         _hook = SetWindowsHookEx(WH_KEYBOARD_LL, _hookProc, GetModuleHandle(null), 0);
+        using var hider = _kind == OfficeApp.Excel
+            ? new OfficeWindowHider(OfficeSession.WindowClass(_kind), new WindowInteropHelper(_owner).Handle, _host.ScreenArea())
+            : new OfficeWindowHider(OfficeSession.WindowClass(_kind));
         try
         {
             var session = await OfficeSession.OpenAsync(_kind, _path, _readOnly, _create).ConfigureAwait(true);
@@ -188,6 +191,18 @@ public sealed class OfficePage : DockPanel, IPage, ILeavePage, IDisposable
             }
 
             _host.Dock(session.Window);
+            hider.Release(session.Window);
+            _host.Settle(session.Window);
+            _host.Refresh();
+
+            // Excel settles its layout a moment later.
+            await Task.Delay(700).ConfigureAwait(true);
+            if (!_closed)
+            {
+                _host.Activate();
+                await session.SettleAsync().ConfigureAwait(true);
+                _host.Refresh();
+            }
             _status.Text = OfficeFiles.Name(_kind);
             _owner.Activated += OnOwnerActivated;
             _watch.Start();

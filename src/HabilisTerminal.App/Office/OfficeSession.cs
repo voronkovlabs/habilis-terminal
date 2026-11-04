@@ -28,6 +28,14 @@ public sealed class OfficeSession
     /// <summary>The document window, which the page docks.</summary>
     public IntPtr Window { get; private set; }
 
+    /// <summary>The class of the application's document window.</summary>
+    internal static string WindowClass(OfficeApp kind) => kind switch
+    {
+        OfficeApp.Word => "OpusApp",
+        OfficeApp.Excel => "XLMAIN",
+        _ => "PPTFrameClass",
+    };
+
     public static bool IsInstalled(OfficeApp kind) => Type.GetTypeFromProgID(ProgId(kind)) is not null;
 
     /// <summary>Opens <paramref name="path"/>, or creates and saves it first. Throws when Office cannot.</summary>
@@ -59,6 +67,20 @@ public sealed class OfficeSession
             throw;
         }
     }
+
+    /// <summary>
+    /// Excel, once docked: it now and then shows an empty ribbon and no status bar after starting behind another window.
+    /// Activating the workbook and switching the status bar makes it lay its frame out again.
+    /// </summary>
+    public Task SettleAsync() => _dispatcher.InvokeAsync(() =>
+    {
+        if (_kind == OfficeApp.Excel)
+        {
+            _document!.Activate();
+            _app!.DisplayStatusBar = false;
+            _app!.DisplayStatusBar = true;
+        }
+    }).Task;
 
     /// <summary>False once the document is closed, from inside Office too. A busy Office counts as open.</summary>
     public Task<bool> IsOpenAsync() => _dispatcher.InvokeAsync(() =>
@@ -113,7 +135,7 @@ public sealed class OfficeSession
         switch (_kind)
         {
             case OfficeApp.Word:
-                _app.Visible = true;
+                _app.Visible = true; // started hidden, Word and Excel build no ribbon; OfficeWindowHider covers them
                 if (create)
                 {
                     _document = _app.Documents.Add();
@@ -260,7 +282,7 @@ public sealed class OfficeSession
             EnumWindows((window, _) =>
             {
                 var text = new char[512];
-                if (new string(text, 0, GetClassName(window, text, text.Length)) == "PPTFrameClass" &&
+                if (new string(text, 0, GetClassName(window, text, text.Length)) == WindowClass(OfficeApp.PowerPoint) &&
                     new string(text, 0, GetWindowText(window, text, text.Length)).StartsWith(name, StringComparison.OrdinalIgnoreCase))
                 {
                     found = window;
