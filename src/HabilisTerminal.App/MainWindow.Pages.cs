@@ -100,17 +100,16 @@ public partial class MainWindow
         }
 
         RememberFile(path, edited: false);
-        if (PdfImagePage.IsLarge(path))
+        var pages = new PdfImagePage(path);
+        pages.CloseRequested += Close;
+        pages.SearchRequested += index =>
         {
-            var images = new PdfImagePage(path);
-            images.CloseRequested += Close;
-            ShowPage(images);
-            return;
-        }
-
-        var page = new PdfViewerPage(path, _themes.Current);
-        page.CloseRequested += Close;
-        ShowPage(page);
+            ClosePage(refocus: false);
+            var viewer = new PdfViewerPage(path, _themes.Current, index);
+            viewer.CloseRequested += Close;
+            ShowPage(viewer);
+        };
+        ShowPage(pages);
     }
 
     private void OpenPlainViewer(string path, FilePanel returnTo)

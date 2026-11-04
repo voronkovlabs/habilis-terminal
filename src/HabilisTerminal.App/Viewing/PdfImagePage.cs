@@ -9,14 +9,12 @@ using HabilisTerminal.App.Theming;
 namespace HabilisTerminal.App.Viewing;
 
 /// <summary>
-/// F3 on a large PDF (issue #113): one page at a time through <see cref="PdfPreview"/>. The Edge viewer reads the whole
-/// file before it shows anything, about 60 ms per MB; this opens at once but has no search or text selection.
+/// F3 on a PDF (issue #114): one page at a time through <see cref="PdfPreview"/>. The Edge viewer starts a browser process
+/// and reads the whole file, about 60 ms per MB, so it comes only on Ctrl+F, for search and text selection.
 /// PgUp / PgDn, arrows and the wheel turn pages, Home / End go to the ends, Esc / F10 / F3 close.
 /// </summary>
 public sealed class PdfImagePage : DockPanel, IPage, IDisposable
 {
-    private const long LargeFileBytes = 50L * 1024 * 1024;
-
     private readonly Image _image = new() { Stretch = Stretch.Uniform, StretchDirection = StretchDirection.DownOnly };
     private readonly Grid _content = new();
     private readonly TextBlock _info = new();
@@ -33,7 +31,7 @@ public sealed class PdfImagePage : DockPanel, IPage, IDisposable
         LastChildFill = true;
 
         var title = new TextBlock { Text = path, FontWeight = FontWeights.SemiBold };
-        var hint = new TextBlock { Text = "Large file: no search · PgUp PgDn page · Home End · Esc close" };
+        var hint = new TextBlock { Text = "PgUp PgDn page · Home End · Ctrl+F find, select text · Esc close" };
         foreach (var text in new[] { title, _info, hint })
         {
             text.FontFamily = new FontFamily("Segoe UI");
@@ -61,11 +59,8 @@ public sealed class PdfImagePage : DockPanel, IPage, IDisposable
     /// <summary>Esc / F10 / F3.</summary>
     public event Action? CloseRequested;
 
-    public static bool IsLarge(string path)
-    {
-        var file = new FileInfo(path);
-        return file.Exists && file.Length >= LargeFileBytes;
-    }
+    /// <summary>Ctrl+F: the same file in the Edge viewer, at this zero-based page.</summary>
+    public event Action<int>? SearchRequested;
 
     public void FocusContent() => Focus();
 
@@ -81,6 +76,13 @@ public sealed class PdfImagePage : DockPanel, IPage, IDisposable
     {
         base.OnPreviewKeyDown(e);
         var key = e.Key == Key.System ? e.SystemKey : e.Key;
+        if (key == Key.F && Keyboard.Modifiers == ModifierKeys.Control)
+        {
+            e.Handled = true;
+            SearchRequested?.Invoke(_index);
+            return;
+        }
+
         if (Keyboard.Modifiers != ModifierKeys.None)
         {
             return;

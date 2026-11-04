@@ -12,9 +12,10 @@ using Microsoft.Web.WebView2.Wpf;
 namespace HabilisTerminal.App.Viewing;
 
 /// <summary>
-/// F3 on a PDF (issue #110): the Edge PDF viewer in WebView2, with its text selection and zoom. Read-only: the toolbar's
-/// save buttons are hidden. Web links open in the browser. Esc / F10 / F3 close. Ctrl+F opens a search row of our own:
-/// the viewer's search bar takes no input when hosted in WebView2, while its find API works on the document.
+/// Ctrl+F in the PDF page view (issues #110, #114): the Edge PDF viewer in WebView2, with its text selection and zoom.
+/// Read-only: the toolbar's save buttons are hidden. Web links open in the browser. Esc / F10 / F3 close. It opens with a
+/// search row of our own, Esc closes that first: the viewer's search bar takes no input when hosted in WebView2, while
+/// its find API works on the document.
 /// </summary>
 public sealed class PdfViewerPage : DockPanel, IPage, IDisposable
 {
@@ -26,11 +27,15 @@ public sealed class PdfViewerPage : DockPanel, IPage, IDisposable
     private readonly string _path;
     private readonly Uri _uri;
     private CoreWebView2Environment? _environment;
+    private DateTime _loadedAt;
+    private int _findRequest;
+    private bool _findPending;
 
-    public PdfViewerPage(string path, ColorTheme theme)
+    /// <param name="page">The zero-based page to open at.</param>
+    public PdfViewerPage(string path, ColorTheme theme, int page)
     {
         _path = path;
-        _uri = new Uri(path);
+        _uri = new Uri($"{new Uri(path).AbsoluteUri}#page={page + 1}");
         Focusable = true;
         FocusVisualStyle = null;
         Background = PanelPalette.Background;
@@ -71,7 +76,7 @@ public sealed class PdfViewerPage : DockPanel, IPage, IDisposable
         row.Children.Add(findLabel);
         row.Children.Add(_search);
         row.Children.Add(_matches);
-        _searchRow = new Border { Child = row, BorderBrush = PanelPalette.Border, BorderThickness = new Thickness(0, 0, 0, 1), Background = PanelPalette.HeaderBackground, Visibility = Visibility.Collapsed };
+        _searchRow = new Border { Child = row, BorderBrush = PanelPalette.Border, BorderThickness = new Thickness(0, 0, 0, 1), Background = PanelPalette.HeaderBackground };
         DockPanel.SetDock(_searchRow, Dock.Top);
         Children.Add(_searchRow);
 
@@ -85,9 +90,23 @@ public sealed class PdfViewerPage : DockPanel, IPage, IDisposable
 
     public static bool IsPdf(string path) => string.Equals(Path.GetExtension(path), ".pdf", StringComparison.OrdinalIgnoreCase);
 
-    public void FocusContent() => _web.Focus();
+    public void FocusContent()
+    {
+        if (_searchRow.Visibility == Visibility.Visible)
+        {
+            _search.Focus();
+        }
+        else
+        {
+            _web.Focus();
+        }
+    }
 
-    public void Dispose() => _web.Dispose();
+    public void Dispose()
+    {
+        _findRequest++;
+        _web.Dispose();
+    }
 
     protected override void OnPreviewKeyDown(KeyEventArgs e)
     {
@@ -107,7 +126,16 @@ public sealed class PdfViewerPage : DockPanel, IPage, IDisposable
                 CloseSearch();
                 break;
             case Key.Enter when searching && _search.IsKeyboardFocused && modifiers == ModifierKeys.None:
-                _web.CoreWebView2?.Find.FindNext();
+                if (_web.CoreWebView2?.Find is { MatchCount: > 0 } find)
+                {
+                    find.FindNext();
+                }
+                else if (!_findPending)
+                {
+                    // The file may have taken longer to read than expected.
+                    _ = FindAsync();
+                }
+
                 break;
             case Key.Enter when searching && _search.IsKeyboardFocused && modifiers == ModifierKeys.Shift:
                 _web.CoreWebView2?.Find.FindPrevious();
@@ -124,6 +152,8 @@ public sealed class PdfViewerPage : DockPanel, IPage, IDisposable
     private void CloseSearch()
     {
         _searchRow.Visibility = Visibility.Collapsed;
+        _findRequest++;
+        _findPending = false;
         _web.CoreWebView2?.Find.Stop();
         _web.Focus();
     }
@@ -135,9 +165,11 @@ public sealed class PdfViewerPage : DockPanel, IPage, IDisposable
             return;
         }
 
+        var request = ++_findRequest;
         var term = _search.Text;
         if (term.Length == 0)
         {
+            _findPending = false;
             core.Find.Stop();
             _matches.Text = string.Empty;
             return;
@@ -147,18 +179,49 @@ public sealed class PdfViewerPage : DockPanel, IPage, IDisposable
         options.FindTerm = term;
         options.SuppressDefaultFindDialog = true;
         options.ShouldHighlightAllMatches = true;
+
+        _findPending = true;
         try
         {
+            // The viewer gives no sign that it has read the file, and a search started before that finds nothing or never
+            // ends. So the search waits for the time reading takes (about 60 ms per MB, issue #110) and starts once.
+            var wait = _loadedAt - DateTime.UtcNow;
+            if (wait > TimeSpan.Zero)
+            {
+                _matches.Text = "Loading…";
+                await Task.Delay(wait).ConfigureAwait(true);
+                if (request != _findRequest)
+                {
+                    return;
+                }
+            }
+
+            _matches.Text = "Searching…";
+            core.Find.Stop();
             await core.Find.StartAsync(options).ConfigureAwait(true);
+            if (request != _findRequest)
+            {
+                return;
+            }
+
+            _findPending = false;
+            ShowMatches(core.Find);
         }
-        catch (COMException ex)
+        catch (Exception ex) when (ex is COMException or InvalidOperationException)
         {
-            _matches.Text = ex.Message;
+            if (request == _findRequest)
+            {
+                _findPending = false;
+                _matches.Text = ex.Message;
+            }
         }
     }
 
     private void ShowMatches(CoreWebView2Find find) =>
-        _matches.Text = _search.Text.Length == 0 ? string.Empty : find.MatchCount == 0 ? "Not found" : $"{find.ActiveMatchIndex} of {find.MatchCount}";
+        _matches.Text = _search.Text.Length == 0 ? string.Empty
+            : find.MatchCount > 0 ? $"{find.ActiveMatchIndex} of {find.MatchCount}"
+            : _findPending ? _matches.Text
+            : "Not found";
 
     private async Task InitializeAsync()
     {
@@ -182,11 +245,21 @@ public sealed class PdfViewerPage : DockPanel, IPage, IDisposable
         core.Find.MatchCountChanged += (_, _) => ShowMatches(core.Find);
         core.Find.ActiveMatchIndexChanged += (_, _) => ShowMatches(core.Find);
         core.NavigationStarting += OnNavigationStarting;
+
+        // Text typed before the viewer was created has not been searched for yet.
+        core.NavigationCompleted += (_, _) =>
+        {
+            if (!_findPending)
+            {
+                _ = FindAsync();
+            }
+        };
         core.NewWindowRequested += (_, e) =>
         {
             e.Handled = true;
             OpenLink(e.Uri);
         };
+        _loadedAt = DateTime.UtcNow.AddSeconds(1 + (new FileInfo(_path).Length / (1024.0 * 1024.0) * 0.1));
         core.Navigate(_uri.AbsoluteUri);
     }
 
