@@ -141,7 +141,7 @@ public partial class MainWindow : Window
         Closing += (_, e) =>
         {
             // Unsaved edits are never lost silently, whatever closes the window (F10, Alt+F4, the close button).
-            if (PageHost.Content is Editing.EditorPage editor && !editor.ConfirmLeave())
+            if (PageHost.Content is ILeavePage page && !page.ConfirmLeave())
             {
                 e.Cancel = true;
                 return;

@@ -19,7 +19,7 @@ namespace HabilisTerminal.App.Editing;
 /// Ctrl+F7 replace, Shift+F8 encoding, F6 viewer, Ctrl+F10 back to the file in the panel, Esc / F10 close (asks when
 /// modified). Saving keeps encoding, BOM and line endings and writes atomically.
 /// </summary>
-public sealed class EditorPage : DockPanel, IPage
+public sealed class EditorPage : DockPanel, IPage, ILeavePage
 {
     private readonly TextEditor _editor = new();
     private readonly TextBlock _title = new();

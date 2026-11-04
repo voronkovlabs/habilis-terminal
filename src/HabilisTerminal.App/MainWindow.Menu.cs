@@ -256,7 +256,7 @@ public partial class MainWindow
 
     private void RestartToUpdate()
     {
-        if (PageHost.Content is Editing.EditorPage editor && !editor.ConfirmLeave())
+        if (PageHost.Content is ILeavePage page && !page.ConfirmLeave())
         {
             return;
         }
