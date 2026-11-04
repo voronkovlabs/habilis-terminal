@@ -4,7 +4,6 @@ using HabilisTerminal.App.Panels;
 using HabilisTerminal.App.Viewing;
 using HabilisTerminal.Core.Panels;
 using HabilisTerminal.Core.Viewing;
-using HabilisTerminal.App.Office;
 
 namespace HabilisTerminal.App;
 
@@ -82,12 +81,6 @@ public partial class MainWindow
 
     private void OpenViewer(string path, FilePanel returnTo)
     {
-        if (OfficeFiles.AppFor(path) is { } office && OfficeSession.IsInstalled(office))
-        {
-            OpenOffice(path, office, returnTo, readOnly: true);
-            return;
-        }
-
         if (PdfViewerPage.IsPdf(path))
         {
             OpenPdf(path, returnTo);
@@ -106,39 +99,6 @@ public partial class MainWindow
             ClosePage();
             returnTo.State.TrySetCursor(Path.GetFileName(path));
             returnTo.Refresh();
-        };
-        ShowPage(page);
-    }
-
-    /// <summary>
-    /// The Office application inside the window (issue #101): read-only for F3, editable for F4 and Shift+F4. When it
-    /// cannot open the file, the usual viewer or the system's editor takes over.
-    /// </summary>
-    private void OpenOffice(string path, OfficeApp office, FilePanel returnTo, bool readOnly, bool create = false)
-    {
-        var page = new OfficePage(this, path, office, readOnly, create);
-        RememberFile(path, edited: !readOnly);
-        page.CloseRequested += () => ReturnToPanel(returnTo, path);
-        page.EditRequested += file =>
-        {
-            ClosePage(refocus: false);
-            OpenOffice(file, office, returnTo, readOnly: false);
-        };
-        page.Failed += ex =>
-        {
-            ClosePage();
-            Widgets.OperationDialogs.Message(this, OfficeFiles.Name(office), $"{OfficeFiles.Name(office)} could not open '{Path.GetFileName(path)}': {ex.Message}");
-            if (File.Exists(path))
-            {
-                if (readOnly)
-                {
-                    OpenPlainViewer(path, returnTo);
-                }
-                else
-                {
-                    OpenWithSystemEditor(path, returnTo);
-                }
-            }
         };
         ShowPage(page);
     }
@@ -251,21 +211,6 @@ public partial class MainWindow
         {
             Edit(path, panel);
         }
-        else if (OfficeFiles.AppFor(path) is { } office)
-        {
-            // Office files cannot start empty: the application creates and saves a valid one (issue #101).
-            if (!OfficeFiles.CanCreate(path) || !OfficeSession.IsInstalled(office))
-            {
-                Widgets.OperationDialogs.Message(this, "New file", OfficeFiles.CanCreate(path)
-                    ? $"{OfficeFiles.Name(office)} is not installed."
-                    : $"{OfficeFiles.Name(office)} files are created as .docx, .xlsx or .pptx.");
-                panel.Focus();
-                return;
-            }
-
-            Directory.CreateDirectory(Path.GetDirectoryName(path)!);
-            OpenOffice(path, office, panel, readOnly: false, create: true);
-        }
         else
         {
             OpenEditor(Core.Editing.TextFile.New(path), panel, followFile: true);
@@ -279,12 +224,6 @@ public partial class MainWindow
     /// <param name="followFile">Esc puts the panel cursor on the file (moving the panel to its folder); off for settings.json.</param>
     private void Edit(string path, FilePanel returnTo, bool followFile = true)
     {
-        if (OfficeFiles.AppFor(path) is { } office && OfficeSession.IsInstalled(office))
-        {
-            OpenOffice(path, office, returnTo, readOnly: false);
-            return;
-        }
-
         try
         {
             var sample = new byte[64 * 1024];
