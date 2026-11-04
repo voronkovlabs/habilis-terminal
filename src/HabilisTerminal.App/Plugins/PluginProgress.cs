@@ -55,6 +55,10 @@ internal sealed class PluginProgress(Dispatcher dispatcher, Func<OperationToasts
         Queue();
     }
 
+    /// <summary>Shows the card after this delay even if the plugin has reported nothing by then (issue #116).</summary>
+    public void ShowAfter(TimeSpan delay) =>
+        _ = Task.Delay(delay).ContinueWith(_ => Queue(), TaskScheduler.Default);
+
     /// <summary>Removes the card, if one was shown. Call on the UI thread when the operation ends.</summary>
     public void Close()
     {

@@ -33,6 +33,7 @@ public partial class MainWindow : IPluginWindow
         {
             panel.PluginLocationChanged += (_, location) => _history.Add(location);
             panel.PluginEntryActivated += (p, entry) => Fire(PluginViewAsync(p, entry));
+            panel.WaitToasts = () => Toasts;
         }
     }
 
@@ -58,7 +59,12 @@ public partial class MainWindow : IPluginWindow
         IPanelProvider? provider;
         try
         {
-            provider = await open(CancellationToken.None);
+            using var wait = new WaitCard(Toasts, $"Opening {plugin.Name}");
+            provider = await open(wait.Token);
+        }
+        catch (OperationCanceledException)
+        {
+            return false;
         }
         catch (Exception ex) when (ex is not OutOfMemoryException)
         {
@@ -244,6 +250,7 @@ public partial class MainWindow : IPluginWindow
         var plugin = panel.Plugin!;
         using var control = new OperationControl();
         var progress = new PluginProgress(Dispatcher, () => Toasts.Add(command.Title, control));
+        progress.ShowAfter(TimeSpan.FromMilliseconds(400));
         var current = panel.EntryOf(panel.State.Current);
         try
         {
@@ -583,7 +590,7 @@ public partial class MainWindow : IPluginWindow
         {
             foreach (var panel in new[] { _left, _right }.Where(p => p.Provider == provider))
             {
-                _ = panel.ListPluginAsync();
+                _ = panel.ListPluginAsync(quiet: true);
             }
         });
 

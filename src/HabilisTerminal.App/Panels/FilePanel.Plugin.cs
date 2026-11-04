@@ -1,5 +1,6 @@
 using System.IO;
 using HabilisTerminal.App.Plugins;
+using HabilisTerminal.App.Widgets;
 using HabilisTerminal.Core.FileSystem;
 using HabilisTerminal.Core.Panels;
 using HabilisTerminal.Core.Plugins;
@@ -15,6 +16,9 @@ namespace HabilisTerminal.App.Panels;
 public sealed partial class FilePanel
 {
     private PluginSession? _session;
+
+    /// <summary>Where waiting cards of plugin work appear; set by the window.</summary>
+    internal Func<OperationToasts>? WaitToasts { get; set; }
 
     /// <summary>The plugin location changed (folder history).</summary>
     public event Action<FilePanel, string>? PluginLocationChanged;
@@ -61,6 +65,10 @@ public sealed partial class FilePanel
         State.SetExtension(_session.Extension);
         ShowPluginView(plugin, provider);
         _session.ApplyLayout(0, provider);
+
+        // The plugin's columns must not show the folder's rows while the first listing loads (issue #62).
+        State.SetListing(provider.Location, [], hasParent: false);
+        Refresh();
         if (await ListPluginAsync(focusName: null, opening: true))
         {
             return true;
@@ -73,7 +81,8 @@ public sealed partial class FilePanel
     }
 
     /// <summary>Lists the provider's current location; the previous listing stays on failure.</summary>
-    internal async Task<bool> ListPluginAsync(string? focusName = null, bool opening = false)
+    /// <param name="quiet">A refresh the plugin asked for itself, like a live monitor's: no waiting card.</param>
+    internal async Task<bool> ListPluginAsync(string? focusName = null, bool opening = false, bool quiet = false)
     {
         if (_session is not { } session)
         {
@@ -89,8 +98,10 @@ public sealed partial class FilePanel
         var entries = new Dictionary<(string, bool), PanelEntry>();
         var rows = new List<FileEntry>();
         var shownFirst = false;
-        Message = null;
+        Message = opening ? "Loading…" : null;
         CloseQuickSearch();
+        using var wait = quiet ? null : NewWait($"Loading {location}");
+        using var cancelFromCard = wait?.Token.Register(loading.Cancel) ?? default;
         try
         {
             await foreach (var batch in session.Provider.ListAsync(token).WithCancellation(token))
@@ -103,6 +114,8 @@ public sealed partial class FilePanel
                         rows.Add(row);
                     }
                 }
+
+                wait?.SetCounts($"{rows.Count:N0} items so far");
 
                 // A large listing shows its first batch at once (a refresh keeps the old listing until it is complete).
                 if (!shownFirst && !samePath && _session == session)
@@ -118,7 +131,25 @@ public sealed partial class FilePanel
         }
         catch (OperationCanceledException)
         {
-            return false;
+            if (opening && _session == session)
+            {
+                Message = null;
+            }
+
+            if (wait is not { Cancelled: true } || _session != session || (opening && rows.Count == 0) || samePath)
+            {
+                return false;
+            }
+
+            // Cancelled from the card: the provider is already at the new location, so the panel goes there too, with
+            // what has arrived.
+            session.Entries = entries;
+            session.Extension.NameColumns = NameColumns(session);
+            State.SetListing(location, rows, focusName, hasParent: ShowsParent(session));
+            Refresh();
+            Message = "Cancelled: the list is incomplete.";
+            PluginLocationChanged?.Invoke(this, location);
+            return true;
         }
         catch (Exception ex) when (ex is not OutOfMemoryException)
         {
@@ -147,6 +178,8 @@ public sealed partial class FilePanel
 
         return true;
     }
+
+    private WaitCard? NewWait(string title) => WaitToasts is { } toasts ? new WaitCard(toasts(), title) : null;
 
     /// <summary>Ctrl+1, Ctrl+2...: the provider's layouts.</summary>
     private bool SetPluginLayout(int index)
@@ -182,7 +215,13 @@ public sealed partial class FilePanel
 
         try
         {
-            if (await session.Provider.EnterAsync(entry, CancellationToken.None))
+            bool entered;
+            using (var wait = NewWait($"Opening {entry.Name}"))
+            {
+                entered = await session.Provider.EnterAsync(entry, wait?.Token ?? CancellationToken.None);
+            }
+
+            if (entered)
             {
                 await ListPluginAsync();
             }
@@ -190,6 +229,10 @@ public sealed partial class FilePanel
             {
                 PluginEntryActivated?.Invoke(this, entry);
             }
+        }
+        catch (OperationCanceledException)
+        {
+            // Cancelled from the card: the panel stays where it was.
         }
         catch (Exception ex) when (ex is not OutOfMemoryException)
         {
@@ -208,11 +251,21 @@ public sealed partial class FilePanel
         var previous = session.Provider.Location;
         try
         {
-            if (await session.Provider.GoUpAsync(CancellationToken.None))
+            bool wentUp;
+            using (var wait = NewWait("Going up"))
+            {
+                wentUp = await session.Provider.GoUpAsync(wait?.Token ?? CancellationToken.None);
+            }
+
+            if (wentUp)
             {
                 await ListPluginAsync(LastSegment(previous));
                 return;
             }
+        }
+        catch (OperationCanceledException)
+        {
+            return;
         }
         catch (Exception ex) when (ex is not OutOfMemoryException)
         {
@@ -297,7 +350,7 @@ public sealed partial class FilePanel
     /// <summary>The host side of a plugin view: refresh and keyboard back to the panel.</summary>
     private sealed class PluginViewHost(FilePanel panel) : HabilisTerminal.Plugins.Wpf.IPanelViewHost
     {
-        public void Refresh() => panel.Dispatcher.BeginInvoke(() => _ = panel.ListPluginAsync());
+        public void Refresh() => panel.Dispatcher.BeginInvoke(() => _ = panel.ListPluginAsync(quiet: true));
 
         public void FocusPanel() => panel.Dispatcher.BeginInvoke(() => panel.Focus());
     }

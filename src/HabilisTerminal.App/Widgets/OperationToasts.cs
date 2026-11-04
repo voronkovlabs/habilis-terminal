@@ -42,9 +42,9 @@ public sealed class OperationToasts
         owner.Deactivated += (_, _) => _popup.IsOpen = false;
     }
 
-    public Card Add(string title, OperationControl control)
+    public Card Add(string title, OperationControl control, bool canPause = true)
     {
-        var card = new Card(title, control);
+        var card = new Card(title, control, canPause);
         card.Closed += () =>
         {
             _stack.Children.Remove(card.Root);
@@ -153,10 +153,13 @@ public sealed class OperationToasts
         private readonly Button _cancel = new() { Content = "Cancel", MinWidth = 64 };
         private readonly OperationControl _control;
 
-        internal Card(string title, OperationControl control)
+        internal Card(string title, OperationControl control, bool canPause)
         {
             _control = control;
             _title.Text = title;
+            _title.TextTrimming = TextTrimming.CharacterEllipsis;
+            _title.ToolTip = title;
+            _pause.Visibility = canPause ? Visibility.Visible : Visibility.Collapsed;
             _current.Text = "Preparing…";
             _current.TextTrimming = TextTrimming.CharacterEllipsis;
             _current.SetResourceReference(TextBlock.ForegroundProperty, "Habi.Description");
@@ -217,6 +220,15 @@ public sealed class OperationToasts
 
         public void Queued() => _current.Text = "Waiting for another operation on the same disk…";
 
+        /// <summary>A wait with no known total: the bar keeps moving, the text says what has arrived so far.</summary>
+        internal void ShowWaiting(string? counts)
+        {
+            if (!_control.Token.IsCancellationRequested)
+            {
+                _current.Text = counts ?? "Please wait…";
+            }
+        }
+
         public void Update(OperationProgress progress)
         {
             var culture = CultureInfo.CurrentCulture;
@@ -231,7 +243,9 @@ public sealed class OperationToasts
 
             _counts.Text = progress.TotalBytes > 0
                 ? $"{PanelColumns.FormatCompactSize(progress.DoneBytes, culture)} of {PanelColumns.FormatCompactSize(progress.TotalBytes, culture)} · {progress.DoneItems:N0}/{progress.TotalItems:N0}"
-                : $"{progress.DoneItems:N0}/{progress.TotalItems:N0}";
+                : progress.TotalItems > 0 ? $"{progress.DoneItems:N0}/{progress.TotalItems:N0}"
+                : progress.DoneItems > 0 ? $"{progress.DoneItems:N0} done"
+                : string.Empty;
         }
 
         public void Close() => Closed?.Invoke();

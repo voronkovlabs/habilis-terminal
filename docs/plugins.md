@@ -103,6 +103,9 @@ public interface IPanelProvider : IAsyncDisposable
     Task<bool> GoUpAsync(CancellationToken token);        // false at the top: the host leaves the plugin
     IReadOnlyList<InfoLine> Info { get; }                 // Ctrl+L info panel and the status line
 }
+// When ListAsync, EnterAsync or GoUpAsync takes longer than 0.4 s, the host shows a card with Cancel, which cancels the
+// token; a listing also shows the count of entries so far, so yield batches as they arrive. IPluginWindow.Refresh and
+// IPanelViewHost.Refresh show no card: they are for live panels.
 
 public sealed record PanelEntry(string Name, bool IsFolder, long? Size = null, DateTime? Modified = null)
 {
