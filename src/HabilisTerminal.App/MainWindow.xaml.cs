@@ -209,6 +209,7 @@ public partial class MainWindow : Window
         {
             ApplyTerminalTheme(theme);
             UpdateTitleBar();
+            UpdateTabStrip();
         }
     }
 

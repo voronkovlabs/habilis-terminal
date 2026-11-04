@@ -18,6 +18,7 @@ public partial class MainWindow
         Workspace.Visibility = Visibility.Hidden;
         PageHost.Content = page;
         PageHost.Visibility = Visibility.Visible;
+        UpdateHintButton();
         Dispatcher.BeginInvoke(() =>
         {
             SetFocus(new System.Windows.Interop.WindowInteropHelper(this).Handle);
@@ -44,6 +45,7 @@ public partial class MainWindow
         PageHost.Content = null;
         PageHost.Visibility = Visibility.Collapsed;
         Workspace.Visibility = Visibility.Visible;
+        UpdateHintButton();
         if (refocus)
         {
             FocusActivePanel();

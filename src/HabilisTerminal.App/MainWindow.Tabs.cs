@@ -17,6 +17,7 @@ public partial class MainWindow
     private readonly List<ConsoleTab> _tabs = [];
     private readonly ConsoleTabStrip _tabStrip = new();
     private ConsoleTab? _tab;
+    private ConsoleHintButton? _hintButton;
 
     /// <summary>The last shell ended by itself: there is nothing left to ask about.</summary>
     private bool _lastShellExited;
@@ -32,6 +33,8 @@ public partial class MainWindow
         _tabStrip.TabChosen += ShowTab;
         _tabStrip.TabClosing += tab => CloseTab(tab);
         _tabStrip.NewTabRequested += NewTab;
+        _hintButton = new ConsoleHintButton(this, Workspace, NewTab);
+        Workspace.LayoutUpdated += (_, _) => UpdateHintButton();
     }
 
     private ConsoleTab CreateTab(string folder)
@@ -44,7 +47,7 @@ public partial class MainWindow
             NullIfEmpty(_settings.ShellInitCommand),
             ExtraArguments: NullIfEmpty(_settings.ShellArgs),
             Integration: _settings.ShellIntegration));
-        var tab = new ConsoleTab(host);
+        var tab = new ConsoleTab(host) { ColorIndex = Core.Panels.ConsoleTabRules.FreeColor(_tabs.Select(t => t.ColorIndex).ToList(), ConsoleTabStrip.ColorCount) };
         host.Exited += _ => Dispatcher.BeginInvoke(() => OnShellExited(tab));
         host.DirectoryChanged += path => Dispatcher.BeginInvoke(() =>
         {
@@ -164,6 +167,15 @@ public partial class MainWindow
         }
 
         Workspace.OverlayRows = tab.OverlayRows;
+
+        // Hidden to visible starts no layout, and the layout skipped this console while it was hidden: its window would
+        // stay where it was, over the tabs, and at the old size if the window has changed meanwhile.
+        tab.Terminal.InvalidateMeasure();
+        Workspace.InvalidateMeasure();
+        Workspace.InvalidateArrange();
+        var frame = tab.ColorIndex == 0 ? null : ConsoleTabStrip.ColorOf(tab.ColorIndex);
+        _left.FrameBrush = frame;
+        _right.FrameBrush = frame;
         if (tab.Mark is ConsoleTabMark.Succeeded or ConsoleTabMark.Failed)
         {
             tab.Mark = ConsoleTabMark.None;
@@ -269,6 +281,19 @@ public partial class MainWindow
     private static string Shorten(string line) => line.Length <= 60 ? line : line[..59] + "…";
 
     private static string FinishedCardKey(ConsoleTab tab) => $"console-finished-{tab.GetHashCode()}";
+
+    /// <summary>Only with a single console: then the strip is not there to show that more are possible. Not over a full-screen program.</summary>
+    private void UpdateHintButton()
+    {
+        if (_tabs.Count != 1 || _tab is not { } tab || IsPageOpen || !IsLoaded || tab.OverflowPosted.Alternate || tab.Terminal.ActualWidth <= 0)
+        {
+            _hintButton?.Update(null);
+            return;
+        }
+
+        var corner = tab.Terminal.TranslatePoint(new Point(tab.Terminal.ActualWidth, tab.Terminal.ActualHeight), Workspace);
+        _hintButton?.Update(new Rect(0, 0, corner.X, corner.Y));
+    }
 
     private void UpdateTabStrip()
     {

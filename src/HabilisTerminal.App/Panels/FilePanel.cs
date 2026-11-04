@@ -749,6 +749,19 @@ public sealed partial class FilePanel : Border
 
     private bool _holdsFrame;
 
+    /// <summary>The frame's colour while the panel has the keys: the console tab's (issue #120); null is the theme's.</summary>
+    public System.Windows.Media.Brush? FrameBrush
+    {
+        get => _frameBrush;
+        set
+        {
+            _frameBrush = value;
+            UpdateFocusVisuals();
+        }
+    }
+
+    private System.Windows.Media.Brush? _frameBrush;
+
     protected override void OnGotKeyboardFocus(KeyboardFocusChangedEventArgs e)
     {
         base.OnGotKeyboardFocus(e);
@@ -1157,7 +1170,7 @@ public sealed partial class FilePanel : Border
     private void UpdateFocusVisuals()
     {
         var focused = IsKeyboardFocused || HasKeys || HoldsFrame;
-        BorderBrush = focused ? PanelPalette.FocusOutline : PanelPalette.Border;
+        BorderBrush = focused ? FrameBrush ?? PanelPalette.FocusOutline : PanelPalette.Border;
         _title.Opacity = _isActive ? 1.0 : 0.6;
         _list.IsActivePanel = _isActive;
         _list.HasPanelFocus = focused;

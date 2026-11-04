@@ -168,6 +168,10 @@ internal static class PanelPalette
         return Contrast(color) >= 3 ? color : Contrast(Colors.White) >= Contrast(Colors.Black) ? Colors.White : Colors.Black;
     }
 
+    /// <summary>Black or white, whichever reads better on the brush's colour.</summary>
+    public static Brush ReadableOn(Brush background) =>
+        background is SolidColorBrush solid && Readable(Colors.White, solid.Color) == Colors.White && Luminance(solid.Color) < 0.3 ? Brushes.White : Brushes.Black;
+
     private static Color Mix(Color from, Color to, double share) => Color.FromRgb(
         (byte)(from.R + ((to.R - from.R) * share)),
         (byte)(from.G + ((to.G - from.G) * share)),

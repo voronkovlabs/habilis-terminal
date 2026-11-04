@@ -53,6 +53,7 @@ public partial class MainWindow
                 if (tab == _tab)
                 {
                     GrowConsole(now.Rows, now.Alternate);
+                    UpdateHintButton();
                 }
             });
         };

@@ -19,6 +19,14 @@ public class ConsoleTabRulesTests
     public void After_closing_the_neighbour_takes_over(int closed, int remaining, int expected) =>
         Assert.Equal(expected, ConsoleTabRules.AfterClosing(closed, remaining));
 
+    [Fact]
+    public void A_new_tab_takes_the_first_free_colour()
+    {
+        Assert.Equal(0, ConsoleTabRules.FreeColor([], 3));
+        Assert.Equal(1, ConsoleTabRules.FreeColor([0, 2], 3));
+        Assert.Equal(1, ConsoleTabRules.FreeColor([0, 1, 2, 0], 3));
+    }
+
     [Theory]
     [InlineData(0, false)]
     [InlineData(1, true)]

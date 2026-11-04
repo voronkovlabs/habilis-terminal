@@ -136,7 +136,7 @@ public sealed class OperationToasts
     {
         _stack.UpdateLayout();
         _popup.HorizontalOffset = Math.Max(0, _target.ActualWidth - CardWidth - 32);
-        _popup.VerticalOffset = Math.Max(0, _target.ActualHeight - _stack.ActualHeight - 16);
+        _popup.VerticalOffset = Math.Max(0, _target.ActualHeight - _stack.ActualHeight - 48); // above the console's button and tabs
 
         // Popups only move when an offset actually changes.
         _popup.HorizontalOffset += 0.01;
