@@ -302,6 +302,10 @@ public partial class MainWindow
         {
             _tabStrip.Update(_tabs, _tab);
         }
+        else
+        {
+            _tabStrip.Clear();
+        }
     }
 
     /// <summary>Closing the window stops every running command, so it asks first.</summary>

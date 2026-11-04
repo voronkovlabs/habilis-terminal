@@ -59,6 +59,7 @@ public partial class MainWindow
             }
 
             tab.CommandRunning = true;
+            tab.CommandStartedAt = DateTime.UtcNow;
             tab.Mark = ConsoleTabMark.Running;
             if (tab == _tab)
             {
@@ -75,6 +76,11 @@ public partial class MainWindow
                 {
                     var ended = tab.CommandRunning;
                     tab.CommandRunning = false;
+                    if (ended)
+                    {
+                        tab.LastDuration = DateTime.UtcNow - tab.CommandStartedAt;
+                    }
+
                     if (tab == _tab)
                     {
                         UpdatePanelKeys();

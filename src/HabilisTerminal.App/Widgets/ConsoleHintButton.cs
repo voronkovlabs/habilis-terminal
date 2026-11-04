@@ -48,17 +48,8 @@ internal sealed class ConsoleHintButton
         };
 
         // Left of the button, in the theme's colours: the default one is white and opens past the window's edge.
-        var tip = new ToolTip
-        {
-            Content = "New console (Ctrl+Shift+T)\nA long command goes on in its tab while you work in another one.",
-            Placement = PlacementMode.Left,
-            FontFamily = new FontFamily("Segoe UI"),
-            FontSize = 12,
-            Padding = new Thickness(8, 5, 8, 5),
-        };
-        tip.SetResourceReference(Control.BackgroundProperty, "Habi.WidgetBackground");
-        tip.SetResourceReference(Control.ForegroundProperty, "Habi.Foreground");
-        tip.SetResourceReference(Control.BorderBrushProperty, "Habi.WidgetBorder");
+        var tip = ConsoleTabStrip.Tip("New console (Ctrl+Shift+T)\nA long command goes on in its tab while you work in another one.");
+        tip.Placement = PlacementMode.Left;
         button.ToolTip = tip;
         button.SetResourceReference(Border.BackgroundProperty, "Habi.WidgetBackground");
         button.SetResourceReference(Border.BorderBrushProperty, "Habi.WidgetBorder");

@@ -63,18 +63,65 @@ internal sealed class ConsoleTab : IDisposable
     /// <summary>The console's growth over the panels while the tab is not in front.</summary>
     public int OverlayRows { get; set; }
 
-    /// <summary>The running command, else the shell's folder.</summary>
+    /// <summary>When the running or last command started.</summary>
+    public DateTime CommandStartedAt { get; set; }
+
+    /// <summary>How long the last command took.</summary>
+    public TimeSpan LastDuration { get; set; }
+
+    private bool ShowsCommand => !string.IsNullOrWhiteSpace(CommandLine) && (CommandRunning || Mark is ConsoleTabMark.Succeeded or ConsoleTabMark.Failed);
+
+    /// <summary>The running command, or one that ended here unseen; else the shell's folder.</summary>
     public string Title
     {
         get
         {
-            if (CommandRunning && !string.IsNullOrWhiteSpace(CommandLine))
+            if (ShowsCommand)
             {
-                return CommandLine.Trim();
+                return CommandLine!.Trim();
             }
 
             var folder = Host.CurrentDirectory?.TrimEnd('\\', '/');
             return string.IsNullOrEmpty(folder) ? "Console" : Path.GetFileName(folder) is { Length: > 0 } name ? name : folder;
+        }
+    }
+
+    /// <summary>After the title: how long the command runs or ran, and its code; else the folder's parent.</summary>
+    public string Detail
+    {
+        get
+        {
+            if (CommandRunning)
+            {
+                return ConsoleTabRules.FormatElapsed(DateTime.UtcNow - CommandStartedAt);
+            }
+
+            if (ShowsCommand)
+            {
+                var took = ConsoleTabRules.FormatElapsed(LastDuration);
+                return LastExitCode is { } code ? $"{took}, exit {code}" : took;
+            }
+
+            return Host.CurrentDirectory is { Length: > 0 } folder
+                ? ConsoleTabRules.ParentForDisplay(folder, Environment.GetFolderPath(Environment.SpecialFolder.UserProfile))
+                : string.Empty;
+        }
+    }
+
+    /// <summary>The tab's tooltip: everything the tab may have no room for.</summary>
+    public string Description
+    {
+        get
+        {
+            var lines = new List<string>();
+            if (ShowsCommand)
+            {
+                lines.Add(CommandLine!.Trim());
+                lines.Add(CommandRunning ? $"Running for {ConsoleTabRules.FormatElapsed(DateTime.UtcNow - CommandStartedAt)}" : $"Finished in {Detail}");
+            }
+
+            lines.Add(Host.CurrentDirectory ?? "Starting…");
+            return string.Join('\n', lines);
         }
     }
 
