@@ -2,6 +2,7 @@ using System.Globalization;
 using System.IO;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using HabilisTerminal.App.Editing;
@@ -19,7 +20,8 @@ namespace HabilisTerminal.App.Panels;
 /// <summary>
 /// Ctrl+Q (SPEC §9): the current file of the other panel as text or image, folders as a summary; for a plugin panel
 /// the text its provider gives (<c>IQuickViewEntry</c>). Text files follow the F3 rule (issue #74): up to
-/// <c>viewer.textModeMaxMB</c> in a read-only editor with syntax colours, larger ones in the paged view.
+/// <c>viewer.textModeMaxMB</c> in a read-only editor with syntax colours, larger ones in the paged view. A PDF shows as
+/// page images (issue #110); the keyboard stays in the panels, so the mouse wheel turns its pages.
 /// </summary>
 public sealed class QuickView : Grid, IDisposable
 {
@@ -36,8 +38,21 @@ public sealed class QuickView : Grid, IDisposable
         Visibility = Visibility.Collapsed,
     };
 
+    private readonly TextBlock _pdfPage = new()
+    {
+        Margin = new Thickness(12, 6, 12, 6),
+        FontFamily = new FontFamily("Segoe UI"),
+        FontSize = 12,
+        HorizontalAlignment = HorizontalAlignment.Right,
+        VerticalAlignment = VerticalAlignment.Bottom,
+        Visibility = Visibility.Collapsed,
+    };
+
     private ViewerDocument? _document;
     private string? _path;
+    private PdfPreview? _pdf;
+    private int _pdfIndex;
+    private int _pdfRequest;
 
     /// <summary>The settings and colour theme of the text mode, set by the window (like <see cref="ViewerView.SetFont"/>).</summary>
     public static AppSettings? Settings { get; set; }
@@ -53,13 +68,14 @@ public sealed class QuickView : Grid, IDisposable
         Children.Add(_message);
         _plainScroll.Content = _plain;
         Children.Add(_plainScroll);
+        Children.Add(_pdfPage);
         ApplyTheme();
     }
 
     public void ApplyTheme()
     {
         Background = PanelPalette.Background;
-        _message.Foreground = PanelPalette.DescriptionForeground;
+        _message.Foreground = _pdfPage.Foreground = PanelPalette.DescriptionForeground;
         _plain.Foreground = PanelPalette.Foreground;
         _text.InvalidateVisual();
         if (Theme is { } theme)
@@ -78,6 +94,7 @@ public sealed class QuickView : Grid, IDisposable
         _path = path;
         _document?.Dispose();
         _document = null;
+        ClosePdf();
         _text.Document = null;
         _image.Source = null;
         _text.Visibility = _image.Visibility = _message.Visibility = _plainScroll.Visibility = _editor.Visibility = Visibility.Collapsed;
@@ -110,6 +127,12 @@ public sealed class QuickView : Grid, IDisposable
                 return;
             }
 
+            if (PdfViewerPage.IsPdf(path))
+            {
+                _ = ShowPdfAsync(path);
+                return;
+            }
+
             if (Settings is { } settings && ViewerPage.FitsTextMode(path, settings.ViewerTextModeMaxMB))
             {
                 ShowInEditor(TextFile.Load(path), settings);
@@ -126,6 +149,108 @@ public sealed class QuickView : Grid, IDisposable
             _message.Visibility = Visibility.Visible;
         }
     }
+
+    protected override void OnPreviewMouseWheel(MouseWheelEventArgs e)
+    {
+        base.OnPreviewMouseWheel(e);
+        if (_pdf is { } pdf)
+        {
+            e.Handled = true;
+            var index = Math.Clamp(_pdfIndex + (e.Delta < 0 ? 1 : -1), 0, pdf.PageCount - 1);
+            if (index != _pdfIndex)
+            {
+                _pdfIndex = index;
+                _ = RenderPdfAsync();
+            }
+        }
+    }
+
+    protected override void OnRenderSizeChanged(SizeChangedInfo sizeInfo)
+    {
+        base.OnRenderSizeChanged(sizeInfo);
+        if (_pdf is not null)
+        {
+            _ = RenderPdfAsync();
+        }
+    }
+
+    private async Task ShowPdfAsync(string path)
+    {
+        var request = ++_pdfRequest;
+        PdfPreview? pdf = null;
+        try
+        {
+            pdf = await PdfPreview.OpenAsync(path).ConfigureAwait(true);
+            if (request != _pdfRequest)
+            {
+                pdf.Dispose();
+                return;
+            }
+
+            _pdf = pdf;
+            _pdfIndex = 0;
+            await RenderPdfAsync().ConfigureAwait(true);
+        }
+        catch (Exception ex) when (IsPdfFailure(ex))
+        {
+            pdf?.Dispose();
+            if (request == _pdfRequest)
+            {
+                _pdf = null;
+                ShowPdfFailure(ex);
+            }
+        }
+    }
+
+    private async Task RenderPdfAsync()
+    {
+        if (_pdf is not { } pdf || pdf.PageCount == 0)
+        {
+            return;
+        }
+
+        // The newest request wins: the cursor or the wheel may have moved on while this page was rendering.
+        var request = ++_pdfRequest;
+        var scale = VisualTreeHelper.GetDpi(this);
+        var width = Math.Max(1, ActualWidth - (2 * _image.Margin.Left)) * scale.DpiScaleX;
+        var height = Math.Max(1, ActualHeight - (2 * _image.Margin.Top)) * scale.DpiScaleY;
+        var index = _pdfIndex;
+        try
+        {
+            var bitmap = await pdf.RenderAsync(index, width, height).ConfigureAwait(true);
+            if (request == _pdfRequest)
+            {
+                _image.Source = bitmap;
+                _image.Visibility = Visibility.Visible;
+                _pdfPage.Text = $"Page {index + 1} of {pdf.PageCount}";
+                _pdfPage.Visibility = Visibility.Visible;
+            }
+        }
+        catch (Exception ex) when (IsPdfFailure(ex))
+        {
+            if (request == _pdfRequest)
+            {
+                ShowPdfFailure(ex);
+            }
+        }
+    }
+
+    private void ShowPdfFailure(Exception ex)
+    {
+        _message.Text = $"This PDF cannot be previewed: {ex.Message}";
+        _message.Visibility = Visibility.Visible;
+    }
+
+    private void ClosePdf()
+    {
+        _pdfRequest++;
+        _pdf?.Dispose();
+        _pdf = null;
+        _pdfPage.Visibility = Visibility.Collapsed;
+    }
+
+    private static bool IsPdfFailure(Exception ex) =>
+        ex is IOException or UnauthorizedAccessException or ArgumentException or ObjectDisposedException or System.Runtime.InteropServices.COMException;
 
     private void ShowInEditor(TextFile file, AppSettings settings)
     {
@@ -151,6 +276,7 @@ public sealed class QuickView : Grid, IDisposable
         _path = null;
         _document?.Dispose();
         _document = null;
+        ClosePdf();
         _text.Document = null;
         _image.Source = null;
         _text.Visibility = _image.Visibility = _message.Visibility = _editor.Visibility = Visibility.Collapsed;
@@ -160,6 +286,7 @@ public sealed class QuickView : Grid, IDisposable
 
     public void Dispose()
     {
+        ClosePdf();
         _document?.Dispose();
         _document = null;
         _path = null;

@@ -19,7 +19,7 @@ if (-not $NoBuild) {
 
 $target = Join-Path $env:TEMP "habi-tests\$Name"
 if (Test-Path $target) { throw "$target already exists; pick a new name." }
-Copy-Item "$repo\src\HabilisTerminal.App\bin\Release\net10.0-windows\win-x64" $target -Recurse
+Copy-Item "$repo\src\HabilisTerminal.App\bin\Release\net10.0-windows10.0.19041.0\win-x64" $target -Recurse
 New-Item "$target\portable" -ItemType File | Out-Null
 if ($WithPlugins) {
     $plugins = Join-Path $repo 'artifacts\plugins'

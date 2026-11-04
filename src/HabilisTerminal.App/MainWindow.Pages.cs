@@ -88,7 +88,26 @@ public partial class MainWindow
             return;
         }
 
+        if (PdfViewerPage.IsPdf(path))
+        {
+            OpenPdf(path, returnTo);
+            return;
+        }
+
         OpenPlainViewer(path, returnTo);
+    }
+
+    private void OpenPdf(string path, FilePanel returnTo)
+    {
+        var page = new PdfViewerPage(path, _themes.Current);
+        RememberFile(path, edited: false);
+        page.CloseRequested += () =>
+        {
+            ClosePage();
+            returnTo.State.TrySetCursor(Path.GetFileName(path));
+            returnTo.Refresh();
+        };
+        ShowPage(page);
     }
 
     /// <summary>

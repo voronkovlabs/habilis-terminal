@@ -47,7 +47,7 @@ public sealed class HelpPage : DockPanel, IPage
         ]),
         ("Files",
         [
-            ("F3", "View (on a folder: compute its size)"),
+            ("F3", "View (on a folder: compute its size; a PDF opens in the Edge viewer)"),
             ("Alt+F3", "Markdown rendered; other files in their associated program"),
             ("F4 / Shift+F4", "Edit / new file: asks for a name, created when saved; Word, Excel and PowerPoint files open inside the window (F3 read-only)"),
             ("F5 / Shift+F5", "Copy / copy the item under the cursor"),
@@ -67,7 +67,7 @@ public sealed class HelpPage : DockPanel, IPage
             ("Ctrl+H", "Hidden and system files"),
             ("Ctrl+R", "Re-read"),
             ("Ctrl+L", "Info panel in the other panel (shows a hidden one; again hides it)"),
-            ("Ctrl+Q", "Quick view in the other panel (shows a hidden one; again hides it)"),
+            ("Ctrl+Q", "Quick view in the other panel (shows a hidden one; again hides it); on a PDF the mouse wheel turns pages"),
         ]),
         ("Command line",
         [
