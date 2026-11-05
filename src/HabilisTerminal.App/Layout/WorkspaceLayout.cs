@@ -143,6 +143,7 @@ public sealed class WorkspaceLayout : Panel
 
     protected override Size MeasureOverride(Size availableSize)
     {
+        using var measure = Core.Diagnostics.Perf.Measure("layout.measure");
         var size = new Size(
             double.IsInfinity(availableSize.Width) ? 0 : availableSize.Width,
             double.IsInfinity(availableSize.Height) ? 0 : availableSize.Height);
@@ -165,6 +166,7 @@ public sealed class WorkspaceLayout : Panel
 
     protected override Size ArrangeOverride(Size finalSize)
     {
+        using var measure = Core.Diagnostics.Perf.Measure("layout.arrange");
         var (left, right, terminal) = ComputeRects(finalSize);
 
         foreach (UIElement child in InternalChildren)

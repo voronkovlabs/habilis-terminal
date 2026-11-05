@@ -462,13 +462,22 @@ public sealed class FileListView : FrameworkElement
         {
             if (column.Kind == ColumnKind.Name)
             {
-                DrawIcon(dc, item, x + CellPadding, cell.Y + 3);
+                using (Core.Diagnostics.Perf.Measure("panel.render.icon"))
+                {
+                    DrawIcon(dc, item, x + CellPadding, cell.Y + 3);
+                }
+
                 var nameLeft = x + CellPadding + IconWidth;
                 DrawText(dc, item.Name, foreground, nameLeft, cell.Y, width - (nameLeft - x) - CellPadding, RowHeight, false, isMarked, pixelsPerDip);
             }
             else
             {
-                var folderSize = item.Entry.IsDirectory && !item.IsParent ? state.FolderSizeOf(item.Name) : null;
+                FolderSize? folderSize;
+                using (Core.Diagnostics.Perf.Measure("panel.render.folder-size"))
+                {
+                    folderSize = item.Entry.IsDirectory && !item.IsParent ? state.FolderSizeOf(item.Name) : null;
+                }
+
                 var text = column.Kind == ColumnKind.Custom
                     ? (item.IsParent ? string.Empty : state.Extension?.Cell(item.Entry, column.Key!)?.Text ?? string.Empty)
                     : PanelColumns.FormatCell(column.Kind, item, state.Culture, folderSize, AutoSizedFolders);
@@ -524,6 +533,7 @@ public sealed class FileListView : FrameworkElement
 
         if (!_textCache.TryGetValue((text, brush, bold), out var formatted))
         {
+            using var measure = Core.Diagnostics.Perf.Measure("panel.render.new-text");
             formatted = new FormattedText(text, CultureInfo.CurrentUICulture, FlowDirection.LeftToRight, bold ? UiTypefaceBold : UiTypeface, FontSize, brush, pixelsPerDip)
             {
                 MaxLineCount = 1,

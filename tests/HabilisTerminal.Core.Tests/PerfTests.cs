@@ -76,6 +76,40 @@ public class PerfTests
     }
 
     [Fact]
+    public void The_report_shows_cpu_by_thread_memory_and_the_longest_stalls()
+    {
+        var stall = new PerfStall(new DateTime(2026, 11, 5, 10, 1, 0, DateTimeKind.Utc), 1900, 19, 0, "panel.render.folder-size", null);
+        var period = Period() with
+        {
+            Stalls = [stall],
+            WorkingSetMb = 321,
+            ManagedHeapMb = 45,
+            Threads = [new PerfThread("Folder sizes", 20000), new PerfThread("unnamed, Microsoft.Terminal.Control.dll", 15000), new PerfThread("idle one", 0.2)],
+        };
+        var body = PerfReport.Build([period], "1", "W", 1).Body;
+
+        Assert.Contains("| Folder sizes | 20.0 |", body, StringComparison.Ordinal);
+        Assert.True(body.IndexOf("Folder sizes", StringComparison.Ordinal) < body.IndexOf("Microsoft.Terminal.Control", StringComparison.Ordinal));
+        Assert.DoesNotContain("idle one", body, StringComparison.Ordinal);
+        Assert.Contains("up to 321 MB", body, StringComparison.Ordinal);
+        Assert.Contains("| 60 | 1900 | 1% | 0 | panel.render.folder-size | - |", body, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void A_stall_with_nothing_named_says_so()
+    {
+        var period = Period() with { Stalls = [new PerfStall(DateTime.UtcNow, 200, 100, 0, null, null)] };
+        Assert.Contains("window messages, nothing named", PerfReport.Build([period], "1", "W", 1).Body, StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData(5, "under 100")]
+    [InlineData(100, "100-1k")]
+    [InlineData(6000, "1k-10k")]
+    [InlineData(200000, "over 100k")]
+    public void Counts_show_as_ranges(int count, string range) => Assert.Equal(range, Perf.CountRange(count));
+
+    [Fact]
     public void An_operation_without_cpu_reads_as_asynchronous()
     {
         var draft = PerfReport.Build([Period(Operation("panel.navigate", 1, 100, null, 100, (7, 1)))], "1", "W", 1);

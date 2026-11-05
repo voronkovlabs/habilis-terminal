@@ -152,6 +152,7 @@ internal static class IconProvider
 
     private static BitmapSource? LoadSystemIcon(string path)
     {
+        using var measure = Core.Diagnostics.Perf.Enabled ? Core.Diagnostics.Perf.Measure("icon.system", Reporting.PerfDiagnostics.ExtensionKind(path)) : default;
         var info = new SHFILEINFO();
         if (SHGetFileInfo(path, 0, ref info, (uint)Marshal.SizeOf<SHFILEINFO>(), SHGFI_ICON | SHGFI_SMALLICON) == IntPtr.Zero || info.hIcon == IntPtr.Zero)
         {

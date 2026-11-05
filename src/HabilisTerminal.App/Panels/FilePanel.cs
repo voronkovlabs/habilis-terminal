@@ -338,7 +338,7 @@ public sealed partial class FilePanel : Border
     /// <summary>Opens a directory. On failure the panel stays where it was and shows the error.</summary>
     public async Task<bool> NavigateAsync(string path, string? focusName = null)
     {
-        using var measure = Perf.Enabled ? Perf.MeasureAsync("panel.navigate", PerfDiagnostics.DriveKind(path)) : default;
+        using var measure = Perf.Enabled ? Perf.MeasureAsync("panel.navigate", Perf.DriveKind(path)) : default;
         _loading?.Cancel();
         var loading = new CancellationTokenSource();
         _loading = loading;
@@ -413,6 +413,11 @@ public sealed partial class FilePanel : Border
         }
 
         FullListingTime = stopwatch.Elapsed;
+        if (Perf.Enabled)
+        {
+            Perf.RecordMilestone("panel.listing", stopwatch.Elapsed.TotalMilliseconds, Perf.CountRange(State.Count));
+        }
+
         Refresh();
         RequestFolderSizes();
         if (!samePath)

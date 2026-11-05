@@ -11,8 +11,18 @@ public sealed record PerfOperation(string Name, string? Detail, long Count, doub
 /// <summary>The UI thread did not answer for a while. CpuMs tells computing from waiting; Operation is what was under way.</summary>
 public sealed record PerfStall(DateTime At, double WallMs, double CpuMs, int GarbageCollections, string? Operation, string? Dispatched);
 
+/// <summary>CPU of the threads with one name over a period: a thread's description, or the module it started in.</summary>
+public sealed record PerfThread(string Name, double CpuMs);
+
 /// <summary>What one period collected: a line of the local files.</summary>
-public sealed record PerfPeriod(DateTime Start, DateTime End, IReadOnlyList<PerfOperation> Operations, IReadOnlyList<PerfStall> Stalls, double ProcessCpuMs, double GcPauseMs);
+public sealed record PerfPeriod(DateTime Start, DateTime End, IReadOnlyList<PerfOperation> Operations, IReadOnlyList<PerfStall> Stalls, double ProcessCpuMs, double GcPauseMs)
+{
+    public IReadOnlyList<PerfThread>? Threads { get; init; }
+
+    public double WorkingSetMb { get; init; }
+
+    public double ManagedHeapMb { get; init; }
+}
 
 /// <summary>
 /// Optional performance measuring (issue #130), off by default, when it costs one check per call. Names and details are
@@ -52,7 +62,35 @@ public static class Perf
     public static Scope MeasureAsync(string name, string? detail = null) => Enabled ? new Scope(name, detail, withCpu: false) : default;
 
     /// <summary>A point in time since process start, such as the first window shown.</summary>
-    public static void RecordMilestone(string name, double wallMs) => Add(name, null, wallMs, null);
+    public static void RecordMilestone(string name, double wallMs, string? detail = null) => Add(name, detail, wallMs, null);
+
+    /// <summary>Impersonal context for a measurement: the kind of drive, never the path.</summary>
+    public static string DriveKind(string path)
+    {
+        if (path.StartsWith(@"\\", StringComparison.Ordinal))
+        {
+            return "network";
+        }
+
+        try
+        {
+            return new DriveInfo(path).DriveType.ToString().ToLowerInvariant();
+        }
+        catch (ArgumentException)
+        {
+            return "other";
+        }
+    }
+
+    /// <summary>A number as a range, so that a report shows the scale and not the exact content of a folder.</summary>
+    public static string CountRange(int count) => count switch
+    {
+        < 100 => "under 100",
+        < 1000 => "100-1k",
+        < 10000 => "1k-10k",
+        < 100000 => "10k-100k",
+        _ => "over 100k",
+    };
 
     public static void RecordStall(double wallMs, double cpuMs, int collections, string? operation, string? dispatched)
     {
@@ -63,7 +101,7 @@ public static class Perf
     }
 
     /// <summary>What was collected since the last call, or null when nothing was.</summary>
-    public static PerfPeriod? TakePeriod()
+    public static PerfPeriod? TakePeriod(IReadOnlyList<PerfThread>? threads = null)
     {
         var operations = new List<PerfOperation>();
         foreach (var (key, counter) in Counters)
@@ -88,7 +126,12 @@ public static class Perf
 
         var cpu = Environment.CpuUsage.TotalTime;
         var gc = GC.GetTotalPauseDuration();
-        var period = new PerfPeriod(_periodStart, DateTime.UtcNow, operations, stalls, (cpu - _cpuAtStart).TotalMilliseconds, (gc - _gcAtStart).TotalMilliseconds);
+        var period = new PerfPeriod(_periodStart, DateTime.UtcNow, operations, stalls, (cpu - _cpuAtStart).TotalMilliseconds, (gc - _gcAtStart).TotalMilliseconds)
+        {
+            Threads = threads,
+            WorkingSetMb = Environment.WorkingSet / 1048576.0,
+            ManagedHeapMb = GC.GetTotalMemory(false) / 1048576.0,
+        };
         _periodStart = period.End;
         _cpuAtStart = cpu;
         _gcAtStart = gc;

@@ -68,6 +68,8 @@ public static class PerfReport
 {
     private const int MaxOperations = 80;
     private const int MaxStalls = 40;
+    private const int MaxLongestStalls = 15;
+    private const int MaxThreads = 25;
     private const double MinWallForKind = 50;
 
     public static IssueDraft Build(IReadOnlyList<PerfPeriod> periods, string version, string windows, int processors)
@@ -79,7 +81,13 @@ public static class PerfReport
         var text = new StringBuilder();
         text.AppendLine(culture, $"Habilis Terminal {version} · {windows} · {processors} logical processors");
         text.AppendLine(culture, $"Measured {measured:0} min with activity. Process CPU {periods.Sum(p => p.ProcessCpuMs) / 1000:0.0} s, garbage collection pauses {periods.Sum(p => p.GcPauseMs) / 1000:0.0} s.");
+        if (periods.Count > 0)
+        {
+            text.AppendLine(culture, $"Memory: working set up to {periods.Max(p => p.WorkingSetMb):0} MB, managed heap up to {periods.Max(p => p.ManagedHeapMb):0} MB.");
+        }
+
         text.AppendLine();
+        AppendThreads(text, periods);
         text.AppendLine("## UI thread stalls");
         text.AppendLine(culture, $"{stalls.Count} stalls of 100 ms or more, {stalls.Sum(s => s.WallMs) / 1000:0.0} s in all.");
         text.AppendLine();
@@ -92,6 +100,17 @@ public static class PerfReport
                 var wall = group.Sum(s => s.WallMs);
                 var cpu = group.Sum(s => s.CpuMs);
                 text.AppendLine(culture, $"| {Cell(group.Key)} | {group.Count()} | {wall:0} | {group.Max(s => s.WallMs):0} | {Share(cpu, wall)} | {Kind(cpu, wall)} |");
+            }
+
+            text.AppendLine();
+            text.AppendLine("Longest ones:");
+            text.AppendLine();
+            text.AppendLine("| At, s | ms | CPU share | Collections | Named operation | Dispatched |");
+            text.AppendLine("|---:|---:|---:|---:|---|---|");
+            var start = periods.Min(p => p.Start);
+            foreach (var stall in stalls.Take(MaxLongestStalls))
+            {
+                text.AppendLine(culture, $"| {(stall.At - start).TotalSeconds:0} | {stall.WallMs:0} | {Share(stall.CpuMs, stall.WallMs)} | {stall.GarbageCollections} | {Cell(stall.Operation ?? "-")} | {Cell(stall.Dispatched ?? "-")} |");
             }
 
             text.AppendLine();
@@ -110,6 +129,30 @@ public static class PerfReport
         }
 
         return new IssueDraft($"Performance report {version}", text.ToString(), ["performance"]);
+    }
+
+    /// <summary>Where the process's CPU went, including what no measuring point covers.</summary>
+    private static void AppendThreads(StringBuilder text, IReadOnlyList<PerfPeriod> periods)
+    {
+        var threads = periods.SelectMany(p => p.Threads ?? []).GroupBy(t => t.Name)
+            .Select(g => (Name: g.Key, CpuMs: g.Sum(t => t.CpuMs))).Where(t => t.CpuMs >= 1).OrderByDescending(t => t.CpuMs).Take(MaxThreads).ToList();
+        if (threads.Count == 0)
+        {
+            return;
+        }
+
+        var culture = CultureInfo.InvariantCulture;
+        text.AppendLine("## CPU by thread");
+        text.AppendLine("By the thread's name, or the module an unnamed thread started in.");
+        text.AppendLine();
+        text.AppendLine("| Thread | CPU, s |");
+        text.AppendLine("|---|---:|");
+        foreach (var (name, cpu) in threads)
+        {
+            text.AppendLine(culture, $"| {Cell(name)} | {cpu / 1000:0.0} |");
+        }
+
+        text.AppendLine();
     }
 
     /// <summary>Periods added up, by operation and detail.</summary>
@@ -162,7 +205,7 @@ public static class PerfReport
     }
 
     private static string StallName(PerfStall stall) =>
-        stall.Operation ?? (stall.Dispatched is { Length: > 0 } dispatched ? $"dispatched: {dispatched}" : "unknown");
+        stall.Operation ?? (stall.Dispatched is { Length: > 0 } dispatched ? $"dispatched: {dispatched}" : "window messages, nothing named");
 
     private static string Share(double cpuMs, double wallMs) =>
         wallMs > 0 ? string.Create(CultureInfo.InvariantCulture, $"{Math.Min(1, cpuMs / wallMs) * 100:0}%") : "-";

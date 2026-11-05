@@ -99,6 +99,7 @@ public sealed class GlobalKeyHook : IDisposable
             return;
         }
 
+        using var measure = Core.Diagnostics.Perf.Measure("console.key-message");
         DispatchMessage(ref msg);
     }
 

@@ -31,6 +31,7 @@ internal static class PerfDiagnostics
     private static volatile string? _dispatched;
     private static DateTime _nextAutomaticSend;
     private static int _sending;
+    private static int _uiThreadId;
 
     /// <summary>For tests, as no token may be used there: "sent" acts as if an issue was created, anything else as a failed send.</summary>
     private static string? DryRun => Environment.GetEnvironmentVariable("HABI_PERF_DRY_RUN") is { Length: > 0 } value ? value : null;
@@ -102,6 +103,7 @@ internal static class PerfDiagnostics
         // Measuring starts while the window is being built, inside an operation the hooks did not see begin.
         _dispatched = "startup";
         Perf.Start(Environment.CurrentManagedThreadId);
+        _uiThreadId = (int)GetCurrentThreadId();
         dispatcher.Hooks.OperationStarted += OnOperationStarted;
         dispatcher.Hooks.OperationCompleted += OnOperationEnded;
         dispatcher.Hooks.OperationAborted += OnOperationEnded;
@@ -173,7 +175,7 @@ internal static class PerfDiagnostics
     {
         try
         {
-            if (Perf.TakePeriod() is { } period)
+            if (Perf.TakePeriod(ThreadCpu()) is { } period)
             {
                 _store?.Append(period);
             }
@@ -182,6 +184,106 @@ internal static class PerfDiagnostics
         {
             MainWindow.Trace($"performance data not written: {ex.Message}");
         }
+    }
+
+    private static readonly Dictionary<int, double> ThreadCpuSeen = [];
+
+    /// <summary>CPU per thread since the last call, by name. What ended meanwhile cannot be asked, so it shows as a difference.</summary>
+    private static List<PerfThread> ThreadCpu()
+    {
+        var byName = new Dictionary<string, double>(StringComparer.Ordinal);
+        using var process = Process.GetCurrentProcess();
+        var modules = Modules(process);
+        foreach (ProcessThread thread in process.Threads)
+        {
+            using (thread)
+            {
+                double cpu;
+                try
+                {
+                    cpu = thread.TotalProcessorTime.TotalMilliseconds;
+                }
+                catch (Exception ex) when (ex is InvalidOperationException or System.ComponentModel.Win32Exception or NotSupportedException)
+                {
+                    continue; // it has just ended
+                }
+
+                _ = ThreadCpuSeen.TryGetValue(thread.Id, out var seen);
+                ThreadCpuSeen[thread.Id] = cpu;
+                var name = ThreadName(thread, modules);
+                byName[name] = byName.GetValueOrDefault(name) + (cpu - seen);
+            }
+        }
+
+        return [.. byName.Select(pair => new PerfThread(pair.Key, pair.Value))];
+    }
+
+    private static string ThreadName(ProcessThread thread, List<(long Start, long End, string Name)> modules)
+    {
+        if (thread.Id == _uiThreadId)
+        {
+            return "UI thread";
+        }
+
+        var handle = OpenThread(ThreadQueryLimitedInformation, false, (uint)thread.Id);
+        if (handle != IntPtr.Zero)
+        {
+            try
+            {
+                if (GetThreadDescription(handle, out var text) >= 0 && text != IntPtr.Zero)
+                {
+                    var description = Marshal.PtrToStringUni(text);
+                    _ = LocalFree(text);
+                    if (!string.IsNullOrWhiteSpace(description))
+                    {
+                        return description;
+                    }
+                }
+            }
+            finally
+            {
+                _ = CloseHandle(handle);
+            }
+        }
+
+        try
+        {
+            var start = thread.StartAddress.ToInt64();
+            foreach (var (from, to, name) in modules)
+            {
+                if (start >= from && start < to)
+                {
+                    return $"unnamed, {name}";
+                }
+            }
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or System.ComponentModel.Win32Exception or NotSupportedException)
+        {
+            // It has just ended.
+        }
+
+        return "unnamed";
+    }
+
+    private static List<(long Start, long End, string Name)> Modules(Process process)
+    {
+        var modules = new List<(long, long, string)>();
+        try
+        {
+            foreach (ProcessModule module in process.Modules)
+            {
+                using (module)
+                {
+                    modules.Add((module.BaseAddress.ToInt64(), module.BaseAddress.ToInt64() + module.ModuleMemorySize, module.ModuleName));
+                }
+            }
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or System.ComponentModel.Win32Exception or NotSupportedException)
+        {
+            // Without modules threads are only "unnamed".
+        }
+
+        return modules;
     }
 
     private static void FlushAndMaybeSend()
@@ -264,26 +366,18 @@ internal static class PerfDiagnostics
     [DllImport("kernel32.dll")]
     private static extern uint GetCurrentThreadId();
 
+    [DllImport("kernel32.dll")]
+    private static extern int GetThreadDescription(IntPtr thread, out IntPtr description);
+
+    [DllImport("kernel32.dll")]
+    private static extern IntPtr LocalFree(IntPtr memory);
+
+    [DllImport("kernel32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool CloseHandle(IntPtr handle);
+
     [DllImport("kernel32.dll", SetLastError = true)]
     private static extern IntPtr OpenThread(uint access, [MarshalAs(UnmanagedType.Bool)] bool inherit, uint threadId);
-
-    /// <summary>Impersonal context for a measurement: the kind of drive, never the path.</summary>
-    public static string DriveKind(string path)
-    {
-        if (path.StartsWith(@"\\", StringComparison.Ordinal))
-        {
-            return "network";
-        }
-
-        try
-        {
-            return new DriveInfo(path).DriveType.ToString().ToLowerInvariant();
-        }
-        catch (ArgumentException)
-        {
-            return "other";
-        }
-    }
 
     /// <summary>A file's extension when it is short and plain; never the name.</summary>
     public static string ExtensionKind(string path)
