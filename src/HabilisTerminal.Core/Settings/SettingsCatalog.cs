@@ -23,7 +23,7 @@ public static class SettingsCatalog
     [
         new("theme", Appearance, "Color Theme",
             "\"auto\" follows the Windows light / dark mode. Otherwise a built-in theme name or the file name of a VS Code color theme in the themes folder.",
-            SettingKind.Text, "auto", ["auto", "dark_modern", "light_modern", "dark_plus", "light_plus", "dark_vs", "light_vs", "hc_black", "hc_light", "far"]),
+            SettingKind.Text, "auto", ["auto", "dark_modern", "light_modern", "dark_plus", "light_plus", "dark_vs", "light_vs", "hc_black", "hc_light", "far", "matrix"]),
         new("useAccentColor", Appearance, "Use Accent Color", "Tint focus and selection with the Windows accent color.", SettingKind.Toggle, true),
         new("iconTheme", Appearance, "File Icon Theme", "Icons in the file panels.", SettingKind.Choice, "material", ["seti", "material"]),
 

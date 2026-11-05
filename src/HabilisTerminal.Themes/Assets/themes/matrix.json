@@ -1,0 +1,97 @@
+{
+	// In the style of the film The Matrix (issue #123): phosphor green on black, with the near-white green of the head
+	// of the falling code for what must catch the eye. Red and blue stay in the terminal's palette as the two pills, so
+	// that errors still stand out. Not tinted with the Windows accent colour.
+	"$schema": "vscode://schemas/color-theme",
+	"name": "Matrix",
+	"type": "dark",
+	"colors": {
+		"foreground": "#00E63A",
+		"descriptionForeground": "#00A82B",
+		"errorForeground": "#FF4B3E",
+		"focusBorder": "#00FF41",
+		"icon.foreground": "#00E63A",
+		"widget.border": "#0E5C25",
+
+		"sideBar.background": "#020A04",
+		"sideBar.foreground": "#00E63A",
+		"sideBar.border": "#0E5C25",
+		"sideBarSectionHeader.background": "#031207",
+		"sideBarSectionHeader.foreground": "#39FF6A",
+
+		"list.activeSelectionBackground": "#00C832",
+		"list.activeSelectionForeground": "#000000",
+		"list.inactiveSelectionBackground": "#0B3A18",
+		"list.focusOutline": "#00FF41",
+		"list.hoverBackground": "#07260F",
+		"list.highlightForeground": "#D6FFE0",
+		"gitDecoration.modifiedResourceForeground": "#D6FFE0",
+
+		"titleBar.activeBackground": "#000000",
+		"titleBar.activeForeground": "#00FF41",
+		"titleBar.inactiveBackground": "#000000",
+		"titleBar.inactiveForeground": "#007A1F",
+
+		"input.background": "#000000",
+		"input.foreground": "#39FF6A",
+		"input.border": "#0E5C25",
+		"input.placeholderForeground": "#007A1F",
+		"quickInput.background": "#031207",
+		"quickInput.foreground": "#00E63A",
+		"editorWidget.background": "#031207",
+		"editorWidget.border": "#0E5C25",
+
+		"button.background": "#00C832",
+		"button.foreground": "#000000",
+		"button.hoverBackground": "#00FF41",
+		"button.secondaryBackground": "#0B3A18",
+		"button.secondaryForeground": "#39FF6A",
+
+		"progressBar.background": "#00FF41",
+		"scrollbarSlider.background": "#00FF4140",
+		"scrollbarSlider.hoverBackground": "#00FF4170",
+		"scrollbarSlider.activeBackground": "#00FF41A0",
+
+		"editor.background": "#000000",
+		"editor.foreground": "#00E63A",
+		"editor.selectionBackground": "#0E5C25",
+		"editor.lineHighlightBackground": "#031207",
+		"editorCursor.foreground": "#D6FFE0",
+		"editorLineNumber.foreground": "#007A1F",
+		"textLink.foreground": "#39FF6A",
+		"textCodeBlock.background": "#031207",
+
+		"panel.background": "#000000",
+		"panel.border": "#0E5C25",
+		"terminal.background": "#000000",
+		"terminal.foreground": "#00E63A",
+		"terminal.selectionBackground": "#0E5C25",
+		"terminalCursor.foreground": "#D6FFE0",
+		"terminal.ansiBlack": "#000000",
+		"terminal.ansiRed": "#E0342A",
+		"terminal.ansiGreen": "#00C832",
+		"terminal.ansiYellow": "#9BE564",
+		"terminal.ansiBlue": "#3B7BFF",
+		"terminal.ansiMagenta": "#5FD38A",
+		"terminal.ansiCyan": "#39D98A",
+		"terminal.ansiWhite": "#A8F0B8",
+		"terminal.ansiBrightBlack": "#2E7D45",
+		"terminal.ansiBrightRed": "#FF4B3E",
+		"terminal.ansiBrightGreen": "#00FF41",
+		"terminal.ansiBrightYellow": "#C8FF7A",
+		"terminal.ansiBrightBlue": "#6E9BFF",
+		"terminal.ansiBrightMagenta": "#8CF0AE",
+		"terminal.ansiBrightCyan": "#7DFFB5",
+		"terminal.ansiBrightWhite": "#D6FFE0"
+	},
+	"tokenColors": [
+		{ "scope": "comment", "settings": { "foreground": "#2E7D45" } },
+		{ "scope": ["string", "constant.other.symbol"], "settings": { "foreground": "#9BE564" } },
+		{ "scope": ["constant.numeric", "constant.language", "constant.character"], "settings": { "foreground": "#7DFFB5" } },
+		{ "scope": ["keyword", "storage", "storage.type"], "settings": { "foreground": "#D6FFE0" } },
+		{ "scope": ["entity.name.function", "support.function"], "settings": { "foreground": "#39FF6A" } },
+		{ "scope": ["entity.name.type", "entity.name.class", "support.type", "support.class"], "settings": { "foreground": "#5FD38A" } },
+		{ "scope": ["variable", "meta.definition.variable"], "settings": { "foreground": "#00E63A" } },
+		{ "scope": "invalid", "settings": { "foreground": "#FF4B3E" } }
+	]
+}

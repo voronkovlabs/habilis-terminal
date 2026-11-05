@@ -48,13 +48,15 @@ public static class ThemeLoader
         ["hc_black.json"] = ThemeType.HighContrast,
         ["hc_light.json"] = ThemeType.HighContrastLight,
         ["far.json"] = ThemeType.Dark,
+        ["matrix.json"] = ThemeType.Dark,
     };
 
     /// <summary>
     /// Built-in themes with a fixed palette that the Windows accent colour must not tint (the Far Manager theme's teal
-    /// cursor, issue #42).
+    /// cursor, issue #42; the Matrix theme's green, issue #123).
     /// </summary>
-    public static bool KeepsOwnAccent(string fileName) => string.Equals(fileName, "far.json", StringComparison.OrdinalIgnoreCase);
+    public static bool KeepsOwnAccent(string fileName) => 
+        string.Equals(fileName, "far.json", StringComparison.OrdinalIgnoreCase) || string.Equals(fileName, "matrix.json", StringComparison.OrdinalIgnoreCase);
 
     public static ColorTheme LoadBuiltIn(string fileName) =>
         Load(
