@@ -252,6 +252,39 @@ public class ShellHostTests
     }
 
     [Fact]
+    public async Task Enter_on_a_registered_command_reports_the_address_instead_of_running_it()
+    {
+        using var shell = new TestShell();
+        var addresses = new System.Collections.Concurrent.ConcurrentQueue<string>();
+        shell.Host.AddressEntered += addresses.Enqueue;
+        shell.Host.AddressCommands = ["cd demo"];
+        await shell.WaitIdleAsync();
+
+        foreach (var (line, expected) in new[]
+        {
+            ("cd demo:", "demo:"),
+            ("cd demo://bucket/a/", "demo://bucket/a/"),
+            ("  CD   \"demo://bucket/my folder/\"  ", "demo://bucket/my folder/"),
+            ("cd 'demo://b/'", "demo://b/"),
+        })
+        {
+            shell.Host.Write(line + "\r");
+            await TestShell.WaitUntilAsync(() => !addresses.IsEmpty, "open-address message for: " + line);
+            Assert.True(addresses.TryDequeue(out var address));
+            Assert.Equal(expected, address);
+        }
+
+        // The same command with anything else, and the address with another command, still run.
+        shell.Host.Write("cd C:\\; 'ON-' + 'C'\r");
+        await shell.WaitForTextAsync("ON-C");
+        shell.Host.Write("function foo { 'FOO-' + 'RAN' }\r");
+        await shell.WaitIdleAsync();
+        shell.Host.Write("foo demo:x\r");
+        await shell.WaitForTextAsync("FOO-RAN");
+        Assert.Empty(addresses);
+    }
+
+    [Fact]
     public async Task Non_filesystem_location_does_not_change_directory()
     {
         using var shell = new TestShell();

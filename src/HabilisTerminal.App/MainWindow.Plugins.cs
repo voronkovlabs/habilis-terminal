@@ -76,7 +76,7 @@ public partial class MainWindow : IPluginWindow
         return await panel.OpenPluginAsync(plugin, provider);
     }
 
-    /// <summary>The command line's Enter on "prefix:..." (integration script): open the plugin in the active panel.</summary>
+    /// <summary>The command line's Enter on "prefix:..." or "cd prefix:..." (integration script): open the plugin in the active panel.</summary>
     private void OnPluginAddress(string address)
     {
         if (_plugins.ForAddress(address) is not { } plugin)

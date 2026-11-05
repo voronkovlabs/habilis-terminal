@@ -69,6 +69,11 @@ internal sealed class PluginManager
     public IReadOnlyList<string> Prefixes() =>
         Loaded.SelectMany(p => Guard(p, () => p.Instance!.Prefixes.ToList(), [])).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
 
+    /// <summary>What each plugin catches in the console, as "command prefix": "cd s3" (issue #140).</summary>
+    public IReadOnlyList<string> AddressCommands() =>
+        Loaded.SelectMany(p => Guard(p, () => p.Instance!.AddressCommands.SelectMany(c => p.Instance!.Prefixes.Select(x => $"{c} {x}")).ToList(), []))
+            .Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+
     /// <summary>Runs a synchronous plugin call; an exception counts as "nothing" (the plugin's menu just stays empty).</summary>
     public static T Guard<T>(LoadedPlugin plugin, Func<T> call, T fallback)
     {

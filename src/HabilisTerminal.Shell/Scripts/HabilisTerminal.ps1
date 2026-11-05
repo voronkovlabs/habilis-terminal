@@ -138,7 +138,15 @@ Set-PSReadLineKeyHandler -Chord F24 -BriefDescription HabilisTerminalRequest -De
 
 # Plugin addresses (issue #49): Enter on a line starting with a plugin prefix and a colon ("s3:...", "sqs:...")
 # opens the plugin panel instead of running the line, as Far's command-line prefixes do. Habilis Terminal keeps the
-# prefixes, one per line, in the 'prefixes' file of the channel. Other lines run as before.
+# prefixes, one per line, in the 'prefixes' file of the channel. A plugin can also catch a command in front of its
+# address ("cd s3://bucket/", issue #140): the 'commands' file holds "cd s3", one per line. Other lines run as before.
+function global:__HabiOpenAddress($line, $address) {
+    [Microsoft.PowerShell.PSConsoleReadLine]::AddToHistory($line)
+    [Microsoft.PowerShell.PSConsoleReadLine]::RevertLine()
+    $encoded = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($address))
+    [Console]::Write((__HabiOsc "7731;habi;open-address;$encoded"))
+}
+
 function global:__HabiEnter($key, $arg) {
     __HabiDrawUnicode
     $state = $global:__Habi
@@ -150,10 +158,16 @@ function global:__HabiEnter($key, $arg) {
     if ($line -match '^\s*([A-Za-z][A-Za-z0-9]*):(\S|\s*$)' -and (Test-Path -LiteralPath $prefixes)) {
         $prefix = $Matches[1]
         if (@(Get-Content -LiteralPath $prefixes -Encoding utf8) -contains $prefix) {
-            [Microsoft.PowerShell.PSConsoleReadLine]::AddToHistory($line)
-            [Microsoft.PowerShell.PSConsoleReadLine]::RevertLine()
-            $encoded = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($line.Trim()))
-            [Console]::Write((__HabiOsc "7731;habi;open-address;$encoded"))
+            __HabiOpenAddress $line $line.Trim()
+            return
+        }
+    }
+
+    $commands = Join-Path $state.Channel 'commands'
+    if ($line -match '^\s*(\S+)\s+(["'']?)(([A-Za-z][A-Za-z0-9]*):.*?)\2\s*$' -and (Test-Path -LiteralPath $commands)) {
+        $address = $Matches[3]
+        if (@(Get-Content -LiteralPath $commands -Encoding utf8) -contains "$($Matches[1]) $($Matches[4])") {
+            __HabiOpenAddress $line $address
             return
         }
     }

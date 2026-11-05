@@ -18,7 +18,7 @@ run `aws sso login --profile <name>` first. It does not need the AWS CLI otherwi
 
 - **F11 > S3 buckets**, or the drive menu (Alt+F1 / Alt+F2) > S3 buckets: the bucket list.
 - **Command line:** `s3:` (the bucket list), `s3://bucket/` or `s3://bucket/folder/sub/`. The short form
-  `s3:bucket/folder` works too, and a missing final `/` is added.
+  `s3:bucket/folder` works too, and a missing final `/` is added. `cd s3://bucket/folder/` in the console does the same.
 - **Folder history (Alt+F12) and bookmarks** reopen the location the panel showed.
 
 The panel title is `S3 · profile · bucket/folder/`.

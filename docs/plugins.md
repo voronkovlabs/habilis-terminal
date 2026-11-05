@@ -61,6 +61,7 @@ public abstract class Plugin
     public virtual IEnumerable<PluginMenuItem> MenuItems { get; }      // F11 plugin menu
     public virtual IEnumerable<PluginMenuItem> DriveMenuItems { get; } // Alt+F1 / Alt+F2
     public virtual IEnumerable<string> Prefixes { get; }               // "s3", "sqs"...
+    public virtual IEnumerable<string> AddressCommands { get; }        // SDK 1.4: "cd", for "cd s3://bucket/"
     public virtual Task<IPanelProvider?> OpenAddressAsync(string address, CancellationToken token);
     public virtual bool HasConfiguration { get; }
     public virtual Task ConfigureAsync(CancellationToken token);       // F9 > Options > Plugins, Alt+Shift+F9
@@ -69,7 +70,8 @@ public abstract class Plugin
 public sealed record PluginMenuItem(string Title, Func<CancellationToken, Task<IPanelProvider?>> Open);
 ```
 `OpenAddressAsync` gets the full text after Enter on the command line, e.g. `s3://bucket/path/` or
-`sqs:prod/eu-west-1`. A provider returned from any entry point opens in the active panel.
+`sqs:prod/eu-west-1`. With a command from `AddressCommands` in front it gets the address alone, without quotes.
+ A provider returned from any entry point opens in the active panel.
 
 ### Host services
 ```csharp
@@ -157,7 +159,8 @@ as "<plugin> failed: <message>". Plugin calls run off the UI thread or are await
   lines in the other panel.
 - A key the provider does not support shows "Not supported by <plugin>" in the status line.
 - The command line: Enter on a line starting with a registered prefix and a colon (`s3:`, `sqs:`, `sm:`) opens the
-  plugin panel instead of running the line in PowerShell (PSReadLine Enter handler, as for Tab).
+  plugin panel instead of running the line in PowerShell (PSReadLine Enter handler, as for Tab). So does a line with a
+  command the plugin registered in front of such an address (`AddressCommands`: `cd s3://bucket/`).
 - F11 lists the plugins' menu items; F9 > Options > Plugins (Alt+Shift+F9) lists loaded and failed plugins and opens
   their configuration; F9 > Commands > Plugin panel commands lists the commands of the plugin panel with their keys.
 - After a plugin command the host re-lists the panel. Ctrl+1... switch the provider's layouts, Ctrl+F12 adds its sort

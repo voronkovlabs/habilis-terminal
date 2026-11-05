@@ -20,6 +20,8 @@ public sealed class DemoPlugin : Plugin
 
     public override IEnumerable<string> Prefixes => ["demo"];
 
+    public override IEnumerable<string> AddressCommands => ["cd"];
+
     public override bool HasConfiguration => true;
 
     /// <summary>"demo:" or "demo:/folder/sub".</summary>

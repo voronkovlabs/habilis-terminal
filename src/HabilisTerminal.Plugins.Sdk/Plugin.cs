@@ -25,8 +25,16 @@ public abstract class Plugin
     public virtual IEnumerable<string> Prefixes => [];
 
     /// <summary>
-    /// Opens a panel for an address: a command line starting with one of <see cref="Prefixes"/>, or a location the
-    /// plugin reported earlier through <see cref="IPanelProvider.Location"/> (folder history). Null: nothing to open.
+    /// Shell commands to catch in front of this plugin's addresses, e.g. "cd" (SDK 1.4). Enter on "cd s3://bucket/",
+    /// quoted or not, calls <see cref="OpenAddressAsync"/> with "s3://bucket/" instead of running the line in the shell.
+    /// An address needs one of <see cref="Prefixes"/>; the same command with anything else runs as usual.
+    /// </summary>
+    public virtual IEnumerable<string> AddressCommands => [];
+
+    /// <summary>
+    /// Opens a panel for an address: a command line starting with one of <see cref="Prefixes"/> or one of
+    /// <see cref="AddressCommands"/>, or a location the plugin reported earlier through
+    /// <see cref="IPanelProvider.Location"/> (folder history). Null: nothing to open.
     /// </summary>
     public virtual Task<IPanelProvider?> OpenAddressAsync(string address, CancellationToken cancellationToken) =>
         Task.FromResult<IPanelProvider?>(null);

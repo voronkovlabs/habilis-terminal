@@ -5,7 +5,7 @@ namespace Habilis.Aws.S3;
 
 /// <summary>
 /// Amazon S3 in a Habilis Terminal panel (issue #46). Opens from F11, the drive menu or the command line:
-/// <c>s3:</c> (the bucket list), <c>s3://bucket/</c>, <c>s3://bucket/prefix/</c>.
+/// <c>s3:</c> (the bucket list), <c>s3://bucket/</c>, <c>s3://bucket/prefix/</c>, also after <c>cd</c>.
 /// </summary>
 public sealed class S3Plugin : Plugin
 {
@@ -18,6 +18,8 @@ public sealed class S3Plugin : Plugin
     public override IEnumerable<PluginMenuItem> DriveMenuItems => MenuItems;
 
     public override IEnumerable<string> Prefixes => ["s3"];
+
+    public override IEnumerable<string> AddressCommands => ["cd"];
 
     public override bool HasConfiguration => true;
 

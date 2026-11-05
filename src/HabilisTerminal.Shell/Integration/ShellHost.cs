@@ -79,8 +79,8 @@ public sealed class ShellHost : IDisposable
     public event Action<string>? PanelKeyReturned;
 
     /// <summary>
-    /// Enter on a command line starting with one of <see cref="AddressPrefixes"/> and a colon: the line, which the
-    /// shell did not run (plugin addresses, issue #49). Background thread.
+    /// Enter on a command line starting with one of <see cref="AddressPrefixes"/> and a colon, or with one of
+    /// <see cref="AddressCommands"/>: the address, which the shell did not run (issues #49, #140). Background thread.
     /// </summary>
     public event Action<string>? AddressEntered;
 
@@ -102,18 +102,28 @@ public sealed class ShellHost : IDisposable
     /// </summary>
     public IReadOnlyList<string> AddressPrefixes
     {
-        set
+        set => WriteChannelLines("prefixes", value);
+    }
+
+    /// <summary>
+    /// Commands plugins catch in front of an address, as "command prefix": Enter on "cd s3://bucket/" with "cd s3" here
+    /// reports "s3://bucket/" through <see cref="AddressEntered"/> instead of running (issue #140). Kept as a file too.
+    /// </summary>
+    public IReadOnlyList<string> AddressCommands
+    {
+        set => WriteChannelLines("commands", value);
+    }
+
+    private void WriteChannelLines(string name, IReadOnlyList<string> lines)
+    {
+        try
         {
-            var file = Path.Combine(ChannelDirectory, "prefixes");
-            try
-            {
-                Directory.CreateDirectory(ChannelDirectory);
-                File.WriteAllLines(file, value);
-            }
-            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-            {
-                // Without the file Enter simply runs the line.
-            }
+            Directory.CreateDirectory(ChannelDirectory);
+            File.WriteAllLines(Path.Combine(ChannelDirectory, name), lines);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            // Without the file Enter simply runs the line.
         }
     }
 

@@ -212,6 +212,16 @@ public class NavigationTests
     }
 
     [Fact]
+    public async Task Cd_in_the_console_is_caught_and_its_address_opens_the_place()
+    {
+        var plugin = new S3Plugin { Connect = _ => new FakeS3().Add("b", "a/x.txt", "x") };
+        plugin.Initialize(new FakeHost());
+        Assert.Contains("cd", plugin.AddressCommands); // issue #140; the host passes the address alone
+        var panel = (S3Panel)(await plugin.OpenAddressAsync("s3://b/a/", CancellationToken.None))!;
+        Assert.Equal("s3://b/a/", panel.Location);
+    }
+
+    [Fact]
     public async Task Switching_to_a_profile_that_cannot_list_the_bucket_shows_the_bucket_list()
     {
         var api = new FakeS3().Add("b", "a/x.txt", "x");

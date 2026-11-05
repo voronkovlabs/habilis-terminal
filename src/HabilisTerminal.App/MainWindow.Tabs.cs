@@ -88,6 +88,7 @@ public partial class MainWindow
         host.CommandLineAccepted += line => Dispatcher.BeginInvoke(() => tab.CommandLine = line);
         host.CommandFinished += code => Dispatcher.BeginInvoke(() => tab.LastExitCode = code);
         host.AddressPrefixes = _plugins.Prefixes();
+        host.AddressCommands = _plugins.AddressCommands();
         WireOverflow(tab);
         WireCommandLine(tab);
 
