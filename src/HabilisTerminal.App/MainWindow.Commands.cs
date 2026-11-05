@@ -57,9 +57,13 @@ public partial class MainWindow
                 _titleBar.ToggleMaximize();
                 return true;
 
-            // Terminal-level clipboard; Ctrl+C / Ctrl+V go to the shell (SPEC §12).
+            // Terminal-level clipboard; Ctrl+V goes to the shell (SPEC §12). Ctrl+C and Ctrl+Insert copy a selection
+            // in the console, as in Windows Terminal; with none they go on to the shell, an interrupt (issue #137).
             case Key.C when modifiers == (KeyModifiers.Control | KeyModifiers.Shift) && TerminalHasFocus:
                 CopyTerminalSelection();
+                return true;
+
+            case Key.C or Key.Insert when modifiers == KeyModifiers.Control && TerminalHasFocus && _consoleMode && CopyTerminalSelection():
                 return true;
 
             case Key.V when modifiers == (KeyModifiers.Control | KeyModifiers.Shift) && TerminalHasFocus:

@@ -437,7 +437,7 @@ Approach:
 - Mouse: drag selects; double click selects a word, triple click a line; Alt+drag block selection. When the running
   program enables mouse mode, selection requires Shift (Windows Terminal behaviour).
 - Right click: copy and clear if there is a selection, otherwise paste.
-- Ctrl+Shift+C / Ctrl+Shift+V copy / paste at terminal level. Ctrl+C and Ctrl+V go to the shell.
+- Ctrl+Shift+C / Ctrl+Shift+V copy / paste at terminal level. Ctrl+C and Ctrl+Insert copy and clear a selection in the console; with none they go to the shell, as does Ctrl+V.
 - Multi-line paste warning ("Paste N lines?"), can be disabled; bracketed paste passed through when enabled by the shell.
 - Scrollback 9001 lines; mouse wheel scrolls the buffer; Ctrl+wheel changes the terminal font size.
 

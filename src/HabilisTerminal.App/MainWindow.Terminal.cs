@@ -6,9 +6,10 @@ using HabilisTerminal.App.Widgets;
 namespace HabilisTerminal.App;
 
 /// <summary>
-/// Terminal clipboard and zoom (SPEC §12). Mouse selection, double / triple click, Shift with mouse-mode programs and
-/// copy-on-right-click with a selection are handled by the terminal control itself; pasting goes through here so the
-/// multi-line warning and bracketed paste apply to every route (right click, Ctrl+Shift+V).
+/// Terminal clipboard and zoom (SPEC §12). Mouse selection, double / triple click and Shift with mouse-mode programs are
+/// handled by the terminal control itself. Copying and pasting go through here: copying because reading the selection
+/// clears it, so the control could not see it afterwards (issue #137); pasting so that the multi-line warning and
+/// bracketed paste apply to every route (right click, Ctrl+Shift+V).
 /// </summary>
 public partial class MainWindow
 {
@@ -51,9 +52,12 @@ public partial class MainWindow
                 ZoomTerminal(Math.Sign(delta));
                 return true;
 
-            case WM_RBUTTONDOWN when string.IsNullOrEmpty(Terminal.GetSelectedText()):
-                // With a selection the control copies and clears it itself.
-                PasteIntoTerminal();
+            case WM_RBUTTONDOWN:
+                if (!CopyTerminalSelection())
+                {
+                    PasteIntoTerminal();
+                }
+
                 return true;
 
             default:
@@ -75,13 +79,17 @@ public partial class MainWindow
         UpdateCellSize();
     }
 
-    private void CopyTerminalSelection()
+    /// <summary>Copies the console's selection and clears it. False when nothing is selected.</summary>
+    private bool CopyTerminalSelection()
     {
         var text = Terminal.GetSelectedText();
-        if (!string.IsNullOrEmpty(text))
+        if (string.IsNullOrEmpty(text))
         {
-            TrySetClipboard(text);
+            return false;
         }
+
+        TrySetClipboard(text);
+        return true;
     }
 
     /// <summary>Pastes clipboard text into the shell, asking first for several lines (<c>terminal.multilinePasteWarning</c>).</summary>
