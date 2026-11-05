@@ -51,6 +51,11 @@ public partial class App : Application
             return;
         }
 
+        if (Hosting.FramePrototype.TryStart(this))
+        {
+            return;
+        }
+
         MainWindow = new MainWindow();
         MainWindow.Show();
         Updates.Start(MainWindow.Dispatcher);

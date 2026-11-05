@@ -87,6 +87,15 @@ public sealed class ShellHost : IDisposable
         }
     }
 
+    /// <summary>The output kept for a replay.</summary>
+    public string OutputSoFar()
+    {
+        lock (_replay)
+        {
+            return string.Concat(_replay);
+        }
+    }
+
     public void CompleteHandoff()
     {
         _handedOff = true;
