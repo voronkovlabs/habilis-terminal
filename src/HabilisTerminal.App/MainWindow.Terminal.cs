@@ -21,7 +21,8 @@ public partial class MainWindow
     /// <summary>Ctrl+wheel steps for this session, on top of <c>terminal.fontSize</c>.</summary>
     private int _terminalZoom;
 
-    private IntPtr TerminalHandle => FindHwndHost(Terminal)?.Handle ?? IntPtr.Zero;
+    /// <summary>Zero until the first tab exists: restoring the layout activates a panel before that.</summary>
+    private IntPtr TerminalHandle => _tab is { } tab ? FindHwndHost(tab.Terminal)?.Handle ?? IntPtr.Zero : IntPtr.Zero;
 
     private bool TerminalHasFocus => !IsPageOpen && TerminalHandle != IntPtr.Zero && IsChildOrSelf(TerminalHandle, GetFocus());
 
