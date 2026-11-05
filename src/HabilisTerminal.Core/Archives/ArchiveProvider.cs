@@ -105,20 +105,21 @@ public sealed class ArchiveProvider : IPanelProvider, IGetFiles, IPutFiles, IDel
         return provider;
     }
 
-    /// <summary>True when the extension belongs to a format 7z.dll reads (Enter tries to open such files).</summary>
+    /// <summary>True when the extension is that of an archive (Enter tries to open such files as folders).</summary>
     public static bool HasArchiveExtension(string name, SevenZipLibrary? library = null)
     {
         library ??= SevenZipLibrary.Default;
         var extension = Path.GetExtension(name).TrimStart('.');
-        return library is not null && extension.Length > 0 && library.Extensions.Contains(extension) && !NotOpenedOnEnter.Contains(extension);
+        return library is not null && extension.Length > 0 && library.Extensions.Contains(extension) && OpenedOnEnter.Contains(extension);
     }
 
-    // Formats 7-Zip reads but that are documents or programs to the user: Enter opens them in their program and
-    // Ctrl+PgDn still opens them as archives.
-    private static readonly HashSet<string> NotOpenedOnEnter = new(StringComparer.OrdinalIgnoreCase)
+    // A list of what is an archive to the user, not of exceptions: 7-Zip also reads documents and programs (doc, xls,
+    // docx, jar, apk, exe, disk images...), and these open in their program on Enter (issue #138). Ctrl+PgDn still
+    // tries any file as an archive.
+    private static readonly HashSet<string> OpenedOnEnter = new(StringComparer.OrdinalIgnoreCase)
     {
-        "exe", "dll", "sys", "msi", "msp", "docx", "xlsx", "pptx", "odt", "ods", "odp", "epub", "chm", "hfs", "dmg",
-        "elf", "macho", "so", "img", "vhd", "vhdx", "vmdk", "vdi", "qcow", "qcow2", "mbr", "gpt", "fat", "ntfs", "lib", "a",
+        "zip", "zipx", "z01", "7z", "rar", "r00", "tar", "gz", "gzip", "tgz", "tpz", "bz2", "bzip2", "tbz", "tbz2", "xz", "txz",
+        "lzma", "tlz", "z", "taz", "zst", "tzst", "cab", "arj", "lzh", "lha", "cpio", "rpm", "deb", "iso", "wim", "swm", "esd", "001",
     };
 
     public async IAsyncEnumerable<IReadOnlyList<PanelEntry>> ListAsync([System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken)

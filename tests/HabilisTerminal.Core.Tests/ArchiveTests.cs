@@ -20,6 +20,18 @@ public class ArchiveTests
         Assert.True(ArchiveProvider.HasArchiveExtension("logs.tar.gz"));
         Assert.False(ArchiveProvider.HasArchiveExtension("report.docx")); // Ctrl+PgDn only
         Assert.False(ArchiveProvider.HasArchiveExtension("notes.txt"));
+
+        // 7-Zip reads these, but they are documents and programs: they open in their program (issue #138).
+        Assert.Contains("doc", library.Extensions);
+        foreach (var name in new[] { "old.doc", "old.xls", "old.ppt", "app.jar", "app.apk", "setup.exe", "setup.msi", "disk.img", "book.epub" })
+        {
+            Assert.False(ArchiveProvider.HasArchiveExtension(name), name);
+        }
+
+        foreach (var name in new[] { "a.7z", "a.rar", "a.tar", "a.tgz", "a.bz2", "a.xz", "a.cab", "a.iso" })
+        {
+            Assert.True(ArchiveProvider.HasArchiveExtension(name), name);
+        }
     }
 
     [Fact]

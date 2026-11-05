@@ -311,9 +311,10 @@ Common rules:
 
 ### 8.1 Archives as folders (issue #51)
 As Far's arclite, on 7-Zip's `7z.dll` (26.04, shipped next to `habi.exe` per architecture; `third_party/7-Zip`).
-- **Enter** on a file whose extension belongs to a format 7z.dll reads (zip, 7z, rar, tar, gz, bz2, xz, iso, cab...)
+- **Enter** on a file with an archive's extension (zip, 7z, rar, tar, gz, bz2, xz, iso, cab...)
   opens it as a folder in a plugin panel; when it is no archive after all, Enter does what it does with any file.
-  Documents and programs that are zip or PE inside (docx, xlsx, exe, msi...) are excluded from Enter.
+  Everything else 7-Zip can read but that is a document or a program (doc, xls, docx, xlsx, jar, apk, exe, msi, disk
+  images...) opens in its program.
 - **Ctrl+PgDn** on any file tries every format by signature.
 - The panel path reads `C:\data\a.zip\docs`; folders only implied by item paths are shown. ".." at the archive's top
   returns to its folder with the cursor on the archive file. Folder history reopens such locations.
