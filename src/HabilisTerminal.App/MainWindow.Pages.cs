@@ -169,6 +169,15 @@ public partial class MainWindow
     /// <summary>Ctrl+Q: quick view of the active panel's current file in the other panel.</summary>
     private void ToggleQuickView()
     {
+        // Pressed in the panel showing it: this panel goes back to its list, as in Far (issue #128).
+        if (_active.QuickViewSource is not null)
+        {
+            var panel = _active;
+            panel.QuickViewSource = null;
+            RevealOtherContent(panel, on: false);
+            return;
+        }
+
         var other = Other(_active);
         if (!HiddenPanelReveal.TurnsOn(IsShown(other), other.QuickViewSource is not null))
         {

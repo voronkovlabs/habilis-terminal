@@ -265,7 +265,7 @@ public partial class MainWindow
             }
         }
 
-        if (FocusedPanel() is not { } panel)
+        if (FocusedPanel() is not { } panel || HandleKeyOverHiddenList(panel, key, KeyModifiers.None))
         {
             return;
         }

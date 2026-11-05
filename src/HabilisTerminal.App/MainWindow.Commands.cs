@@ -114,8 +114,13 @@ public partial class MainWindow
             CollapseConsole(stopGrowing: false);
         }
 
+        if (HandleKeyOverHiddenList(panel, key, modifiers))
+        {
+            return true;
+        }
+
         // Plugin panels and F11 first: a plugin's command key takes precedence over the host's key (issue #49).
-        if ((!panel.IsQuickSearchActive && HandlePluginKey(panel, key, modifiers)) || HandleWindowKey(panel, key, modifiers) || panel.HandleKey(key, modifiers))
+        if ((!panel.IsQuickSearchActive && !(panel.ShowsOtherContent && panel.IsPlugin && key != Key.F11) && HandlePluginKey(panel, key, modifiers)) || HandleWindowKey(panel, key, modifiers) || panel.HandleKey(key, modifiers))
         {
             if (OverflowExpanded)
             {
@@ -133,6 +138,35 @@ public partial class MainWindow
         }
 
         return false;
+    }
+
+    /// <summary>
+    /// In a panel showing a quick view or info (issue #128) the list is hidden: the arrows scroll what is shown, as in Far,
+    /// and keys that would act on the hidden list's files do nothing. Window keys such as Tab and Ctrl+Q go on.
+    /// </summary>
+    private static bool HandleKeyOverHiddenList(FilePanel panel, Key key, KeyModifiers modifiers)
+    {
+        if (!panel.ShowsOtherContent)
+        {
+            return false;
+        }
+
+        switch (modifiers)
+        {
+            case KeyModifiers.None when key is Key.Up or Key.Down or Key.Left or Key.Right or Key.PageUp or Key.PageDown or Key.Home or Key.End:
+                panel.ScrollQuickView(key);
+                return true;
+            case KeyModifiers.None:
+                return key is (>= Key.F3 and <= Key.F8) or Key.Enter or Key.Insert or Key.Delete or Key.Back or Key.Add or Key.Subtract or Key.Multiply;
+            case KeyModifiers.Shift:
+                return key is (>= Key.F1 and <= Key.F12) or Key.Up or Key.Down or Key.Left or Key.Right or Key.PageUp or Key.PageDown or Key.Home or Key.End or Key.Enter;
+            case KeyModifiers.Alt:
+                return key is (>= Key.A and <= Key.Z) or (>= Key.D0 and <= Key.D9) or Key.F5 or Key.F6 or Key.Enter;
+            case KeyModifiers.Control:
+                return key is Key.A or Key.Enter or Key.PageUp or Key.PageDown;
+            default:
+                return false;
+        }
     }
 
     /// <summary>
@@ -486,19 +520,18 @@ public partial class MainWindow
     /// <summary>Ctrl+L: the info panel of the active panel in the other panel.</summary>
     private void ToggleInfoPanel()
     {
+        if (_active.InfoSource is not null)
+        {
+            var panel = _active;
+            panel.InfoSource = null;
+            RevealOtherContent(panel, on: false);
+            return;
+        }
+
         var other = Other(_active);
         var on = HiddenPanelReveal.TurnsOn(IsShown(other), other.InfoSource is not null);
         other.QuickViewSource = null;
         other.InfoSource = on ? _active : null;
-        if (_active.InfoSource is not null)
-        {
-            _active.InfoSource = null;
-            if (ReferenceEquals(_reveal.Revealed, _active) && _active.QuickViewSource is null)
-            {
-                _reveal.Forget();
-            }
-        }
-
         RevealOtherContent(other, on);
     }
 

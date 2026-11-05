@@ -153,14 +153,80 @@ public sealed class QuickView : Grid, IDisposable
     protected override void OnPreviewMouseWheel(MouseWheelEventArgs e)
     {
         base.OnPreviewMouseWheel(e);
-        if (_pdf is { } pdf)
+        if (_pdf is not null)
         {
             e.Handled = true;
-            var index = Math.Clamp(_pdfIndex + (e.Delta < 0 ? 1 : -1), 0, pdf.PageCount - 1);
+            TurnPdfPage(_pdfIndex + (e.Delta < 0 ? 1 : -1));
+        }
+    }
+
+    private void TurnPdfPage(int index)
+    {
+        if (_pdf is { PageCount: > 0 } pdf)
+        {
+            index = Math.Clamp(index, 0, pdf.PageCount - 1);
             if (index != _pdfIndex)
             {
                 _pdfIndex = index;
                 _ = RenderPdfAsync();
+            }
+        }
+    }
+
+    /// <summary>The keys of a panel showing this view scroll it (issue #128), as in Far.</summary>
+    public void Scroll(Key key)
+    {
+        if (_pdf is not null)
+        {
+            TurnPdfPage(key switch
+            {
+                Key.Down or Key.PageDown or Key.Right => _pdfIndex + 1,
+                Key.Up or Key.PageUp or Key.Left => _pdfIndex - 1,
+                Key.Home => 0,
+                Key.End => int.MaxValue,
+                _ => _pdfIndex,
+            });
+        }
+        else if (_editor.Visibility == Visibility.Visible)
+        {
+            switch (key)
+            {
+                case Key.Down: _editor.LineDown(); break;
+                case Key.Up: _editor.LineUp(); break;
+                case Key.PageDown: _editor.PageDown(); break;
+                case Key.PageUp: _editor.PageUp(); break;
+                case Key.Left: _editor.LineLeft(); break;
+                case Key.Right: _editor.LineRight(); break;
+                case Key.Home: _editor.ScrollToHome(); break;
+                case Key.End: _editor.ScrollToEnd(); break;
+            }
+        }
+        else if (_text.Visibility == Visibility.Visible)
+        {
+            switch (key)
+            {
+                case Key.Down: _text.ScrollLines(1); break;
+                case Key.Up: _text.ScrollLines(-1); break;
+                case Key.PageDown: _text.ScrollPages(1); break;
+                case Key.PageUp: _text.ScrollPages(-1); break;
+                case Key.Left: _text.ScrollHorizontally(-1); break;
+                case Key.Right: _text.ScrollHorizontally(1); break;
+                case Key.Home: _text.GoToStart(); break;
+                case Key.End: _text.GoToEnd(); break;
+            }
+        }
+        else if (_plainScroll.Visibility == Visibility.Visible)
+        {
+            switch (key)
+            {
+                case Key.Down: _plainScroll.LineDown(); break;
+                case Key.Up: _plainScroll.LineUp(); break;
+                case Key.PageDown: _plainScroll.PageDown(); break;
+                case Key.PageUp: _plainScroll.PageUp(); break;
+                case Key.Left: _plainScroll.LineLeft(); break;
+                case Key.Right: _plainScroll.LineRight(); break;
+                case Key.Home: _plainScroll.ScrollToHome(); break;
+                case Key.End: _plainScroll.ScrollToEnd(); break;
             }
         }
     }

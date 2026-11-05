@@ -219,6 +219,11 @@ public sealed partial class FilePanel : Border
     }
 
     /// <summary>What the panel body shows: info or quick view of the other panel, a plugin's own view, or the list.</summary>
+    /// <summary>The list is hidden under an info panel or a quick view: keys must not act on what cannot be seen (issue #128).</summary>
+    public bool ShowsOtherContent => InfoSource is not null || _quickViewSource is not null;
+
+    public void ScrollQuickView(Key key) => _quickView.Scroll(key);
+
     private void UpdateBody()
     {
         var otherContent = InfoSource is not null || _quickViewSource is not null;
@@ -226,6 +231,7 @@ public sealed partial class FilePanel : Border
         _quickView.Visibility = _quickViewSource is null ? Visibility.Collapsed : Visibility.Visible;
         _pluginViewHost.Visibility = !otherContent && _pluginViewHost.Content is not null ? Visibility.Visible : Visibility.Collapsed;
         _list.Visibility = !otherContent && _pluginViewHost.Content is null ? Visibility.Visible : Visibility.Collapsed;
+        UpdateStatus();
     }
 
     /// <summary>Follows the source panel's cursor.</summary>
@@ -236,6 +242,7 @@ public sealed partial class FilePanel : Border
             return;
         }
 
+        UpdateStatus();
         var version = ++_quickViewVersion;
         if (source.IsPlugin)
         {
@@ -1127,6 +1134,16 @@ public sealed partial class FilePanel : Border
     private void UpdateStatus()
     {
         var culture = CultureInfo.CurrentCulture;
+
+        // The status line belongs to what is shown, not to the list hidden under it (issue #128).
+        if (ShowsOtherContent)
+        {
+            _status.Foreground = PanelPalette.DescriptionForeground;
+            _status.Text = _quickViewSource is { State.Count: > 0 } source && !source.State.Current.IsParent ? source.State.Current.Name : string.Empty;
+            _statusRight.Text = string.Empty;
+            return;
+        }
+
         if (_counting is { } counting)
         {
             _status.Foreground = PanelPalette.DescriptionForeground;

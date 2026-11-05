@@ -70,7 +70,7 @@ public sealed class HelpPage : DockPanel, IPage
             ("Ctrl+Shift+T", "New console, with the panels of the last one closed; each tab keeps its own panels, a long command goes on in its tab"),
             ("Ctrl+Tab / Ctrl+Shift+Tab", "Next / previous console"),
             ("Ctrl+Shift+W", "Close the console"),
-            ("Ctrl+Q", "Quick view in the other panel (shows a hidden one; again hides it); on a PDF the mouse wheel turns pages"),
+            ("Ctrl+Q", "Quick view in the other panel (shows a hidden one; again hides it); on a PDF the mouse wheel turns pages; Tab goes into it, where the arrows scroll it"),
         ]),
         ("Command line",
         [
