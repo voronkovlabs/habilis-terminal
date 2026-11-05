@@ -270,6 +270,7 @@ public sealed class FolderSizeWorker : IDisposable
 
     private void Count(string path, Paused? resumed, CancellationToken token)
     {
+        using var measure = Diagnostics.Perf.Measure("folder.size");
         var stamp = resumed?.Stamp ?? Cache.Stamp;
         var walk = resumed?.Walk ?? new DirectorySize.Walk(path);
         try

@@ -1,5 +1,7 @@
 using System.IO;
 using System.Globalization;
+using HabilisTerminal.App.Reporting;
+using HabilisTerminal.Core.Diagnostics;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
@@ -336,6 +338,7 @@ public sealed partial class FilePanel : Border
     /// <summary>Opens a directory. On failure the panel stays where it was and shows the error.</summary>
     public async Task<bool> NavigateAsync(string path, string? focusName = null)
     {
+        using var measure = Perf.Enabled ? Perf.MeasureAsync("panel.navigate", PerfDiagnostics.DriveKind(path)) : default;
         _loading?.Cancel();
         var loading = new CancellationTokenSource();
         _loading = loading;

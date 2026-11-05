@@ -27,6 +27,8 @@ public sealed class AppSettings
 
     public bool PanelsFolderSizes => Get<bool>("panels.folderSizes");
 
+    public bool DiagnosticsPerformance => Get<bool>("diagnostics.performance");
+
     public string TerminalFontFamily => Get<string>("terminal.fontFamily");
 
     public int TerminalFontSize => Get<int>("terminal.fontSize");

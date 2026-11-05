@@ -4,6 +4,7 @@ using HabilisTerminal.App.Hosting;
 using HabilisTerminal.App.Layout;
 using HabilisTerminal.App.Panels;
 using HabilisTerminal.App.Widgets;
+using HabilisTerminal.Core.Diagnostics;
 using HabilisTerminal.Core.Panels;
 using HabilisTerminal.Core.Settings;
 using HabilisTerminal.Shell;
@@ -224,6 +225,7 @@ public partial class MainWindow
     /// <summary>Ctrl+Shift+T: a new shell with the panels of the last console closed; never closed one: like the one in front.</summary>
     private void NewTab()
     {
+        using var measure = Perf.Measure("tab.new");
         if (IsPageOpen)
         {
             return;
@@ -268,6 +270,7 @@ public partial class MainWindow
     /// <summary>Brings a tab to the front, with its own panels and layout (issue #125).</summary>
     private void ShowTab(ConsoleTab tab)
     {
+        using var measure = Perf.Measure("tab.show");
         var previous = _tab;
         ReleaseFrame();
         if (tab != previous && previous is not null)

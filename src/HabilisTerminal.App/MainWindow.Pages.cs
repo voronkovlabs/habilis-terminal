@@ -14,6 +14,7 @@ public partial class MainWindow
 
     private void ShowPage(FrameworkElement page)
     {
+        using var measure = Core.Diagnostics.Perf.Measure("page.show", page.GetType().Name);
         ClosePage(refocus: false);
         Workspace.Visibility = Visibility.Hidden;
         PageHost.Content = page;

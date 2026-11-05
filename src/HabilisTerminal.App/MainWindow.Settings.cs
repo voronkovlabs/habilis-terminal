@@ -1,4 +1,6 @@
 using System.IO;
+using HabilisTerminal.App.Reporting;
+using HabilisTerminal.Core.Diagnostics;
 using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Interop;
@@ -28,9 +30,14 @@ public partial class MainWindow
     /// <summary>Applies settings that can change while running; the shell settings apply on the next start.</summary>
     private void ApplySettings(AppSettings settings)
     {
+        using var measure = Perf.Measure("settings.apply");
         var previous = _appliedSettings;
         _settings = settings;
         _appliedSettings = settings;
+        if (App.Paths is { } paths)
+        {
+            PerfDiagnostics.Apply(settings.DiagnosticsPerformance, Dispatcher, paths.DiagnosticsDirectory);
+        }
 
         _themes.ThemesDirectory = App.Paths?.ThemesDirectory;
         _themes.Configure(settings.Theme, settings.UseAccentColor, force: previous is null);
@@ -279,6 +286,7 @@ public partial class MainWindow
 
     private void SaveState()
     {
+        using var measure = Perf.Measure("state.save");
         try
         {
             App.State?.Save(CaptureState());

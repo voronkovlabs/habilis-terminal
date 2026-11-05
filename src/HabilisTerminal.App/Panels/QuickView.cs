@@ -86,6 +86,9 @@ public sealed class QuickView : Grid, IDisposable
 
     public void Show(string? path, bool isDirectory, long? folderSize)
     {
+        using var measure = Core.Diagnostics.Perf.Enabled && path is not null
+            ? Core.Diagnostics.Perf.Measure("quickview.show", isDirectory ? "folder" : Reporting.PerfDiagnostics.ExtensionKind(path))
+            : default;
         if (string.Equals(path, _path, StringComparison.OrdinalIgnoreCase) && !isDirectory)
         {
             return;

@@ -98,11 +98,13 @@ public partial class MainWindow : Window
                 settings.Watch();
             }
 
+            Reporting.PerfDiagnostics.RecordStartupMilestone("startup.window-loaded");
             StartStateTimer();
             App.Updates.UpdateReady += OnUpdateReady;
             await _left.NavigateAsync(leftStart, state.Left.CurrentName);
             await _right.NavigateAsync(rightStart, state.Right.CurrentName);
         };
+        ContentRendered += (_, _) => Reporting.PerfDiagnostics.RecordStartupMilestone("startup.first-render");
         DpiChanged += (_, _) => UpdateCellSize();
         PreviewTextInput += OnPreviewTextInput;
         PreviewKeyDown += OnPreviewArrowKey;
@@ -132,6 +134,7 @@ public partial class MainWindow : Window
                 settings.Changed -= OnSettingsFileChanged;
             }
 
+            Reporting.PerfDiagnostics.Stop();
             _keyHook?.Dispose();
             foreach (var tab in _tabs)
             {
@@ -181,6 +184,7 @@ public partial class MainWindow : Window
 
     private void OnThemeChanged(Themes.ColorTheme theme)
     {
+        using var measure = Core.Diagnostics.Perf.Measure("theme.apply");
         Background = PanelPalette.Background;
         QuickView.Theme = theme;
         IconProvider.OnColorThemeChanged();

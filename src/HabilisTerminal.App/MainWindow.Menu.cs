@@ -67,6 +67,7 @@ public partial class MainWindow
                 MenuCommand.Separator,
                 new MenuCommand("Keyboard help", "F1", ShowHelp),
                 new MenuCommand("Send feedback…", null, ShowFeedback),
+                new MenuCommand("Send performance report", null, () => Fire(SendPerformanceReportAsync())),
                 new MenuCommand("Check for updates", null, () => Fire(CheckForUpdatesAsync())),
                 new MenuCommand("About Habilis Terminal", null, ShowAbout),
             ]),
@@ -225,6 +226,26 @@ public partial class MainWindow
         }
 
         Close();
+    }
+
+    /// <summary>F9, Options (issue #130). Measuring is off by default, so say how to turn it on.</summary>
+    private async Task SendPerformanceReportAsync()
+    {
+        if (!Reporting.PerfDiagnostics.Running)
+        {
+            Toasts.Notify("performance-report", "Performance diagnostics are off", "Turn on diagnostics.performance in Settings, work for a while, then send the report.");
+            return;
+        }
+
+        var result = await Reporting.PerfDiagnostics.SendNowAsync();
+        var (title, text) = result switch
+        {
+            null => ("Nothing to send yet", "No measurements have been collected since the last report."),
+            { Link: { } link } => ("Performance report sent", link.Url),
+            { OpenedInBrowser: true } => ("Performance report", "This build cannot send by itself: the report opened in the browser. The data stays here until a report is sent."),
+            _ => ("Performance report not sent", (result.Error ?? "Unknown error.") + " The data stays here for the next attempt."),
+        };
+        Toasts.Notify("performance-report", title, text);
     }
 
     private void OnUpdateReady(string version) =>

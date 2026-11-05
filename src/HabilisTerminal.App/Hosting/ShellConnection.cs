@@ -13,7 +13,11 @@ public sealed class ShellConnection : ITerminalConnection, IDisposable
     public ShellConnection(ShellHost host)
     {
         Host = host;
-        Host.Output += text => TerminalOutput?.Invoke(this, new TerminalOutputEventArgs(text));
+        Host.Output += text =>
+        {
+            using var measure = Core.Diagnostics.Perf.Measure("console.output");
+            TerminalOutput?.Invoke(this, new TerminalOutputEventArgs(text));
+        };
     }
 
     public event EventHandler<TerminalOutputEventArgs>? TerminalOutput;

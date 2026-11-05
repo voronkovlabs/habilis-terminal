@@ -21,6 +21,9 @@ public sealed record AppPaths(string SettingsDirectory, string StateDirectory, b
     /// <summary>Crash reports waiting to be offered on the next start.</summary>
     public string CrashDirectory => Path.Combine(StateDirectory, "crashes");
 
+    /// <summary>Performance data waiting to be sent (issue #130).</summary>
+    public string DiagnosticsDirectory => Path.Combine(StateDirectory, "diagnostics");
+
     /// <summary>The user's plugins, one folder each (docs/plugins.md §3); next to the executable when portable.</summary>
     public string PluginsDirectory => Path.Combine(StateDirectory, "plugins");
 

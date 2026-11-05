@@ -189,6 +189,7 @@ public sealed class FileListView : FrameworkElement
 
     protected override void OnRender(DrawingContext drawingContext)
     {
+        using var measure = Core.Diagnostics.Perf.Measure("panel.render");
         var dc = drawingContext;
         dc.DrawRectangle(PanelPalette.Background, null, new Rect(RenderSize));
         if (_state is null)

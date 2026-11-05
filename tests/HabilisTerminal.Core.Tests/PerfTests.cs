@@ -1,0 +1,124 @@
+using HabilisTerminal.Core.Diagnostics;
+
+namespace HabilisTerminal.Core.Tests;
+
+public class PerfTests
+{
+    private static PerfOperation Operation(string name, long count, double wall, double? cpu, double max, params (int Bucket, int Count)[] buckets)
+    {
+        var values = new int[Perf.BucketCount];
+        foreach (var (bucket, amount) in buckets)
+        {
+            values[bucket] = amount;
+        }
+
+        return new PerfOperation(name, null, count, wall, cpu, max, values);
+    }
+
+    private static PerfPeriod Period(params PerfOperation[] operations) =>
+        new(new DateTime(2026, 11, 5, 10, 0, 0, DateTimeKind.Utc), new DateTime(2026, 11, 5, 10, 5, 0, DateTimeKind.Utc), operations, [], 1000, 10);
+
+    [Theory]
+    [InlineData(0.5, 0)]
+    [InlineData(1, 0)]
+    [InlineData(1.5, 1)]
+    [InlineData(4, 2)]
+    [InlineData(5, 3)]
+    [InlineData(1e9, Perf.BucketCount - 1)]
+    public void Durations_fall_into_doubling_buckets(double ms, int bucket) => Assert.Equal(bucket, Perf.BucketOf(ms));
+
+    [Theory]
+    [InlineData(90, 100, "computes")]
+    [InlineData(70, 100, "computes")]
+    [InlineData(50, 100, "mixed")]
+    [InlineData(30, 100, "waits")]
+    [InlineData(2, 100, "waits")]
+    [InlineData(0, 5, "too short to tell")]
+    public void Cpu_share_tells_computing_from_waiting(double cpu, double wall, string kind) => Assert.Equal(kind, PerfReport.Kind(cpu, wall));
+
+    [Fact]
+    public void Percentile_is_the_bucket_holding_it()
+    {
+        var operation = Operation("x", 100, 500, 100, 900, (1, 94), (5, 5), (10, 1));
+        Assert.Equal(32, PerfReport.Percentile95(operation)); // the 95th of 100 is in the 5th bucket, up to 32 ms
+    }
+
+    [Fact]
+    public void Percentile_is_not_above_the_longest()
+    {
+        var operation = Operation("x", 1, 3, 1, 3, (2, 1));
+        Assert.Equal(3, PerfReport.Percentile95(operation));
+    }
+
+    [Fact]
+    public void Periods_add_up()
+    {
+        var merged = Assert.Single(PerfReport.Merge([Period(Operation("x", 2, 10, 4, 7, (2, 2))), Period(Operation("x", 3, 20, null, 9, (2, 3)))]));
+        Assert.Equal(5, merged.Count);
+        Assert.Equal(30, merged.WallMs);
+        Assert.Equal(4, merged.CpuMs);
+        Assert.Equal(9, merged.MaxWallMs);
+        Assert.Equal(5, merged.Buckets[2]);
+    }
+
+    [Fact]
+    public void The_report_names_what_took_the_time()
+    {
+        var stall = new PerfStall(DateTime.UtcNow, 800, 40, 0, "panel.navigate", null);
+        var period = Period(Operation("panel.render", 10, 200, 190, 50, (5, 10))) with { Stalls = [stall] };
+        var draft = PerfReport.Build([period], "1.2.3", "Windows 11", 8);
+
+        Assert.Equal("Performance report 1.2.3", draft.Title);
+        Assert.Contains("performance", draft.Labels);
+        Assert.Contains("| panel.navigate | 1 | 800 | 800 | 5% | waits |", draft.Body, StringComparison.Ordinal);
+        Assert.Contains("panel.render", draft.Body, StringComparison.Ordinal);
+        Assert.Contains("computes", draft.Body, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void An_operation_without_cpu_reads_as_asynchronous()
+    {
+        var draft = PerfReport.Build([Period(Operation("panel.navigate", 1, 100, null, 100, (7, 1)))], "1", "W", 1);
+        Assert.Contains("asynchronous", draft.Body, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void The_store_keeps_periods_until_their_files_are_deleted()
+    {
+        var folder = Path.Combine(Path.GetTempPath(), "habi-tests", "perf-" + Guid.NewGuid().ToString("N"));
+        try
+        {
+            var store = new PerfStore(folder);
+            Assert.Equal(0, store.PendingBytes);
+            store.Append(Period(Operation("x", 1, 1, 1, 1, (0, 1))));
+            store.Append(Period(Operation("y", 1, 1, 1, 1, (0, 1))));
+            File.AppendAllText(Path.Combine(folder, $"perf-{Environment.ProcessId}.jsonl"), "{cut off" + Environment.NewLine);
+            Assert.True(store.PendingBytes > 0);
+
+            var (periods, files) = store.ReadPending();
+            Assert.Equal(2, periods.Count);
+
+            PerfStore.Delete(files);
+            Assert.Equal(0, store.PendingBytes);
+            Assert.Empty(store.ReadPending().Periods);
+        }
+        finally
+        {
+            if (Directory.Exists(folder))
+            {
+                Directory.Delete(folder, recursive: true);
+            }
+        }
+    }
+
+    [Fact]
+    public void Measuring_off_records_nothing()
+    {
+        Perf.Stop();
+        using (Perf.Measure("not.measured"))
+        {
+        }
+
+        Assert.DoesNotContain(Perf.TakePeriod()?.Operations ?? [], o => o.Name == "not.measured");
+    }
+}

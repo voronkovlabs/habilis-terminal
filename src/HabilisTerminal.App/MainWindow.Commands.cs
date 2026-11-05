@@ -21,6 +21,7 @@ public partial class MainWindow
     /// <summary>Keys intercepted before they reach either panels or terminal (SPEC §4, §5).</summary>
     private bool OnGlobalKey(Key key, KeyModifiers modifiers)
     {
+        using var measure = Core.Diagnostics.Perf.Measure("key");
         Trace($"key {modifiers}+{key} focusedPanel={FocusedPanel()?.Side ?? "-"} wpfLeft={_left.IsKeyboardFocused} wpfRight={_right.IsKeyboardFocused} win32={GetFocus():X}");
         switch (key)
         {

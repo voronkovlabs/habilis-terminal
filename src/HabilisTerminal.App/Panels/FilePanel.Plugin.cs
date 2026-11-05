@@ -89,6 +89,7 @@ public sealed partial class FilePanel
             return false;
         }
 
+        using var measure = Core.Diagnostics.Perf.MeasureAsync("plugin.list", session.Plugin.Id);
         _loading?.Cancel();
         var loading = new CancellationTokenSource();
         _loading = loading;

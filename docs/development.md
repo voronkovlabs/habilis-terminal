@@ -84,3 +84,9 @@ dotnet test -c Release --no-build
 - The strip sits below the console, which grows upwards over the panels, and shows only with two or more tabs. With both panels shown its height comes out of the panels, so the console keeps its size.
 - Each tab owns a pair of `FilePanel`s and their layout (#125); only the pair in front is in `Workspace.Children`, and the window's `_left`, `_right`, `_active` and layout are the front tab's. `SavePanels` and `LoadPanels` move them on a switch. Closing a tab or the window saves its configuration: a new tab and the next start open with the last closed one. A plugin stays live in its tab, but a saved configuration keeps only its local folder.
 - The tab's command line comes from the script (`command-line` over OSC 7731), the exit code from OSC 133;D. Without the integration script a tab has no running state, title or finish card.
+
+## Performance diagnostics (#130)
+- Setting `diagnostics.performance`, off by default. `Core/Diagnostics/Perf.cs` measures, `Reporting/PerfDiagnostics.cs` runs the UI watchdog and the files, `PerfReport` writes the issue.
+- A measuring point is one line: `using var measure = Perf.Measure("name", detail);` for work that stays on its thread (wall and CPU), `Perf.MeasureAsync` for work with awaits (wall only). Off, it costs one check. Details must be impersonal: reports go to public issues, so never a path, file name, command or typed text.
+- In a report, "computes" means optimise it, "waits" means make it asynchronous. A stall names the operation under way, or the dispatched method if none; one thread cannot read another's stack here, so add measuring points to narrow it down.
+- Files: `diagnostics` in the state folder. A created issue deletes them; a failed send keeps them, up to 20 MB. Automatic sends need the release token; without one the menu item opens the browser. `last-report.md` shows the last text prepared.

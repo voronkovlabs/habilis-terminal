@@ -506,6 +506,7 @@ public partial class MainWindow : IPluginWindow
     /// <summary>Runs a plugin operation with a progress card and Cancel; null when it failed (the message is shown).</summary>
     private async Task<OperationOutcome?> RunPluginOperationAsync(LoadedPlugin plugin, string title, Func<IOperationProgress, CancellationToken, Task<OperationOutcome>> work)
     {
+        using var measure = Core.Diagnostics.Perf.MeasureAsync("plugin.operation", plugin.Id);
         using var control = new OperationControl();
         var card = Toasts.Add(title, control);
         var progress = new PluginProgress(Dispatcher, () => card);
