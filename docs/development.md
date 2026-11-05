@@ -39,6 +39,8 @@ dotnet test -c Release --no-build
   - It builds Release, copies the output to `%TEMP%\habi-tests\<Name>` with a `portable` marker, starts it and prints the pid.
   - Thanks to the marker, settings and state stay next to the exe and never reach the owner's `%APPDATA%` or `%LOCALAPPDATA%`.
   - Use a new name each time, so every copy starts with a clean state.
+  - The running Explorer starts the copy, as a double click does, so it inherits nothing from the session running the script. A program started from an agent's session can behave differently: Acrobat showed a "Font Capture" error window on every PDF (#139), though clean environment variables did not help. Which part of the session causes it was not found. With `-NoLaunch` you start the copy yourself, for example to pass a test variable, and it inherits your session.
+  - A test that opens outside programs leaves their windows on the owner's screen. Close them, also after an interrupted run.
   - Close every copy you started when your checks are done: `tools/ui/Stop-TestCopies.ps1` stops every habi under `%TEMP%\habi-tests\` and prints what it stopped (never any other habi). Leave a copy running only when the owner asks ("запусти"), and tell them its path.
 - **Drive the window** with `tools/ui/uitool.ps1`. Always target the copy with `-Process pid:N`: the owner may be running their own habi at the same time.
   - **Keys.** `keys` only sends while the target is in the foreground. Once the owner's typing landed in a test window, so test in your own copy and never in theirs.

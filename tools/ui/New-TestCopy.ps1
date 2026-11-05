@@ -29,6 +29,12 @@ if ($WithPlugins) {
 
 if ($NoLaunch) { return $target }
 
-$process = Start-Process "$target\habi.exe" -WorkingDirectory $target -PassThru
+# The running Explorer starts it, as a double click does. Started from an agent's session, the copy and every program
+# it opens would inherit that session's state: Acrobat then failed with an error window (issue #139).
+$shell = New-Object -ComObject Shell.Application
+$desktop = $shell.Windows().FindWindowSW([ref]0, [ref]0, 8, [ref]0, 1)
+$desktop.Document.Application.ShellExecute("$target\habi.exe", '', $target, '', 1)
 Start-Sleep -Seconds 3
+$process = Get-Process habi -ErrorAction SilentlyContinue | Where-Object { $_.Path -eq "$target\habi.exe" } | Select-Object -First 1
+if (-not $process) { throw "$target\habi.exe did not start." }
 $process.Id
