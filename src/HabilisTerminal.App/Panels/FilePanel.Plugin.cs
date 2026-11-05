@@ -292,6 +292,15 @@ public sealed partial class FilePanel
         }
     }
 
+    /// <summary>The panel's console tab has closed: a plugin and a folder watch end with it.</summary>
+    internal void Release()
+    {
+        ClosePlugin();
+        _watcher?.Dispose();
+        _watcher = null;
+        SizeWorker.Cancel(this);
+    }
+
     /// <summary>Drops the plugin (the provider is disposed in the background); the caller shows a folder next.</summary>
     private void ClosePlugin()
     {

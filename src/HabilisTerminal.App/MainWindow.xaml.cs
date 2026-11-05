@@ -32,7 +32,7 @@ public partial class MainWindow : Window
     private FilePanel _right = new("Right");
     private FilePanel _active;
     private (bool Left, bool Right) _restoreVisibility = (true, true);
-    private readonly HiddenPanelReveal _reveal = new();
+    private HiddenPanelReveal _reveal = new();
     private bool _revealFromTerminal;
     private GlobalKeyHook? _keyHook;
     private System.Windows.Threading.DispatcherTimer? _themeReloadTimer;
@@ -70,23 +70,11 @@ public partial class MainWindow : Window
         WorkspaceLayout.SetRole(_right, WorkspaceRole.RightPanel);
         Workspace.Children.Add(_left);
         Workspace.Children.Add(_right);
-        foreach (var panel in new[] { _left, _right })
-        {
-            panel.Navigated += OnPanelNavigated;
-            panel.ExecuteRequested += OnPanelExecuteRequested;
-            panel.ArchiveRequested += (p, item, anyFormat) => Fire(OpenArchiveAsync(p, item, anyFormat));
-            panel.ShellMenuRequested += OnPanelShellMenuRequested;
-            panel.Changed += OnPanelChanged;
-            panel.GotKeyboardFocus += (_, _) => OnPanelFocused(panel);
-            panel.GotKeyboardFocus += (_, _) =>
-            {
-                CollapseConsole(stopGrowing: true); // issue #82
-                OnPanelGotFocus(panel); // issue #90: the panel gets the keys, the console keeps the Win32 focus
-            };
-        }
-
+        WirePanel(_left);
+        WirePanel(_right);
         LoadPlugins();
         RestoreLayout(state);
+        _lastClosed = state;
 
         var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
         var leftStart = StartPath(state.Left, home);
@@ -94,7 +82,9 @@ public partial class MainWindow : Window
         InitTabs();
         ShellIntegrated = _settings.ShellIntegration;
         WireWindowKeys();
-        ShowTab(CreateTab(_active == _right ? rightStart : leftStart));
+        var first = CreateTab(_active == _right ? rightStart : leftStart);
+        SavePanels(first);
+        ShowTab(first);
         UpdatePanelsShown(); // the layout was restored before the shell existed
 
         Loaded += async (_, _) =>
@@ -110,8 +100,8 @@ public partial class MainWindow : Window
 
             StartStateTimer();
             App.Updates.UpdateReady += OnUpdateReady;
-            await _left.NavigateAsync(leftStart);
-            await _right.NavigateAsync(rightStart);
+            await _left.NavigateAsync(leftStart, state.Left.CurrentName);
+            await _right.NavigateAsync(rightStart, state.Right.CurrentName);
         };
         DpiChanged += (_, _) => UpdateCellSize();
         PreviewTextInput += OnPreviewTextInput;
@@ -194,8 +184,11 @@ public partial class MainWindow : Window
         Background = PanelPalette.Background;
         QuickView.Theme = theme;
         IconProvider.OnColorThemeChanged();
-        _left.ApplyTheme();
-        _right.ApplyTheme();
+        foreach (var panel in AllPanels())
+        {
+            panel.ApplyTheme();
+        }
+
         if (PageHost?.Content is Editing.EditorPage editor)
         {
             editor.ApplyTheme(theme);

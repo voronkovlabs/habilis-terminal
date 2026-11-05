@@ -29,12 +29,6 @@ public partial class MainWindow : IPluginWindow
             Trace($"plugin {failed.Id} not loaded: {failed.Error}");
         }
 
-        foreach (var panel in new[] { _left, _right })
-        {
-            panel.PluginLocationChanged += (_, location) => _history.Add(location);
-            panel.PluginEntryActivated += (p, entry) => Fire(PluginViewAsync(p, entry));
-            panel.WaitToasts = () => Toasts;
-        }
     }
 
     /// <summary>Opens a folder, or a plugin address ("s3://...", "sqs:...") from history or the drive menu.</summary>

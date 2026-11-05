@@ -2,7 +2,10 @@ using System.IO;
 using System.Windows;
 using HabilisTerminal.App.Hosting;
 using HabilisTerminal.App.Layout;
+using HabilisTerminal.App.Panels;
 using HabilisTerminal.App.Widgets;
+using HabilisTerminal.Core.Panels;
+using HabilisTerminal.Core.Settings;
 using HabilisTerminal.Shell;
 using HabilisTerminal.Shell.Integration;
 
@@ -18,6 +21,9 @@ public partial class MainWindow
     private readonly ConsoleTabStrip _tabStrip = new();
     private ConsoleTab? _tab;
     private ConsoleHintButton? _hintButton;
+
+    /// <summary>The panel configuration of the last console closed (issue #125); a new tab opens with it.</summary>
+    private AppState _lastClosed = new();
 
     /// <summary>The last shell ended by itself: there is nothing left to ask about.</summary>
     private bool _lastShellExited;
@@ -112,7 +118,110 @@ public partial class MainWindow
         });
     }
 
-    /// <summary>Ctrl+Shift+T: a new shell in the active panel's folder.</summary>
+    /// <summary>Everything that belongs to one panel: its events go to the window, whichever tab it is in.</summary>
+    private void WirePanel(FilePanel panel)
+    {
+        panel.Navigated += OnPanelNavigated;
+        panel.ExecuteRequested += OnPanelExecuteRequested;
+        panel.ArchiveRequested += (p, item, anyFormat) => Fire(OpenArchiveAsync(p, item, anyFormat));
+        panel.ShellMenuRequested += OnPanelShellMenuRequested;
+        panel.Changed += OnPanelChanged;
+        panel.GotKeyboardFocus += (_, _) => OnPanelFocused(panel);
+        panel.GotKeyboardFocus += (_, _) =>
+        {
+            CollapseConsole(stopGrowing: true); // issue #82
+            OnPanelGotFocus(panel); // issue #90: the panel gets the keys, the console keeps the Win32 focus
+        };
+        panel.PluginLocationChanged += (_, location) => _history.Add(location);
+        panel.PluginEntryActivated += (p, entry) => Fire(PluginViewAsync(p, entry));
+        panel.WaitToasts = () => Toasts;
+    }
+
+    /// <summary>The panels of every tab: those in front are the window's, as Ctrl+U swaps them.</summary>
+    private IEnumerable<FilePanel> AllPanels()
+    {
+        yield return _left;
+        yield return _right;
+        foreach (var tab in _tabs.Where(t => t != _tab))
+        {
+            yield return tab.Left;
+            yield return tab.Right;
+        }
+    }
+
+    /// <summary>A new tab's panels, set up from a saved configuration; the folders open once they are in the window.</summary>
+    private void CreatePanels(ConsoleTab tab, AppState configuration)
+    {
+        tab.Left = new FilePanel("Left");
+        tab.Right = new FilePanel("Right");
+        WorkspaceLayout.SetRole(tab.Left, WorkspaceRole.LeftPanel);
+        WorkspaceLayout.SetRole(tab.Right, WorkspaceRole.RightPanel);
+        WirePanel(tab.Left);
+        WirePanel(tab.Right);
+        RestorePanel(tab.Left, configuration.Left);
+        RestorePanel(tab.Right, configuration.Right);
+        tab.LeftVisible = configuration.Left.Visible;
+        tab.RightVisible = configuration.Right.Visible;
+        var visible = (configuration.Left.Visible, configuration.Right.Visible);
+        tab.Active = PanelVisibilityRule.ActiveIsLeft(configuration.ActivePanel != "Right", visible, visible) ? tab.Left : tab.Right;
+        tab.TerminalRows = configuration.TerminalRows ?? Workspace.TerminalRows;
+        tab.SplitRatio = configuration.SplitRatio ?? Workspace.SplitRatio;
+        tab.SinglePanelRatio = configuration.SinglePanelRatio ?? Workspace.SinglePanelRatio;
+    }
+
+    /// <summary>The tab in front keeps its panels and layout in the window's fields; this gives them back to the tab.</summary>
+    private void SavePanels(ConsoleTab tab)
+    {
+        tab.Left = _left;
+        tab.Right = _right;
+        tab.Active = _active;
+        tab.LeftVisible = Workspace.LeftVisible;
+        tab.RightVisible = Workspace.RightVisible;
+        tab.RestoreVisibility = _restoreVisibility;
+        tab.Reveal = _reveal;
+        tab.RevealFromTerminal = _revealFromTerminal;
+        tab.TerminalRows = Workspace.TerminalRows;
+        tab.SplitRatio = Workspace.SplitRatio;
+        tab.SinglePanelRatio = Workspace.SinglePanelRatio;
+    }
+
+    private void LoadPanels(ConsoleTab tab)
+    {
+        if (_left != tab.Left || _right != tab.Right)
+        {
+            _left.HasKeys = false;
+            _right.HasKeys = false;
+            Workspace.Children.Remove(_left);
+            Workspace.Children.Remove(_right);
+            _left = tab.Left;
+            _right = tab.Right;
+            Workspace.Children.Add(_left);
+            Workspace.Children.Add(_right);
+        }
+
+        _restoreVisibility = tab.RestoreVisibility;
+        _reveal = tab.Reveal;
+        _revealFromTerminal = tab.RevealFromTerminal;
+        Workspace.LeftVisible = tab.LeftVisible;
+        Workspace.RightVisible = tab.RightVisible;
+        Workspace.TerminalRows = tab.TerminalRows;
+        Workspace.SplitRatio = tab.SplitRatio;
+        Workspace.SinglePanelRatio = tab.SinglePanelRatio;
+        Activate(tab.Active);
+    }
+
+    /// <summary>A tab's panel configuration, as it would be saved.</summary>
+    private static AppState Configuration(ConsoleTab tab) => new()
+    {
+        Left = Snapshot(tab.Left, tab.LeftVisible),
+        Right = Snapshot(tab.Right, tab.RightVisible),
+        ActivePanel = tab.Active == tab.Right ? "Right" : "Left",
+        TerminalRows = tab.TerminalRows,
+        SplitRatio = tab.SplitRatio,
+        SinglePanelRatio = tab.SinglePanelRatio,
+    };
+
+    /// <summary>Ctrl+Shift+T: a new shell with the panels of the last console closed; never closed one: like the one in front.</summary>
     private void NewTab()
     {
         if (IsPageOpen)
@@ -120,7 +229,17 @@ public partial class MainWindow
             return;
         }
 
-        var tab = CreateTab(StartFolder());
+        if (_lastClosed.Left.Path is null && _tab is { } current)
+        {
+            SavePanels(current);
+            _lastClosed = Configuration(current);
+        }
+
+        var configuration = _lastClosed;
+        var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+        var activeIsRight = configuration.ActivePanel == "Right" && configuration.Right.Visible;
+        var tab = CreateTab(StartPath(activeIsRight ? configuration.Right : configuration.Left, home));
+        CreatePanels(tab, configuration);
         tab.Terminal.Visibility = Visibility.Hidden;
         void OnTerminalLoaded(object sender, RoutedEventArgs e)
         {
@@ -130,12 +249,8 @@ public partial class MainWindow
 
         tab.Terminal.Loaded += OnTerminalLoaded;
         ShowTab(tab);
-    }
-
-    private string StartFolder()
-    {
-        var folder = _active.LocalPath;
-        return folder.Length > 0 && Directory.Exists(folder) ? folder : Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+        _ = tab.Left.NavigateAsync(StartPath(configuration.Left, home), configuration.Left.CurrentName);
+        _ = tab.Right.NavigateAsync(StartPath(configuration.Right, home), configuration.Right.CurrentName);
     }
 
     /// <summary>Ctrl+Tab and Ctrl+Shift+Tab; false with a single console, so that the key goes on to it.</summary>
@@ -150,16 +265,19 @@ public partial class MainWindow
         return true;
     }
 
-    /// <summary>Brings a tab to the front. The active panel goes to its folder, unless it shows a plugin.</summary>
+    /// <summary>Brings a tab to the front, with its own panels and layout (issue #125).</summary>
     private void ShowTab(ConsoleTab tab)
     {
         var previous = _tab;
+        ReleaseFrame();
         if (tab != previous && previous is not null)
         {
             previous.OverlayRows = Workspace.OverlayRows;
+            SavePanels(previous);
         }
 
         _tab = tab;
+        LoadPanels(tab);
         tab.Terminal.Visibility = Visibility.Visible;
         if (previous is not null && previous != tab)
         {
@@ -182,19 +300,12 @@ public partial class MainWindow
         }
 
         Toasts.Dismiss(FinishedCardKey(tab));
-        ReleaseFrame();
         UpdatePanelsShown();
         UpdatePanelKeys();
         UpdateTabStrip();
         if (tab.CommandRunning)
         {
             GrowConsole(tab.OverflowPosted.Rows, tab.OverflowPosted.Alternate);
-        }
-
-        if (!_active.IsPlugin && tab.Host.CurrentDirectory is { Length: > 0 } folder &&
-            !string.Equals(folder, _active.LocalPath, StringComparison.OrdinalIgnoreCase))
-        {
-            _ = _active.NavigateAsync(folder);
         }
 
         // The control may not have its window yet; StartTab then gives it the focus.
@@ -227,6 +338,12 @@ public partial class MainWindow
             }
         }
 
+        if (tab == _tab)
+        {
+            SavePanels(tab);
+        }
+
+        _lastClosed = Configuration(tab);
         var index = _tabs.IndexOf(tab);
         _tabs.Remove(tab);
         Toasts.Dismiss(FinishedCardKey(tab));
@@ -236,6 +353,8 @@ public partial class MainWindow
             ShowTab(_tabs[Core.Panels.ConsoleTabRules.AfterClosing(index, _tabs.Count)]);
         }
 
+        tab.Left.Release();
+        tab.Right.Release();
         Workspace.Children.Remove(tab.Terminal);
         tab.Dispose();
         (FindHwndHost(tab.Terminal) as IDisposable)?.Dispose();

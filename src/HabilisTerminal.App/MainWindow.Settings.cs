@@ -45,16 +45,21 @@ public partial class MainWindow
 
         if (previous is not null && previous.PanelsShowHidden != settings.PanelsShowHidden)
         {
-            _left.State.SetShowHidden(settings.PanelsShowHidden);
-            _right.State.SetShowHidden(settings.PanelsShowHidden);
+            foreach (var panel in AllPanels())
+            {
+                panel.State.SetShowHidden(settings.PanelsShowHidden);
+            }
+
             repaintPanels = true;
         }
 
         FilePanel.AutoFolderSizes = settings.PanelsFolderSizes;
         if (previous is not null && previous.PanelsFolderSizes != settings.PanelsFolderSizes)
         {
-            _left.RequestFolderSizes();
-            _right.RequestFolderSizes();
+            foreach (var panel in AllPanels())
+            {
+                panel.RequestFolderSizes();
+            }
         }
 
         QuickView.Settings = settings;
@@ -66,8 +71,10 @@ public partial class MainWindow
 
         if (repaintPanels && previous is not null)
         {
-            _left.InvalidatePanel();
-            _right.InvalidatePanel();
+            foreach (var panel in AllPanels())
+            {
+                panel.InvalidatePanel();
+            }
         }
 
         if (previous is not null && IsLoaded && (previous.TerminalFontFamily != settings.TerminalFontFamily || previous.TerminalFontSize != settings.TerminalFontSize))
@@ -267,6 +274,7 @@ public partial class MainWindow
         SelectedFirst = panel.State.SelectedFirst,
         ShowHidden = panel.State.ShowHidden,
         Visible = visible,
+        CurrentName = panel.IsPlugin || panel.State.Count == 0 || panel.State.Current.IsParent ? null : panel.State.Current.Name,
     };
 
     private void SaveState()

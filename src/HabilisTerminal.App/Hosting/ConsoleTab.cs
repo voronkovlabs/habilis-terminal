@@ -1,4 +1,5 @@
 using System.IO;
+using HabilisTerminal.App.Panels;
 using HabilisTerminal.Core.Panels;
 using HabilisTerminal.Shell.Integration;
 using Microsoft.Terminal.Wpf;
@@ -45,6 +46,29 @@ internal sealed class ConsoleTab : IDisposable
     public int? LastExitCode { get; set; }
 
     public ConsoleTabMark Mark { get; set; }
+
+    // The tab's own panels and their layout (issue #125): current while the tab is not in front; the window holds them while it is.
+    public FilePanel Left { get; set; } = null!;
+
+    public FilePanel Right { get; set; } = null!;
+
+    public FilePanel Active { get; set; } = null!;
+
+    public bool LeftVisible { get; set; } = true;
+
+    public bool RightVisible { get; set; } = true;
+
+    public (bool Left, bool Right) RestoreVisibility { get; set; } = (true, true);
+
+    public HiddenPanelReveal Reveal { get; set; } = new();
+
+    public bool RevealFromTerminal { get; set; }
+
+    public int TerminalRows { get; set; }
+
+    public double SplitRatio { get; set; }
+
+    public double SinglePanelRatio { get; set; }
 
     /// <summary>The tab's colour in the strip and on the panel frame (issue #120).</summary>
     public int ColorIndex { get; set; }

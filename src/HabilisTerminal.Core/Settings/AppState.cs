@@ -21,6 +21,9 @@ public sealed record PanelSnapshot
     public bool? ShowHidden { get; init; }
 
     public bool Visible { get; init; } = true;
+
+    /// <summary>The item under the cursor (issue #125).</summary>
+    public string? CurrentName { get; init; }
 }
 
 /// <summary>Restored (not maximised) window bounds in physical pixels, workspace coordinates (<c>GetWindowPlacement</c>).</summary>
