@@ -20,6 +20,11 @@
     <ConptyRequiresx64Host Condition="'$(RuntimeIdentifier)' == 'win-x64'">true</ConptyRequiresx64Host>
     <ConptyRequiresARM64Host Condition="'$(RuntimeIdentifier)' == 'win-x64' Or '$(RuntimeIdentifier)' == 'win-arm64'">true</ConptyRequiresARM64Host>
   </PropertyGroup>
+  <PropertyGroup>
+    <!-- Startup (issue #136): published code comes compiled, and less compiling goes on in the background afterwards. -->
+    <PublishReadyToRun>true</PublishReadyToRun>
+    <TieredPGO>false</TieredPGO>
+  </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="AvalonEdit" />
     <PackageReference Include="CI.Microsoft.Terminal.Wpf" />

@@ -62,6 +62,23 @@ public class PerfTests
     }
 
     [Fact]
+    public void Cpu_of_threads_that_ended_is_the_difference_from_the_process()
+    {
+        var sampled = Period() with { Threads = [new PerfThread("UI thread", 300), new PerfThread("Folder sizes", 200)] };
+        Assert.Equal(500, PerfReport.EndedThreadsCpuMs([sampled, Period()])); // a period with no thread data says nothing
+        var draft = PerfReport.Build([sampled], "1.2.3", "Windows 11", 8);
+        Assert.Contains("Threads that ended before their last sample", draft.Body);
+    }
+
+    [Fact]
+    public void A_stall_with_no_operation_is_named_by_its_window_message()
+    {
+        var stall = new PerfStall(DateTime.UtcNow, 800, 40, 0, null, PerfReport.WindowMessagePrefix + "WM_TIMER");
+        var draft = PerfReport.Build([Period() with { Stalls = [stall] }], "1.2.3", "Windows 11", 8);
+        Assert.Contains("| window message WM_TIMER | 1 |", draft.Body);
+    }
+
+    [Fact]
     public void The_report_names_what_took_the_time()
     {
         var stall = new PerfStall(DateTime.UtcNow, 800, 40, 0, "panel.navigate", null);

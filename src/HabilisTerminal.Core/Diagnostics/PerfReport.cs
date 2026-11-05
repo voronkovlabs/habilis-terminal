@@ -66,6 +66,9 @@ public sealed class PerfStore(string directory)
 /// <summary>Merges periods into the text of an issue: what took the time, and whether it computed or waited.</summary>
 public static class PerfReport
 {
+    /// <summary>Marks a stall's Dispatched as the window message under way, as no dispatcher operation was.</summary>
+    public const string WindowMessagePrefix = "window message ";
+
     private const int MaxOperations = 80;
     private const int MaxStalls = 40;
     private const int MaxLongestStalls = 15;
@@ -134,12 +137,15 @@ public static class PerfReport
     /// <summary>Where the process's CPU went, including what no measuring point covers.</summary>
     private static void AppendThreads(StringBuilder text, IReadOnlyList<PerfPeriod> periods)
     {
-        var threads = periods.SelectMany(p => p.Threads ?? []).GroupBy(t => t.Name)
-            .Select(g => (Name: g.Key, CpuMs: g.Sum(t => t.CpuMs))).Where(t => t.CpuMs >= 1).OrderByDescending(t => t.CpuMs).Take(MaxThreads).ToList();
+        var sampled = periods.Where(p => p.Threads is not null).ToList();
+        var threads = sampled.SelectMany(p => p.Threads!).GroupBy(t => t.Name)
+            .Select(g => (Name: g.Key, CpuMs: g.Sum(t => t.CpuMs))).Where(t => t.CpuMs >= 1).OrderByDescending(t => t.CpuMs).ToList();
         if (threads.Count == 0)
         {
             return;
         }
+
+        var ended = EndedThreadsCpuMs(sampled);
 
         var culture = CultureInfo.InvariantCulture;
         text.AppendLine("## CPU by thread");
@@ -147,13 +153,23 @@ public static class PerfReport
         text.AppendLine();
         text.AppendLine("| Thread | CPU, s |");
         text.AppendLine("|---|---:|");
-        foreach (var (name, cpu) in threads)
+        foreach (var (name, cpu) in threads.Take(MaxThreads))
         {
             text.AppendLine(culture, $"| {Cell(name)} | {cpu / 1000:0.0} |");
         }
 
+        if (threads.Count > MaxThreads)
+        {
+            text.AppendLine(culture, $"| Other threads | {threads.Skip(MaxThreads).Sum(t => t.CpuMs) / 1000:0.0} |");
+        }
+
+        text.AppendLine(culture, $"| Threads that ended before their last sample (the process's total minus the above) | {ended / 1000:0.0} |");
         text.AppendLine();
     }
+
+    /// <summary>The process's CPU that no sampled thread accounts for.</summary>
+    public static double EndedThreadsCpuMs(IEnumerable<PerfPeriod> periods) =>
+        Math.Max(0, periods.Where(p => p.Threads is not null).Sum(p => p.ProcessCpuMs - p.Threads!.Sum(t => t.CpuMs)));
 
     /// <summary>Periods added up, by operation and detail.</summary>
     public static IReadOnlyList<PerfOperation> Merge(IEnumerable<PerfPeriod> periods) =>
@@ -205,7 +221,12 @@ public static class PerfReport
     }
 
     private static string StallName(PerfStall stall) =>
-        stall.Operation ?? (stall.Dispatched is { Length: > 0 } dispatched ? $"dispatched: {dispatched}" : "window messages, nothing named");
+        stall.Operation ?? stall.Dispatched switch
+        {
+            null or "" => "window messages, nothing named",
+            { } message when message.StartsWith(WindowMessagePrefix, StringComparison.Ordinal) => message,
+            { } dispatched => $"dispatched: {dispatched}",
+        };
 
     private static string Share(double cpuMs, double wallMs) =>
         wallMs > 0 ? string.Create(CultureInfo.InvariantCulture, $"{Math.Min(1, cpuMs / wallMs) * 100:0}%") : "-";

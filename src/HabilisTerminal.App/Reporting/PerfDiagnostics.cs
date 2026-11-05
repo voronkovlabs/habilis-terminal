@@ -2,6 +2,7 @@ using System.Diagnostics;
 using System.IO;
 using System.Reflection;
 using System.Runtime.InteropServices;
+using System.Windows.Interop;
 using System.Windows.Threading;
 using HabilisTerminal.Core.Diagnostics;
 using HabilisTerminal.Core.Reporting;
@@ -20,12 +21,15 @@ internal static class PerfDiagnostics
     private const double StallMs = 100;
     private const uint ThreadQueryLimitedInformation = 0x0800;
     private static readonly TimeSpan FlushEvery = TimeSpan.FromSeconds(30);
+    private static readonly TimeSpan SampleThreadsEvery = TimeSpan.FromSeconds(5);
     private static readonly TimeSpan RetryAfter = TimeSpan.FromMinutes(30);
     private static readonly PropertyInfo? OperationName = typeof(DispatcherOperation).GetProperty("Name", BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public);
 
     private static Dispatcher? _dispatcher;
     private static PerfStore? _store;
     private static Timer? _flush;
+    private static Timer? _threadSampling;
+    private static volatile int _lastMessage;
     private static Thread? _watchdog;
     private static volatile bool _running;
     private static volatile string? _dispatched;
@@ -70,10 +74,13 @@ internal static class PerfDiagnostics
             dispatcher.Hooks.OperationStarted -= OnOperationStarted;
             dispatcher.Hooks.OperationCompleted -= OnOperationEnded;
             dispatcher.Hooks.OperationAborted -= OnOperationEnded;
+            ComponentDispatcher.ThreadFilterMessage -= OnThreadMessage;
         }
 
         _flush?.Dispose();
         _flush = null;
+        _threadSampling?.Dispose();
+        _threadSampling = null;
         Flush();
     }
 
@@ -107,11 +114,34 @@ internal static class PerfDiagnostics
         dispatcher.Hooks.OperationStarted += OnOperationStarted;
         dispatcher.Hooks.OperationCompleted += OnOperationEnded;
         dispatcher.Hooks.OperationAborted += OnOperationEnded;
+        ComponentDispatcher.ThreadFilterMessage += OnThreadMessage;
         var uiThread = OpenThread(ThreadQueryLimitedInformation, false, GetCurrentThreadId());
         _watchdog = new Thread(() => Watch(dispatcher, uiThread)) { IsBackground = true, Name = "Performance watchdog" };
         _watchdog.Start();
         _flush = new Timer(_ => FlushAndMaybeSend(), null, FlushEvery, FlushEvery);
+        _threadSampling = new Timer(_ => SampleThreads(), null, SampleThreadsEvery, SampleThreadsEvery);
     }
+
+    /// <summary>The window message under way names a stall that no dispatcher operation explains. Only its number is kept.</summary>
+    private static void OnThreadMessage(ref MSG msg, ref bool handled) => _lastMessage = msg.message;
+
+    private static string? MessageName(int message) => message switch
+    {
+        0 => null,
+        0x000F => "WM_PAINT",
+        0x0100 => "WM_KEYDOWN",
+        0x0101 => "WM_KEYUP",
+        0x0102 => "WM_CHAR",
+        0x0104 => "WM_SYSKEYDOWN",
+        0x0105 => "WM_SYSKEYUP",
+        0x0113 => "WM_TIMER",
+        0x0200 => "WM_MOUSEMOVE",
+        0x0201 => "WM_LBUTTONDOWN",
+        0x0202 => "WM_LBUTTONUP",
+        0x020A => "WM_MOUSEWHEEL",
+        >= 0xC000 => "registered",
+        _ => string.Create(System.Globalization.CultureInfo.InvariantCulture, $"0x{message:X4}"),
+    };
 
     private static void OnOperationStarted(object? sender, DispatcherHookEventArgs e)
     {
@@ -157,7 +187,7 @@ internal static class PerfDiagnostics
                 {
                     sampled = true;
                     operation = Perf.UiOperation;
-                    dispatched = _dispatched;
+                    dispatched = _dispatched ?? (MessageName(_lastMessage) is { } message ? PerfReport.WindowMessagePrefix + message : null);
                 }
             }
 
@@ -175,7 +205,19 @@ internal static class PerfDiagnostics
     {
         try
         {
-            if (Perf.TakePeriod(ThreadCpu()) is { } period)
+            SampleThreads();
+            PerfPeriod? period;
+            lock (ThreadGate)
+            {
+                // A period with no activity is not kept, so what its threads used waits for the next one.
+                period = Perf.TakePeriod([.. ThreadCpuPending.Select(pair => new PerfThread(pair.Key, pair.Value))]);
+                if (period is not null)
+                {
+                    ThreadCpuPending.Clear();
+                }
+            }
+
+            if (period is not null)
             {
                 _store?.Append(period);
             }
@@ -186,39 +228,60 @@ internal static class PerfDiagnostics
         }
     }
 
-    private static readonly Dictionary<int, double> ThreadCpuSeen = [];
+    private static readonly Lock ThreadGate = new();
+    private static readonly Dictionary<string, double> ThreadCpuPending = new(StringComparer.Ordinal);
+    private static Dictionary<int, double> _threadCpuSeen = [];
 
-    /// <summary>CPU per thread since the last call, by name. What ended meanwhile cannot be asked, so it shows as a difference.</summary>
-    private static List<PerfThread> ThreadCpu()
+    /// <summary>
+    /// Adds what each thread used since the last sample, by name. What a thread used after its last sample cannot be asked
+    /// for once it has ended, so the report shows that as a difference from the process's total.
+    /// </summary>
+    private static void SampleThreads()
     {
-        var byName = new Dictionary<string, double>(StringComparer.Ordinal);
-        using var process = Process.GetCurrentProcess();
-        var modules = Modules(process);
-        foreach (ProcessThread thread in process.Threads)
+        lock (ThreadGate)
         {
-            using (thread)
+            try
             {
-                double cpu;
-                try
+                using var process = Process.GetCurrentProcess();
+                var modules = new Lazy<List<(long Start, long End, string Name)>>(() => Modules(process));
+                var seenNow = new Dictionary<int, double>();
+                foreach (ProcessThread thread in process.Threads)
                 {
-                    cpu = thread.TotalProcessorTime.TotalMilliseconds;
-                }
-                catch (Exception ex) when (ex is InvalidOperationException or System.ComponentModel.Win32Exception or NotSupportedException)
-                {
-                    continue; // it has just ended
+                    using (thread)
+                    {
+                        double cpu;
+                        try
+                        {
+                            cpu = thread.TotalProcessorTime.TotalMilliseconds;
+                        }
+                        catch (Exception ex) when (ex is InvalidOperationException or System.ComponentModel.Win32Exception or NotSupportedException)
+                        {
+                            continue; // it has just ended
+                        }
+
+                        seenNow[thread.Id] = cpu;
+                        var seen = _threadCpuSeen.GetValueOrDefault(thread.Id);
+
+                        // Less than before: Windows gave the id of an ended thread to a new one.
+                        var used = cpu >= seen ? cpu - seen : cpu;
+                        if (used > 0)
+                        {
+                            var name = ThreadName(thread, modules);
+                            ThreadCpuPending[name] = ThreadCpuPending.GetValueOrDefault(name) + used;
+                        }
+                    }
                 }
 
-                _ = ThreadCpuSeen.TryGetValue(thread.Id, out var seen);
-                ThreadCpuSeen[thread.Id] = cpu;
-                var name = ThreadName(thread, modules);
-                byName[name] = byName.GetValueOrDefault(name) + (cpu - seen);
+                _threadCpuSeen = seenNow;
+            }
+            catch (Exception ex) when (ex is InvalidOperationException or System.ComponentModel.Win32Exception or NotSupportedException)
+            {
+                MainWindow.Trace($"threads not sampled: {ex.Message}");
             }
         }
-
-        return [.. byName.Select(pair => new PerfThread(pair.Key, pair.Value))];
     }
 
-    private static string ThreadName(ProcessThread thread, List<(long Start, long End, string Name)> modules)
+    private static string ThreadName(ProcessThread thread, Lazy<List<(long Start, long End, string Name)>> modules)
     {
         if (thread.Id == _uiThreadId)
         {
@@ -249,7 +312,7 @@ internal static class PerfDiagnostics
         try
         {
             var start = thread.StartAddress.ToInt64();
-            foreach (var (from, to, name) in modules)
+            foreach (var (from, to, name) in modules.Value)
             {
                 if (start >= from && start < to)
                 {

@@ -1,5 +1,6 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using HabilisTerminal.Core.Diagnostics;
 using HabilisTerminal.Core.FileSystem;
 using HabilisTerminal.Core.Panels;
 
@@ -70,9 +71,17 @@ public sealed record AppState
     public IReadOnlyDictionary<string, string> PluginHotkeys { get; init; } = new Dictionary<string, string>();
 }
 
-/// <summary>Reads and writes state.json atomically; a missing or broken file gives the defaults.</summary>
+/// <summary>
+/// Reads and writes state.json atomically; a missing or broken file gives the defaults. Writing can wait for the disk for
+/// a long time, so the periodic save runs in the background (issue #136). The newest state asked for wins, in any order.
+/// </summary>
 public sealed class StateStore(string path)
 {
+    private readonly Lock _gate = new();
+    private long _lastTicket;
+    private long _writtenTicket;
+    private string? _writtenText;
+
     private static readonly JsonSerializerOptions Options = new()
     {
         WriteIndented = true,
@@ -94,5 +103,45 @@ public sealed class StateStore(string path)
         }
     }
 
-    public void Save(AppState state) => SettingsStore.WriteAtomically(FilePath, JsonSerializer.Serialize(state, Options));
+    /// <summary>Writes now, on this thread: for when the app is about to exit.</summary>
+    public void Save(AppState state) => Write(state, Interlocked.Increment(ref _lastTicket));
+
+    /// <summary>Writes on another thread. <paramref name="state"/> must not change afterwards.</summary>
+    public Task SaveInBackground(AppState state, Action<Exception>? failed = null)
+    {
+        var ticket = Interlocked.Increment(ref _lastTicket);
+        return Task.Run(() =>
+        {
+            try
+            {
+                Write(state, ticket);
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                failed?.Invoke(ex);
+            }
+        });
+    }
+
+    private void Write(AppState state, long ticket)
+    {
+        using var measure = Perf.Measure("state.save");
+        lock (_gate)
+        {
+            if (ticket < _writtenTicket)
+            {
+                return; // a newer state is already on the disk
+            }
+
+            // Most minutes nothing changed: the disk is left alone then.
+            var text = JsonSerializer.Serialize(state, Options);
+            if (text != _writtenText || !File.Exists(FilePath))
+            {
+                SettingsStore.WriteAtomically(FilePath, text);
+                _writtenText = text;
+            }
+
+            _writtenTicket = ticket;
+        }
+    }
 }

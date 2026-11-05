@@ -206,11 +206,17 @@ public sealed class FileListView : FrameworkElement
         var pixelsPerDip = VisualTreeHelper.GetDpi(this).PixelsPerDip;
         var columns = ColumnCount;
         var rows = RowsPerColumn;
-        var details = PanelColumns.DetailColumns(_state);
+        IReadOnlyList<ColumnSpec> details;
+        using (Core.Diagnostics.Perf.Measure("panel.render.columns"))
+        {
+            details = PanelColumns.DetailColumns(_state);
+        }
+
         var columnWidth = ActualWidth / columns;
 
         if (HasHeader)
         {
+            using var header = Core.Diagnostics.Perf.Measure("panel.render.header");
             DrawHeader(dc, details, pixelsPerDip);
         }
 
@@ -236,6 +242,7 @@ public sealed class FileListView : FrameworkElement
 
         if (VisibleRange != _reportedRange)
         {
+            using var range = Core.Diagnostics.Perf.Measure("panel.render.visible-range");
             _reportedRange = VisibleRange;
             VisibleRangeChanged?.Invoke(_reportedRange.Top, _reportedRange.Count);
         }
@@ -443,7 +450,13 @@ public sealed class FileListView : FrameworkElement
         }
 
         // A plugin row may carry a tone (issue #49): it colours the row unless it is marked or under the cursor.
-        var tone = !item.IsParent && state.Extension is { } extension ? PanelPalette.Tone(extension.Tone(item.Entry)) : null;
+        Brush? tone = null;
+        if (!item.IsParent && state.Extension is { } extension)
+        {
+            using var plugin = Core.Diagnostics.Perf.Measure("panel.render.plugin");
+            tone = PanelPalette.Tone(extension.Tone(item.Entry));
+        }
+
         var cursorFocused = isCursor && IsActivePanel && HasPanelFocus;
         var foreground = isMarked ? PanelPalette.MarkedForeground
             : cursorFocused ? PanelPalette.ActiveSelectionForeground
@@ -478,9 +491,17 @@ public sealed class FileListView : FrameworkElement
                     folderSize = item.Entry.IsDirectory && !item.IsParent ? state.FolderSizeOf(item.Name) : null;
                 }
 
-                var text = column.Kind == ColumnKind.Custom
-                    ? (item.IsParent ? string.Empty : state.Extension?.Cell(item.Entry, column.Key!)?.Text ?? string.Empty)
-                    : PanelColumns.FormatCell(column.Kind, item, state.Culture, folderSize, AutoSizedFolders);
+                string text;
+                if (column.Kind == ColumnKind.Custom)
+                {
+                    using var plugin = Core.Diagnostics.Perf.Measure("panel.render.plugin");
+                    text = item.IsParent ? string.Empty : state.Extension?.Cell(item.Entry, column.Key!)?.Text ?? string.Empty;
+                }
+                else
+                {
+                    text = PanelColumns.FormatCell(column.Kind, item, state.Culture, folderSize, AutoSizedFolders);
+                }
+
                 // On the focused cursor row the details use the selection colour, like the name: the description
                 // colour can match the selection background (the Far theme's teal, issue #42).
                 var brush = isMarked ? PanelPalette.MarkedForeground
@@ -542,7 +563,14 @@ public sealed class FileListView : FrameworkElement
             _textCache[(text, brush, bold)] = formatted;
         }
 
-        formatted.MaxTextWidth = width;
+        using var drawing = Core.Diagnostics.Perf.Measure("panel.render.text");
+
+        // Setting it, even to the same value, throws away the layout the cache is there to keep (issue #136).
+        if (formatted.MaxTextWidth != width)
+        {
+            formatted.MaxTextWidth = width;
+        }
+
         var textX = alignRight ? x + Math.Max(0, width - formatted.WidthIncludingTrailingWhitespace) : x;
         dc.DrawText(formatted, new Point(textX, y + ((height - formatted.Height) / 2)));
     }

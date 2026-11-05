@@ -170,6 +170,43 @@ public class SettingsTests
     }
 
     [Fact]
+    public async Task State_saved_in_the_background_reaches_the_disk()
+    {
+        using var sandbox = new TestSandbox();
+        var store = new StateStore(Path.Combine(sandbox.Path, "state.json"));
+        await store.SaveInBackground(new AppState { ActivePanel = "Right" });
+        Assert.Equal("Right", store.Load().ActivePanel);
+    }
+
+    [Fact]
+    public async Task A_late_background_save_does_not_overwrite_a_newer_state()
+    {
+        using var sandbox = new TestSandbox();
+        var store = new StateStore(Path.Combine(sandbox.Path, "state.json"));
+        var saves = Enumerable.Range(1, 50).Select(i => store.SaveInBackground(new AppState { TerminalRows = i })).ToList();
+        store.Save(new AppState { TerminalRows = 99 });
+        await Task.WhenAll(saves);
+        Assert.Equal(99, store.Load().TerminalRows);
+    }
+
+    [Fact]
+    public void An_unchanged_state_leaves_the_disk_alone()
+    {
+        using var sandbox = new TestSandbox();
+        var path = Path.Combine(sandbox.Path, "state.json");
+        var store = new StateStore(path);
+        store.Save(new AppState { TerminalRows = 5 });
+        var old = new DateTime(2020, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+        File.SetLastWriteTimeUtc(path, old);
+
+        store.Save(new AppState { TerminalRows = 5 });
+        Assert.Equal(old, File.GetLastWriteTimeUtc(path));
+
+        store.Save(new AppState { TerminalRows = 6 });
+        Assert.NotEqual(old, File.GetLastWriteTimeUtc(path));
+    }
+
+    [Fact]
     public void State_round_trips_and_survives_a_broken_file()
     {
         using var sandbox = new TestSandbox();

@@ -1,3 +1,4 @@
+using System.Collections.Immutable;
 using System.Runtime.InteropServices;
 using HabilisTerminal.Core.Viewing;
 
@@ -26,6 +27,8 @@ public sealed class FolderSizeWorker : IDisposable
     private HashSet<object> _currentOwners = [];
     private CancellationTokenSource? _currentCancel;
     private readonly Dictionary<string, Paused> _paused = new(StringComparer.OrdinalIgnoreCase);
+    private ImmutableDictionary<object, VisibleList> _visible = ImmutableDictionary<object, VisibleList>.Empty;
+    private long _visibleOrder;
     private volatile bool _scheduleChanged;
     private bool _disposed;
     private long _nextNotify;
@@ -111,9 +114,11 @@ public sealed class FolderSizeWorker : IDisposable
     /// </summary>
     public void Request(object owner, IEnumerable<string> paths)
     {
+        using var measure = Diagnostics.Perf.Measure("folder.size.request");
         var wanted = paths.Where(p => !Cache.HasFinal(p)).ToArray();
         lock (_lock)
         {
+            ApplyVisible();
             _queue.Set(owner, wanted);
             if (_current is { } current)
             {
@@ -134,22 +139,26 @@ public sealed class FolderSizeWorker : IDisposable
         }
     }
 
-    /// <summary>The owner's visible folders: they go first.</summary>
+    /// <summary>
+    /// The owner's visible folders: they go first. Called while a panel draws, so it must not wait for the lock: this
+    /// thread holds it at the lowest priority and may be held up itself, which would freeze the window (issue #136).
+    /// The worker takes the newest list of each owner when it next looks at the schedule.
+    /// </summary>
     public void SetVisible(object owner, IEnumerable<string> paths)
     {
-        var visible = paths.ToArray();
-        lock (_lock)
-        {
-            _queue.SetVisible(owner, visible);
-            _scheduleChanged = true;
-        }
+        var visible = new VisibleList(Interlocked.Increment(ref _visibleOrder), [.. paths]);
+        ImmutableInterlocked.AddOrUpdate(ref _visible, owner, visible, (_, _) => visible);
+        _scheduleChanged = true;
     }
 
     /// <summary>The owner left its folder: everything it asked for is dropped, its running count stopped.</summary>
     public void Cancel(object owner)
     {
+        using var measure = Diagnostics.Perf.Measure("folder.size.cancel");
+        ImmutableInterlocked.TryRemove(ref _visible, owner, out _);
         lock (_lock)
         {
+            ApplyVisible();
             _queue.Cancel(owner);
             DropCurrentOwner(owner);
             DropUnwantedPaused();
@@ -210,8 +219,14 @@ public sealed class FolderSizeWorker : IDisposable
             {
                 string? next;
                 IReadOnlyList<object> owners;
-                while ((next = _queue.TakeNext(out owners)) is null && !_disposed)
+                while (true)
                 {
+                    ApplyVisible();
+                    if ((next = _queue.TakeNext(out owners)) is not null || _disposed)
+                    {
+                        break;
+                    }
+
                     if (_dirty)
                     {
                         break;
@@ -268,6 +283,8 @@ public sealed class FolderSizeWorker : IDisposable
         }
     }
 
+    private sealed record VisibleList(long Order, string[] Paths);
+
     private void Count(string path, Paused? resumed, CancellationToken token)
     {
         using var measure = Diagnostics.Perf.Enabled ? Diagnostics.Perf.Measure("folder.size", Diagnostics.Perf.DriveKind(path)) : default;
@@ -311,6 +328,16 @@ public sealed class FolderSizeWorker : IDisposable
         Changed();
     }
 
+    /// <summary>Under the lock: brings the schedule up to date with <see cref="SetVisible"/>, in the order of the calls.</summary>
+    private void ApplyVisible()
+    {
+        var pending = Interlocked.Exchange(ref _visible, ImmutableDictionary<object, VisibleList>.Empty);
+        foreach (var (owner, list) in pending.OrderBy(entry => entry.Value.Order))
+        {
+            _queue.SetVisible(owner, list.Paths);
+        }
+    }
+
     /// <summary>After each folder: pause when the schedule changed and a visible folder now ranks higher.</summary>
     private bool ShouldPause()
     {
@@ -327,6 +354,7 @@ public sealed class FolderSizeWorker : IDisposable
         lock (_lock)
         {
             _scheduleChanged = false;
+            ApplyVisible();
             return _current is { } current && _queue.ShouldYield(current, _currentOwners);
         }
     }

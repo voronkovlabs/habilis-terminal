@@ -284,9 +284,9 @@ public partial class MainWindow
         CurrentName = panel.IsPlugin || panel.State.Count == 0 || panel.State.Current.IsParent ? null : panel.State.Current.Name,
     };
 
+    /// <summary>For an exit: the state must be on the disk when this returns.</summary>
     private void SaveState()
     {
-        using var measure = Perf.Measure("state.save");
         try
         {
             App.State?.Save(CaptureState());
@@ -297,10 +297,27 @@ public partial class MainWindow
         }
     }
 
+    /// <summary>The state is read here and written on another thread, as the disk can keep it waiting (issue #136).</summary>
+    private void SaveStateInBackground()
+    {
+        if (App.State is not { } store)
+        {
+            return;
+        }
+
+        AppState state;
+        using (Perf.Measure("state.capture"))
+        {
+            state = CaptureState();
+        }
+
+        _ = store.SaveInBackground(state, ex => Trace($"state not saved: {ex.Message}"));
+    }
+
     /// <summary>State is also written every minute, so a crash loses little (SPEC §14).</summary>
     private void StartStateTimer()
     {
-        _stateTimer = new System.Windows.Threading.DispatcherTimer(TimeSpan.FromMinutes(1), System.Windows.Threading.DispatcherPriority.Background, (_, _) => SaveState(), Dispatcher);
+        _stateTimer = new System.Windows.Threading.DispatcherTimer(TimeSpan.FromMinutes(1), System.Windows.Threading.DispatcherPriority.Background, (_, _) => SaveStateInBackground(), Dispatcher);
         _stateTimer.Start();
     }
 
