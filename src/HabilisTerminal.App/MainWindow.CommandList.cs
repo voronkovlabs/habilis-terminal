@@ -160,7 +160,7 @@ public partial class MainWindow
         "console.copy" => () => CopyTerminalSelection(),
         "console.paste" => PasteIntoTerminal,
         "plugins.menu" => () => Fire(ShowPluginMenuAsync()),
-        "plugins.configure" => () => Fire(ShowPluginsConfigurationAsync()),
+        "plugins.configure" => OpenPluginsPage,
         "plugins.panelCommands" => () => Fire(ShowPluginCommandsAsync(_active)),
         "settings.open" => OpenSettingsPage,
         "settings.file" => OpenSettingsFile,

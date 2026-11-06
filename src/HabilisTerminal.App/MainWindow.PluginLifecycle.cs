@@ -28,9 +28,15 @@ public partial class MainWindow : IPluginApiHandler
     private Task<T> OnUiAsync<T>(Func<Task<T>> work) => Dispatcher.InvokeAsync(work).Task.Unwrap();
 
     Task<IReadOnlyList<PluginApiEntry>> IPluginApiHandler.ListAsync() =>
-        OnUiAsync<IReadOnlyList<PluginApiEntry>>(() => Task.FromResult<IReadOnlyList<PluginApiEntry>>(_plugins.Plugins.Select(p => new PluginApiEntry(
-            p.Id, p.Name, p.Manifest?.Version, p.Manifest?.Sdk, p.Folder, p.Source, p.Instance is null ? "failed" : "loaded", p.Error, p.ErrorDetail, p.Context?.IsCollectible == true,
-            p.Instance?.GetType().Module.ModuleVersionId.ToString("N"))).ToList()));
+        OnUiAsync<IReadOnlyList<PluginApiEntry>>(() =>
+        {
+            var running = _plugins.Plugins.Select(p => new PluginApiEntry(
+                p.Id, p.Name, p.Manifest?.Version, p.Manifest?.Sdk, p.Folder, p.Source, p.Instance is null ? "failed" : "loaded", p.Error, p.ErrorDetail, p.Context?.IsCollectible == true,
+                p.Instance?.GetType().Module.ModuleVersionId.ToString("N")));
+            var turnedOff = PluginStore.List().Where(p => PluginStore.IsDisabled(p.Id) && _plugins.Find(p.Id) is null).Select(p => new PluginApiEntry(
+                p.Id, p.Name, p.Version, null, p.Folder, p.Folder, "disabled", null, null, false, null));
+            return Task.FromResult<IReadOnlyList<PluginApiEntry>>([.. running, .. turnedOff]);
+        });
 
     Task<PluginApiOutcome> IPluginApiHandler.LoadAsync(string folder) => OnUiAsync(() => InstallAsync(Path.GetFullPath(folder), null));
 

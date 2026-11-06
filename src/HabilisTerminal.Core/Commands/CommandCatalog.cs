@@ -252,7 +252,7 @@ public static class CommandCatalog
         new("window.exit", Window, "Exit", "F10", Workspace),
         new("window.close", Window, "Close this page", "Esc", c => c.Area is CommandArea.Viewer or CommandArea.Editor or CommandArea.OtherPage) { Help = "Close a viewer, editor, settings or this page" },
         new("plugins.menu", Window, "Plugins", "F11", Workspace),
-        new("plugins.configure", Window, "Plugins…", "Alt+Shift+F9", Workspace),
+        new("plugins.configure", Window, "Plugin manager…", "Alt+Shift+F9", Workspace),
         new("plugins.panelCommands", Window, "Plugin panel commands…", null, c => HasPanel(c) && c.PanelHasCommands),
         new("settings.open", Window, "Settings", null, Workspace),
         new("settings.file", Window, "Open settings.json", null, Workspace),

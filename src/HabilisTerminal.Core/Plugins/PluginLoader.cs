@@ -27,6 +27,9 @@ public sealed record LoadedPlugin(string Folder, PluginManifest? Manifest, Plugi
 /// </summary>
 public static class PluginLoader
 {
+    /// <summary>In a plugin folder: it was removed, but its files were locked. It no longer counts; the next start deletes it.</summary>
+    public const string RemoveMarker = ".remove";
+
     /// <summary>
     /// Plugin folders (subfolders with a plugin.json) under the given roots. The same plugin in several roots (a standard
     /// plugin shipped with the app and a copy the user installed) loads once: the highest version wins, and on a tie the
@@ -40,7 +43,7 @@ public static class PluginLoader
         {
             foreach (var folder in Directory.EnumerateDirectories(root).Order(StringComparer.OrdinalIgnoreCase))
             {
-                if (!File.Exists(Path.Combine(folder, PluginManifest.FileName)))
+                if (!File.Exists(Path.Combine(folder, PluginManifest.FileName)) || File.Exists(Path.Combine(folder, RemoveMarker)))
                 {
                     continue;
                 }

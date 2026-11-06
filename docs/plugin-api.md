@@ -77,7 +77,7 @@ Fields with no value are left out.
 | `panels.state` | | A panel state |
 | `commands.list` | | What the command line (Ctrl+Shift+P) would show now, in its order: an array of `{ id, title, section, keys }`. A panel opened with `panels.open` counts |
 
-In a list, `state` is `loaded` or `failed`. `folder` is where it runs from, `source` where a reload reads it. `error` is the message and `errorDetail` the whole exception.
+In a list, `state` is `loaded`, `failed` or `disabled` (turned off in the plugin manager, so not running). `folder` is where it runs from, `source` where a reload reads it. `error` is the message and `errorDetail` the whole exception.
 
 A panel state is the active panel's `{ plugin, location, title, message, count, entries }`, with `entries` as `{ name, isFolder, size }`, at most 1000, without `..`. `plugin` and `title` are left out for a local folder.
 

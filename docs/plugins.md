@@ -91,7 +91,7 @@ From the three plugin briefs (#46 S3, #47 SageMaker training jobs, #48 SQS):
 - **Settings** kept by the host per plugin. Never secrets: the SDK documents this and plugins keep credentials in
   memory only.
 - **Robustness:** a failing plugin shows a plain-language message; it never crashes or hangs the host.
-- **Install without admin rights:** copying a plugin folder into the user's plugins folder is enough.
+- **Install without admin rights:** the plugin manager installs a zip or a folder into the user's plugins folder; copying a plugin folder there by hand works too.
 - **Develop without restarting:** plugins load, reload and unload while the app runs.
 
 ## 2. Pieces
@@ -119,14 +119,25 @@ From the three plugin briefs (#46 S3, #47 SageMaker training jobs, #48 SQS):
   its `.deps.json`, so plugins can bring their own dependencies (the AWS SDK) without clashing. The SDK assembly is
   always the host's copy.
 - **Hot load:** the same plugin can be loaded, reloaded and unloaded while the app runs: [plugin-api.md](plugin-api.md),
-  or F5 in F9 > Options > Plugins. A plugin loaded this way runs from a temporary copy. Native libraries a plugin carries
+  or F5 in the plugin manager. A plugin loaded this way runs from a temporary copy. Native libraries a plugin carries
   go in its own folder; for several architectures use `native\win-x64\`, `native\win-arm64\`, and pick by
   `RuntimeInformation.ProcessArchitecture`, as `Habilis.Archives` does.
 - **Compatibility:** the plugin's `sdk` major version must equal the host's; a newer minor version than the host's
   is refused with a message.
 - **Entry point:** the assembly has exactly one public non-abstract class derived from `Plugin`.
-- **Failures:** a plugin that fails to load or initialise is listed in F9 > Options > Plugins with the reason; the
+- **Failures:** a plugin that fails to load or initialise is listed in the plugin manager with the reason; the
   others still load.
+- **Plugin manager (#166):** Alt+Shift+F9, or F9 > Options > Plugin manager. All of it works with no restart:
+  - **Ins** installs from a `.zip` or a folder with a `plugin.json`, at the top or in one folder inside. It copies the
+    plugin into the user's folder and loads it. A plugin that does not load is not kept, and what ran goes on.
+  - **Space** turns a plugin off or on. It stays off across restarts and updates (`disabled.json` in the user's folder).
+  - **F8** or **Del** removes what the user installed. Plugins that come with the app can only be turned off. Removing a
+    newer copy of one brings back the version that comes with the app. Files of a plugin loaded at startup stay locked
+    after the unload: the folder gets a `.remove` marker, no longer counts, and goes at the next start.
+  - **F5** reloads, **Enter** opens the plugin's settings.
+  - A copy no newer than the one that comes with the app is refused, as that one would load in its place.
+  - In a portable copy both kinds share one folder: a `.user-installed` marker tells them apart, so a folder copied there
+    by hand counts as coming with the app.
 
 ## 4. SDK
 
@@ -145,7 +156,7 @@ public abstract class Plugin
     public virtual Task ShutdownAsync();                               // SDK 1.5: being unloaded
     public virtual IEnumerable<PluginCommand> Commands { get; }        // SDK 1.6: anywhere, in the command line
     public virtual bool HasConfiguration { get; }
-    public virtual Task ConfigureAsync(CancellationToken token);       // F9 > Options > Plugins, Alt+Shift+F9
+    public virtual Task ConfigureAsync(CancellationToken token);       // Enter in the plugin manager, Alt+Shift+F9
 }
 
 public sealed record PluginMenuItem(string Title, Func<CancellationToken, Task<IPanelProvider?>> Open);
@@ -293,7 +304,7 @@ as "<plugin> failed: <message>". Plugin calls run off the UI thread or are await
 - The command line: Enter on a line starting with a registered prefix and a colon (`s3:`, `sqs:`, `sm:`) opens the
   plugin panel instead of running the line in PowerShell (PSReadLine Enter handler, as for Tab). So does a line with a
   command the plugin registered in front of such an address (`AddressCommands`: `cd s3://bucket/`).
-- F11 lists the plugins' menu items; F9 > Options > Plugins (Alt+Shift+F9) lists loaded and failed plugins and opens
+- F11 lists the plugins' menu items; the plugin manager (Alt+Shift+F9) lists all plugins, also failed and turned off, and opens
   their configuration; F9 > Commands > Plugin panel commands lists the commands of the plugin panel with their keys.
 - After a plugin command the host re-lists the panel. Ctrl+1... switch the provider's layouts, Ctrl+F12 adds its sort
   keys, and a click on a custom column's header sorts by it.
@@ -313,6 +324,7 @@ as "<plugin> failed: <message>". Plugin calls run off the UI thread or are await
   developed against the SDK package only.
 - Plugin tests run without network access: the AWS clients sit behind small interfaces with fakes.
 - Each plugin has a README (install, settings, AWS permissions) and a manual test plan for a real account.
+- **To hand a plugin to someone:** zip what `artifacts/plugins/<id>/` holds. It installs with Ins in the plugin manager.
 
 ## 7. Standard plugins
 

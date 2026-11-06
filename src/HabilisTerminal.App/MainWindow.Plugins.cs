@@ -21,7 +21,7 @@ public partial class MainWindow : IPluginWindow
 
     private void LoadPlugins()
     {
-        _plugins.LoadAll(App.Paths, HostFor);
+        _plugins.LoadAll(PluginStore, HostFor);
         foreach (var failed in _plugins.Plugins.Where(p => p.Error is not null))
         {
             Trace($"plugin {failed.Id} not loaded: {failed.Error}");
@@ -164,7 +164,7 @@ public partial class MainWindow : IPluginWindow
         if (entries.Count == 0)
         {
             panel.Message = _plugins.Plugins.Count == 0
-                ? $"No plugins are installed. Put plugin folders into {App.Paths.PluginsDirectory}."
+                ? "No plugins are running. Alt+Shift+F9 opens the plugin manager."
                 : "No plugin has menu items.";
             return;
         }
@@ -175,53 +175,6 @@ public partial class MainWindow : IPluginWindow
         if (result?.Item?.Tag is ValueTuple<LoadedPlugin, PluginMenuItem> chosen)
         {
             await OpenPluginAsync(panel, chosen.Item1, chosen.Item2.Open);
-        }
-    }
-
-    /// <summary>F9 > Options > Plugins and Alt+Shift+F9: loaded and failed plugins; Enter configures one.</summary>
-    private async Task ShowPluginsConfigurationAsync()
-    {
-        var panel = _active;
-        var items = _plugins.Plugins.Select(p => new QuickPickItem
-        {
-            Label = p.Name,
-            Description = p.Error ?? (p.Instance is { } plugin && PluginManager.Guard(p, () => plugin.HasConfiguration, false) ? $"{p.Manifest!.Version} · Enter to configure" : $"{p.Manifest!.Version}"),
-            Tag = p,
-        }).ToList();
-        if (items.Count == 0)
-        {
-            panel.Message = $"No plugins are installed. Put plugin folders into {App.Paths.PluginsDirectory}.";
-            return;
-        }
-
-        var result = await QuickPick.ShowAsync(panel, items, new QuickPickOptions { Title = "Plugins", Placeholder = "Filter plugins · F5 reloads a plugin", CommandKeys = [Key.F5] });
-        panel.Focus();
-        if (result is { Command: Key.F5, Item.Tag: LoadedPlugin reloading })
-        {
-            try
-            {
-                var outcome = await InstallAsync(reloading.Source, reloading.Id);
-                panel.Message = outcome.Error ?? $"{reloading.Name} reloaded.";
-            }
-            catch (PluginApiException ex)
-            {
-                panel.Message = ex.Message;
-            }
-
-            return;
-        }
-
-        if (result?.Item?.Tag is LoadedPlugin { Instance: { } instance } chosen && PluginManager.Guard(chosen, () => instance.HasConfiguration, false))
-        {
-            using var busy = _plugins.BeginOperation(chosen);
-            try
-            {
-                await instance.ConfigureAsync(CancellationToken.None);
-            }
-            catch (Exception ex) when (ex is not OutOfMemoryException)
-            {
-                OperationDialogs.Message(this, chosen.Name, PluginManager.Describe(chosen, ex));
-            }
         }
     }
 
@@ -236,7 +189,7 @@ public partial class MainWindow : IPluginWindow
 
         if (key == Key.F9 && modifiers == (KeyModifiers.Alt | KeyModifiers.Shift))
         {
-            Fire(ShowPluginsConfigurationAsync());
+            OpenPluginsPage();
             return true;
         }
 

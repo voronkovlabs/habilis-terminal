@@ -18,15 +18,14 @@ internal sealed class PluginManager
 
     public IEnumerable<LoadedPlugin> Loaded => _plugins.Where(p => p.Instance is not null);
 
-    /// <summary>Plugin roots: <c>plugins</c> next to the executable (portable and test copies), then the user's folder.</summary>
-    public static IReadOnlyList<string> Roots(AppPaths paths) =>
-        new[] { Path.Combine(AppContext.BaseDirectory, "plugins"), paths.PluginsDirectory }
-            .Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
+    /// <summary>Plugin roots: <c>plugins</c> next to the executable (shipped, portable and test copies), then the user's folder.</summary>
+    public static PluginStore StoreFor(AppPaths paths) => new(Path.Combine(AppContext.BaseDirectory, "plugins"), paths.PluginsDirectory);
 
-    /// <summary>Loads and initialises every plugin; failures are kept with their reason.</summary>
-    public void LoadAll(AppPaths paths, Func<LoadedPlugin, IPluginHost> hostFor)
+    /// <summary>Loads and initialises every plugin not turned off; failures are kept with their reason.</summary>
+    public void LoadAll(PluginStore store, Func<LoadedPlugin, IPluginHost> hostFor)
     {
-        foreach (var folder in PluginLoader.Discover(Roots(paths)))
+        store.Purge();
+        foreach (var folder in store.FoldersToLoad())
         {
             _plugins.Add(Initialize(PluginLoader.Load(folder), hostFor));
         }
