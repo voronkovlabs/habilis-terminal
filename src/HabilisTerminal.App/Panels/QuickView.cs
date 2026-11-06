@@ -136,7 +136,7 @@ public sealed class QuickView : Grid, IDisposable
                 return;
             }
 
-            if (Settings is { } settings && ViewerPage.FitsTextMode(path, settings.ViewerTextModeMaxMB))
+            if (Settings is { } settings && ViewerPage.FitsTextMode(path, settings.ViewerTextModeMaxMB) && !Core.Editing.LongLines.HasHugeLine(path))
             {
                 ShowInEditor(TextFile.Load(path), settings);
                 return;
@@ -327,7 +327,7 @@ public sealed class QuickView : Grid, IDisposable
         _editor.FontSize = settings.ViewerFontSize;
         _editor.WordWrap = settings.ViewerWrap;
         _editor.Options.IndentationSize = settings.EditorTabSize;
-        _editor.SyntaxHighlighting = settings.EditorSyntaxHighlighting ? HighlightingManager.Instance.GetDefinitionByExtension(Path.GetExtension(file.Path)) : null;
+        _editor.SyntaxHighlighting = settings.EditorSyntaxHighlighting && !Core.Editing.LongLines.TooLongToColor(file.Text) ? HighlightingManager.Instance.GetDefinitionByExtension(Path.GetExtension(file.Path)) : null;
         _editor.Text = file.Text;
         _editor.ScrollToHome();
         if (Theme is { } theme)

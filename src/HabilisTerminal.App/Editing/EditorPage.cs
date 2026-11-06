@@ -64,7 +64,8 @@ public sealed class EditorPage : DockPanel, IPage
         _editor.Text = file.Text;
         _editor.Document.UndoStack.ClearAll();
         _editor.Document.UndoStack.MarkAsOriginalFile();
-        _editor.SyntaxHighlighting = settings.EditorSyntaxHighlighting ? HighlightingManager.Instance.GetDefinitionByExtension(Path.GetExtension(file.Path)) : null;
+        _editor.SyntaxHighlighting = settings.EditorSyntaxHighlighting && !Core.Editing.LongLines.TooLongToColor(file.Text) ? HighlightingManager.Instance.GetDefinitionByExtension(Path.GetExtension(file.Path)) : null;
+        _editor.Document.Changed += OnDocumentChanged;
         _editor.TextArea.Caret.PositionChanged += (_, _) => UpdateStatus();
         _editor.Document.UndoStack.PropertyChanged += (_, _) => UpdateStatus();
         _editor.PreviewKeyDown += OnEditorKeyDown;
@@ -85,6 +86,29 @@ public sealed class EditorPage : DockPanel, IPage
     public string FilePath => _file.Path;
 
     public bool IsModified => !_editor.Document.UndoStack.IsOriginalFile;
+
+    /// <summary>A long line pasted or joined here would freeze the window as a long line in the file does (issue #163): colours go.</summary>
+    private void OnDocumentChanged(object? sender, ICSharpCode.AvalonEdit.Document.DocumentChangeEventArgs e)
+    {
+        if (_editor.SyntaxHighlighting is null)
+        {
+            return;
+        }
+
+        var document = _editor.Document;
+        var line = document.GetLineByOffset(Math.Min(e.Offset, document.TextLength));
+        var last = document.GetLineByOffset(Math.Min(e.Offset + e.InsertionLength, document.TextLength));
+        while (line is not null)
+        {
+            if (line.Length > Core.Editing.LongLines.ColorLimit)
+            {
+                _editor.SyntaxHighlighting = null;
+                return;
+            }
+
+            line = line == last ? null : line.NextLine;
+        }
+    }
 
     private Border Header { get; }
 

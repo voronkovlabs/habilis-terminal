@@ -260,11 +260,18 @@ public partial class MainWindow
                 return;
             }
 
-            if (new FileInfo(path).Length > _settings.EditorLargeFileThresholdMB * 1024L * 1024)
+            var large = new FileInfo(path).Length > _settings.EditorLargeFileThresholdMB * 1024L * 1024;
+            var hugeLine = !large && Core.Editing.LongLines.HasHugeLine(path);
+            if (large || hugeLine)
             {
-                var body = new System.Windows.Controls.TextBlock { Text = $"'{Path.GetFileName(path)}' is large ({Panels.PanelColumns.FormatCompactSize(new FileInfo(path).Length, System.Globalization.CultureInfo.CurrentCulture)}). Editing loads it into memory." };
+                var body = new System.Windows.Controls.TextBlock
+                {
+                    Text = large
+                        ? $"'{Path.GetFileName(path)}' is large ({Panels.PanelColumns.FormatCompactSize(new FileInfo(path).Length, System.Globalization.CultureInfo.CurrentCulture)}). Editing loads it into memory."
+                        : $"'{Path.GetFileName(path)}' has a line of over two million characters. The editor may stop responding for minutes.",
+                };
                 body.SetResourceReference(StyleProperty, "Habi.LabelStyle");
-                var choice = Widgets.ThemedDialog.Show(this, "Large file", body,
+                var choice = Widgets.ThemedDialog.Show(this, large ? "Large file" : "Very long line", body,
                     [new Widgets.DialogButton<int>("Open in _editor", 1), new Widgets.DialogButton<int>("Open in _viewer", 2, IsDefault: true), new Widgets.DialogButton<int>("Cancel", 0, IsCancel: true)], 0);
                 if (choice == 2)
                 {

@@ -375,11 +375,16 @@ public sealed class ViewerPage : DockPanel, IDisposable, IPage
     private async Task LoadTextModeAsync(string path, AppSettings settings, ColorTheme theme)
     {
         var ui = Dispatcher.Thread;
-        (TextFile File, ICSharpCode.AvalonEdit.Document.TextDocument Document) loaded;
+        (TextFile File, ICSharpCode.AvalonEdit.Document.TextDocument Document)? result;
         try
         {
-            loaded = await Task.Run(() =>
+            result = await Task.Run<(TextFile, ICSharpCode.AvalonEdit.Document.TextDocument)?>(() =>
             {
+                if (Core.Editing.LongLines.HasHugeLine(path))
+                {
+                    return null; // the editor control would freeze the window (issue #163)
+                }
+
                 var file = TextFile.Load(path);
                 var document = new ICSharpCode.AvalonEdit.Document.TextDocument(file.Text);
                 document.SetOwnerThread(ui);
@@ -391,7 +396,7 @@ public sealed class ViewerPage : DockPanel, IDisposable, IPage
             return; // the paged view stays
         }
 
-        if (_closed || _view.Hex || !ReferenceEquals(_view.Parent, this))
+        if (result is not { } loaded || _closed || _view.Hex || !ReferenceEquals(_view.Parent, this))
         {
             return;
         }
@@ -426,7 +431,7 @@ public sealed class ViewerPage : DockPanel, IDisposable, IPage
             ShowLineNumbers = true,
             WordWrap = settings.ViewerWrap,
             Document = document,
-            SyntaxHighlighting = settings.EditorSyntaxHighlighting ? HighlightingManager.Instance.GetDefinitionByExtension(Path.GetExtension(file.Path)) : null,
+            SyntaxHighlighting = settings.EditorSyntaxHighlighting && !Core.Editing.LongLines.TooLongToColor(file.Text) ? HighlightingManager.Instance.GetDefinitionByExtension(Path.GetExtension(file.Path)) : null,
         };
         editor.Options.HighlightCurrentLine = true;
         editor.Options.IndentationSize = settings.EditorTabSize;
