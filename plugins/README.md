@@ -12,6 +12,7 @@ package from a local feed. Nothing here references the app's code. Design: `docs
 | Demo (in-memory sample, no network) | `Habilis.Samples.Demo` | `samples.demo` | `demo:` | #49 |
 | GPU monitor (local NVIDIA GPUs, SageMaker jobs) | `Habilis.Gpu` | `gpu.monitor` | `gpu:`, `gpu:sm` | #70 |
 | Archives as folders, on 7-Zip | `Habilis.Archives` | `habi.archives` | none: opens files | #51, #149 |
+| File format sample | `Habilis.Samples.FileFormat` | `samples.fileformat` | none: opens `.habibundle` | #151 |
 
 `Habilis.Aws.Common` holds what the AWS plugins share: profiles and credentials, regions, plain-language errors.
 
@@ -22,12 +23,14 @@ pwsh tools/plugins/Build-Plugins.ps1
 ```
 
 It packs the SDK into `artifacts/nuget`, restores the plugins into `artifacts/packages`, builds and tests them, and
-publishes each into `artifacts/plugins/<id>/` with its `plugin.json`. These four plugins are standard: a release
+publishes each into `artifacts/plugins/<id>/` with its `plugin.json`. These plugins are standard: a release
 copies them into the `plugins` folder next to `habi.exe` (issue #58). Install another plugin by copying its folder into
 `%LOCALAPPDATA%\HabilisTerminal\plugins\` (or the `plugins` folder next to a portable `habi.exe`).
-`tools/ui/New-TestCopy.ps1 -WithPlugins` makes a test copy with all of them.
+`tools/ui/New-TestCopy.ps1` makes a test copy with archives, demo and GPU; `-WithPlugins` adds the AWS ones.
 
 ## Writing a plugin
+
+The guide is [`docs/plugins.md`](../docs/plugins.md): a quick start, the rules, recipes. `tools/plugins/New-Plugin.ps1` makes a project, and `tools/plugins/habi-plugin.ps1` loads it into a running app ([`docs/plugin-api.md`](../docs/plugin-api.md)). In short:
 
 1. A class library targeting `net10.0`, referencing `HabilisTerminal.Plugins.Sdk` with
    `PrivateAssets="all" ExcludeAssets="runtime"` (the host provides the SDK at run time).
@@ -37,4 +40,4 @@ copies them into the `plugins` folder next to `habi.exe` (issue #58). Install an
 4. All UI through `IPluginHost.Dialogs`; settings through `IPluginHost.Settings` (never secrets); user-facing errors
    as `PluginException`.
 
-`Habilis.Samples.Demo` shows every feature in one file.
+`Habilis.Samples.Demo` shows every panel feature in one file; `Habilis.Samples.FileFormat` is a whole file format that opens as a folder.

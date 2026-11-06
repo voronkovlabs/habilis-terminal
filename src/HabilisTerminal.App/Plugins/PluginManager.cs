@@ -56,6 +56,10 @@ internal sealed class PluginManager
 
     public void Remove(LoadedPlugin plugin) => _plugins.Remove(plugin);
 
+    /// <summary>Forgets an earlier failure to load from this folder.</summary>
+    public void RemoveFailed(string source) =>
+        _plugins.RemoveAll(p => p.Instance is null && string.Equals(p.Source, source, StringComparison.OrdinalIgnoreCase));
+
     /// <summary>An operation of the plugin is under way: it may not be unloaded until the result is disposed.</summary>
     public IDisposable BeginOperation(LoadedPlugin plugin)
     {

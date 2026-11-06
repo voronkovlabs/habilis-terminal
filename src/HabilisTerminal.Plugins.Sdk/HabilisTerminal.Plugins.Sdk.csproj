@@ -14,6 +14,9 @@
     <PackageVersion>$(SdkVersion)</PackageVersion>
     <InformationalVersion>$(SdkVersion)</InformationalVersion>
     <IsPackable>true</IsPackable>
+    <!-- A plugin's author, and their tools, read the contracts' comments from the package. -->
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <NoWarn>$(NoWarn);CS1591</NoWarn>
     <PackageId>HabilisTerminal.Plugins.Sdk</PackageId>
     <Description>SDK for Habilis Terminal plugins: plugin entry points, plugin panels, operations and host services.</Description>
     <PackageReadmeFile>README.md</PackageReadmeFile>

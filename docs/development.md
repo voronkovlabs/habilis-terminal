@@ -18,9 +18,9 @@ How the project is built, tested and checked by hand. Most of this is not visibl
   - `plugins/`: plugins built outside the app's solution (see Plugins below).
 
 ## Plugins
-- **Design:** `docs/plugins.md`. The host side is `src/HabilisTerminal.Core/Plugins` (manifest, loader, settings) and `src/HabilisTerminal.App/Plugins`, `MainWindow.Plugins.cs`, `Panels/FilePanel.Plugin.cs`.
+- **Guide:** `docs/plugins.md`; loading into a running app: `docs/plugin-api.md`. The host side is `src/HabilisTerminal.Core/Plugins` (manifest, loader, settings) and `src/HabilisTerminal.App/Plugins`, `MainWindow.Plugins.cs`, `Panels/FilePanel.Plugin.cs`.
 - **Build the plugins:** `tools/plugins/Build-Plugins.ps1`. It packs the SDK into `artifacts/nuget`, builds `plugins/Plugins.slnx` against it (packages restore into `artifacts/packages`), runs the plugin tests and publishes each plugin into `artifacts/plugins/<id>`.
-- **Try them:** `tools/ui/New-TestCopy.ps1 -Name ... -WithPlugins` copies `artifacts/plugins` into the copy's `plugins` folder. The demo plugin (`demo:` on the command line, or F11) exercises every plugin panel feature without network access.
+- **Try them:** `tools/ui/New-TestCopy.ps1 -Name ...` copies the archives, demo and GPU plugins from `artifacts/plugins`, so run `Build-Plugins.ps1` first; archives are a plugin now, so a copy needs it to open a zip. `-WithPlugins` copies all of them, with AWS. The demo plugin (`demo:` on the command line, or F11) exercises every plugin panel feature without network access.
 - **AWS plugins are tested with fakes only.** Never use the owner's AWS profiles; the owner checks against a real account with each plugin's README test plan.
 - **The SDK is a public contract.** A breaking change needs a new SDK major version (`PluginManifest.HostSdkVersion`, the package version, every `plugin.json`).
 

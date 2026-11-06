@@ -11,6 +11,9 @@
     <PackageVersion>$(SdkVersion)</PackageVersion>
     <InformationalVersion>$(SdkVersion)</InformationalVersion>
     <IsPackable>true</IsPackable>
+    <!-- A plugin's author, and their tools, read the contracts' comments from the package. -->
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <NoWarn>$(NoWarn);CS1591</NoWarn>
     <PackageId>HabilisTerminal.Plugins.Sdk.Wpf</PackageId>
     <Description>WPF views for Habilis Terminal plugin panels: a plugin draws its panel itself.</Description>
     <PackageReadmeFile>README.md</PackageReadmeFile>

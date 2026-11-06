@@ -1,11 +1,75 @@
 # Plugins
 
 Habilis Terminal loads plugins written against a public SDK, the way Far Manager loads its plugins. A plugin can
-show its own panel (a list of items with columns, like the S3, SQS and SageMaker plugins), add entries to the plugin
-menu and the drive menu, claim a command-line prefix such as `s3:`, and offer a configuration dialog.
+show its own panel (a list of items with columns, like the S3, SQS and SageMaker plugins), open a file as a folder
+(like archives), add entries to the plugin menu and the drive menu, claim a command-line prefix such as `s3:`, and
+offer a configuration dialog.
 
-Plugins are developed as if by an outside vendor: they reference only the SDK NuGet package, never the app's code,
-and live in `plugins/` with their own solution (issue #49).
+Plugins are developed as if by an outside vendor: they reference only the SDK, never the app's code. They load and
+unload while the app runs, so developing one needs no restart.
+
+**Where to read what:**
+
+| You want | Read |
+|---|---|
+| A working plugin in five minutes | [Quick start](#quick-start) |
+| What a plugin must and must not do | [Rules](#rules) |
+| A file that looks like a folder, as archives do | [Recipe: a file format](#recipe-a-file-format) |
+| Every interface | §4 |
+| How loading works; load into a running app | §3, [plugin-api.md](plugin-api.md) |
+
+## Quick start
+
+You need the .NET 10 SDK and a running Habilis Terminal. `New-Plugin.ps1` and `habi-plugin.ps1` ship next to `habi.exe`, and are in `tools/plugins/` in the repository.
+
+```powershell
+New-Plugin.ps1 -Name MyPanel -Id me.mypanel -Path C:\work -Kind Panel -Prefix my
+dotnet build C:\work\MyPanel -c Release
+habi-plugin.ps1 load C:\work\MyPanel\bin\Release\net10.0
+```
+
+The plugin now runs: press F11, or type `my:` on the command line. Change the code, then:
+
+```powershell
+dotnet build C:\work\MyPanel -c Release
+habi-plugin.ps1 reload me.mypanel
+```
+
+If it does not work, `habi-plugin.ps1 list -Json` shows why, with the whole exception.
+
+To keep it after a restart, copy `bin\Release\net10.0` to `%LOCALAPPDATA%\HabilisTerminal\plugins\me.mypanel\`.
+
+For a format, use `-Kind FileFormat -Extension myf`, then press Enter on a `.myf` file.
+
+## Rules
+
+**A plugin must:**
+
+| Rule | Why |
+|---|---|
+| Have exactly one public non-abstract class derived from `Plugin`, with a parameterless constructor | That is how the host finds it |
+| Have a `plugin.json` next to its assembly | §3 |
+| Not copy the SDK into its folder (`Private=false`, or `PrivateAssets="all" ExcludeAssets="runtime"` on a package) | The host's copy is always used |
+| Keep the constructor and `Initialize` fast, with no network | They run on the UI thread while the app starts |
+| Give a `Location` that opens the same place again: an address its `OpenAddressAsync` accepts, or a path inside its file | Folder history and a reload reopen panels with it |
+| Honour the `CancellationToken` everywhere | Cancel on the waiting card and leaving the panel cancel through it |
+| Yield listing batches as they arrive | The first batch shows at once, and the card counts entries |
+| Throw `PluginException` with a plain message for what the user should read | Anything else shows as "<plugin> failed: ..." |
+| Stop timers in `DisposeAsync`; stop threads and free native libraries in `ShutdownAsync` | What keeps running keeps the old code in memory after a reload |
+| Find its own files through `Host.PluginDirectory` | During development it runs from a temporary copy |
+| Leave no partial file behind after a failed or cancelled transfer | The user would take it for the whole file |
+
+**A plugin must not:**
+
+| Rule | Why |
+|---|---|
+| Reference the app's code (`HabilisTerminal.Core`, `.App`, `.Shell`) | Only the SDK is a contract |
+| Show its own windows or dialogs | All UI goes through `Host.Dialogs`, drawn in the app's theme (a panel may draw itself: `IPanelView`) |
+| Store secrets in `Host.Settings` or write them to a log | Settings are a plain text file |
+| Block the UI thread: `.Result`, `.Wait()`, long work in a property the host reads | The whole window would hang. `Title`, `Location`, `Info`, `FileExtensions`, `Prefixes` and the like must return at once |
+| Claim file extensions of documents or programs in `FileExtensions` | They would stop opening in their own program on Enter (#138) |
+| Keep its objects in statics of other assemblies or subscribe to process-wide events without leaving them on shutdown | The old code stays in memory after a reload |
+| Depend on `AppContext.BaseDirectory` | It is the app's folder, not the plugin's |
 
 ## 1. Goals and constraints
 
@@ -23,6 +87,7 @@ From the three plugin briefs (#46 S3, #47 SageMaker training jobs, #48 SQS):
   memory only.
 - **Robustness:** a failing plugin shows a plain-language message; it never crashes or hangs the host.
 - **Install without admin rights:** copying a plugin folder into the user's plugins folder is enough.
+- **Develop without restarting:** plugins load, reload and unload while the app runs.
 
 ## 2. Pieces
 
@@ -31,6 +96,7 @@ From the three plugin briefs (#46 S3, #47 SageMaker training jobs, #48 SQS):
 | SDK | `src/HabilisTerminal.Plugins.Sdk` | Contracts only (`net10.0`, no WPF). Packed as NuGet `HabilisTerminal.Plugins.Sdk`. |
 | Host support | `src/HabilisTerminal.App/Plugins`, `src/HabilisTerminal.Core/Plugins` | Discovery, loading, host services, plugin panels. |
 | Plugins | `plugins/` | Own solution `plugins/Plugins.slnx`; reference the SDK only through the local NuGet feed. |
+| Tools | `tools/plugins/` | `New-Plugin.ps1` makes a project, `habi-plugin.ps1` talks to a running app. Both ship next to `habi.exe`. |
 | Local feed | `artifacts/nuget/` (ignored by git) | `tools/plugins/Build-Plugins.ps1` packs the SDK here, then builds the plugins. |
 
 ## 3. Discovery and loading
@@ -42,9 +108,15 @@ From the three plugin briefs (#46 S3, #47 SageMaker training jobs, #48 SQS):
   ```json
   { "id": "aws.sqs", "name": "SQS Queues", "version": "1.0.0", "assembly": "Habilis.Aws.Sqs.dll", "sdk": "1.0" }
   ```
-- **Isolation:** each plugin runs in its own `AssemblyLoadContext` with an `AssemblyDependencyResolver` on its
-  `.deps.json`, so plugins can bring their own dependencies (the AWS SDK) without clashing. The SDK assembly is
+  `id`: letters, digits, `.`, `-`, `_`; use your own prefix. `sdk`: the oldest SDK you need, as `major.minor`. Optional
+  `"collectible": false` keeps the plugin's code in memory after an unload, for code that cannot run unloadable.
+- **Isolation:** each plugin runs in its own collectible `AssemblyLoadContext` with an `AssemblyDependencyResolver` on
+  its `.deps.json`, so plugins can bring their own dependencies (the AWS SDK) without clashing. The SDK assembly is
   always the host's copy.
+- **Hot load:** the same plugin can be loaded, reloaded and unloaded while the app runs: [plugin-api.md](plugin-api.md),
+  or F5 in F9 > Options > Plugins. A plugin loaded this way runs from a temporary copy. Native libraries a plugin carries
+  go in its own folder; for several architectures use `native\win-x64\`, `native\win-arm64\`, and pick by
+  `RuntimeInformation.ProcessArchitecture`, as `Habilis.Archives` does.
 - **Compatibility:** the plugin's `sdk` major version must equal the host's; a newer minor version than the host's
   is refused with a message.
 - **Entry point:** the assembly has exactly one public non-abstract class derived from `Plugin`.
@@ -63,11 +135,17 @@ public abstract class Plugin
     public virtual IEnumerable<string> Prefixes { get; }               // "s3", "sqs"...
     public virtual IEnumerable<string> AddressCommands { get; }        // SDK 1.4: "cd", for "cd s3://bucket/"
     public virtual Task<IPanelProvider?> OpenAddressAsync(string address, CancellationToken token);
+    public virtual IEnumerable<string> FileExtensions { get; }         // SDK 1.5: "zip", "tar.gz": opened as a folder
+    public virtual Task<IPanelProvider?> OpenFileAsync(FileOpenRequest request, CancellationToken token); // SDK 1.5
+    public virtual Task ShutdownAsync();                               // SDK 1.5: being unloaded
     public virtual bool HasConfiguration { get; }
     public virtual Task ConfigureAsync(CancellationToken token);       // F9 > Options > Plugins, Alt+Shift+F9
 }
 
 public sealed record PluginMenuItem(string Title, Func<CancellationToken, Task<IPanelProvider?>> Open);
+
+// SDK 1.5. InnerPath: a place inside the file, from folder history. AnyFormat: Ctrl+PgDn, so look at the content.
+public sealed record FileOpenRequest(string Path, string InnerPath, bool AnyFormat);
 ```
 `OpenAddressAsync` gets the full text after Enter on the command line, e.g. `s3://bucket/path/` or
 `sqs:prod/eu-west-1`. With a command from `AddressCommands` in front it gets the address alone, without quotes.
@@ -79,7 +157,8 @@ public interface IPluginHost
 {
     IPluginDialogs Dialogs { get; }
     IPluginSettings Settings { get; }      // JSON per plugin, next to the app's settings; never secrets
-    string TempDirectory { get; }          // per plugin, emptied on start
+    string TempDirectory { get; }          // per plugin, emptied on start and on a reload
+    string PluginDirectory { get; }        // SDK 1.5: the folder the plugin runs from, with its files
     Task ViewFileAsync(string path, string? title = null);
     Task ViewTextAsync(string title, string text);
     void Refresh(IPanelProvider provider); // re-list open panels, e.g. after the settings changed
@@ -88,7 +167,7 @@ public interface IPluginHost
 }
 ```
 Dialogs: `ShowMessageAsync`, `ConfirmAsync(title, message, items, destructive)` (lists the items affected),
-`InputAsync`, `ChooseAsync` (a list picker, e.g. profile or region), `EditAsync(PluginForm)` for forms with text,
+`InputAsync`, `InputSecretAsync` (SDK 1.5, a password), `ChooseAsync` (a list picker, e.g. profile or region), `EditAsync(PluginForm)` for forms with text,
 number, toggle, choice and multi-line list fields. Forms return the edited values; the host draws them like its own
 dialogs.
 
@@ -158,6 +237,10 @@ as "<plugin> failed: <message>". Plugin calls run off the UI thread or are await
   folder, F8 deletes, Ctrl+R re-lists, Ins / Gray + / quick search select and search, Ctrl+L shows the plugin's info
   lines in the other panel.
 - A key the provider does not support shows "Not supported by <plugin>" in the status line.
+- A file a plugin claims (`FileExtensions`): Enter calls `OpenFileAsync`; null there means Enter does what it does with any
+  file. Ctrl+PgDn on any file asks the claiming plugins first, then every other plugin with `FileExtensions`, with
+  `AnyFormat` set. A location with a file in it, from folder history or pasted into the drive menu (`C:\a.zip\docs`),
+  opens the same way with `InnerPath`. ".." at the top returns to the file's folder with the cursor on the file.
 - The command line: Enter on a line starting with a registered prefix and a colon (`s3:`, `sqs:`, `sm:`) opens the
   plugin panel instead of running the line in PowerShell (PSReadLine Enter handler, as for Tab). So does a line with a
   command the plugin registered in front of such an address (`AddressCommands`: `cd s3://bucket/`).
@@ -173,15 +256,20 @@ as "<plugin> failed: <message>". Plugin calls run off the UI thread or are await
 
 - `tools/plugins/Build-Plugins.ps1`: `dotnet pack` the SDK into `artifacts/nuget`, build `plugins/Plugins.slnx`
   against it, and publish each plugin with its `plugin.json` into `artifacts/plugins/<id>/`.
-- `tools/ui/New-TestCopy.ps1 -WithPlugins` copies those folders into the test copy's `plugins\`.
-- **Standard plugins (issue #58):** the S3, SageMaker, SQS and demo plugins ship with the app. CI runs the script on
+- `tools/ui/New-TestCopy.ps1` copies the archives, demo and GPU plugins into the test copy's `plugins\`;
+  `-WithPlugins` copies all of them, with AWS.
+- **Standard plugins (issue #58):** the archives, S3, SageMaker, SQS, GPU and sample plugins ship with the app. CI runs the script on
   every push (build and plugin tests); a release runs it and copies `artifacts/plugins` into each `publish/<rid>/plugins`
   before `vpk pack` and the portable zip, so the installer, the portable zip and auto-updates carry them. They are still
   developed against the SDK package only.
 - Plugin tests run without network access: the AWS clients sit behind small interfaces with fakes.
 - Each plugin has a README (install, settings, AWS permissions) and a manual test plan for a real account.
 
-## 7. AWS plugins
+## 7. Standard plugins
+
+**Archives** (`plugins/Habilis.Archives`, #51, #149): archives as folders on 7-Zip. Claims the usual archive extensions; Ctrl+PgDn tries any file.
+
+### AWS plugins
 
 Shared by the three plugins, in `plugins/Habilis.Aws.Common`: AWS profiles from the standard shared config and
 credentials files (including role assumption and SSO profiles) through the AWS SDK for .NET (Apache 2.0); the
@@ -193,3 +281,120 @@ Credentials stay in memory; nothing is logged.
 | SQS queues (#48) | `sqs:` | Queues with messages available / in flight; purge with confirmation; prefix and exclusion filters; profile / region switch; info summary. |
 | SageMaker training jobs (#47) | `sm:` | Jobs with status, secondary status, warm pool, duration, estimated cost; running first; filters; layouts; summary and full record views; F5 saves descriptions as JSON. Read-only. |
 | S3 browser (#46) | `s3:` | Buckets, prefixes as folders, objects as files; download / upload / move up, delete, make folder; multipart parallel transfers with a limit; F3 view. |
+
+## 8. Recipes
+
+### Recipe: a file format
+
+A file that looks like a folder, as archives do. **The app needs no change:** a plugin claims the extension and gives a panel. `plugins/Habilis.Samples.FileFormat` is a whole one in one file; copy it.
+
+```csharp
+public sealed class MyFormatPlugin : Plugin
+{
+    public override IEnumerable<string> FileExtensions => ["myf"];
+
+    public override async Task<IPanelProvider?> OpenFileAsync(FileOpenRequest request, CancellationToken token)
+    {
+        var data = await Read(request.Path, token);       // IOException etc.: throw PluginException
+        if (data is null) return null;                    // not this format: others are asked, or Enter opens it normally
+        return new MyPanel(request.Path, data, request.InnerPath);
+    }
+}
+```
+
+The panel is an `IPanelProvider`:
+
+| Member | What to do |
+|---|---|
+| `Location` | The file's path, then the inner folder: `C:\data\a.myf\docs`. The host splits it at the file, so folder history and a reload work |
+| Constructor | Go to `InnerPath` if it still exists, else stay at the top |
+| `ListAsync` | The current inner folder |
+| `EnterAsync` | Change the inner folder; false for a file |
+| `GoUpAsync` | Go up; **false at the top**, and the host returns to the file |
+| `Layouts` | At least one: `new PanelLayout("Default", [PanelColumn.Size, PanelColumn.Modified])` |
+
+Then add what the format can do:
+
+| Interface | Gives |
+|---|---|
+| `IGetFiles` | F5 copies out, and F3 views through a temporary copy |
+| `IViewEntry` | F3 with your own text, instead of a copy |
+| `IPutFiles`, `IDeleteEntries`, `IMakeFolder` | F5 / F6 in, F8, F7. Write a new file next to the old one, then replace it, so a failure leaves it whole. See `Habilis.Archives` |
+
+An encrypted format asks with `await Host.Dialogs.InputSecretAsync(...)` and keeps the answer in memory.
+
+### Recipe: a panel with its own data
+
+`New-Plugin.ps1 -Kind Panel` gives a start; `plugins/Habilis.Samples.Demo` shows every feature. Set `Prefixes` to open by address (`my:`), `MenuItems` for F11, `DriveMenuItems` for Alt+F1. To catch `cd my://...` in the console too, add `AddressCommands => ["cd"]`.
+
+### Recipe: columns, tones, commands
+
+```csharp
+public IReadOnlyList<PanelLayout> Layouts { get; } =
+    [new PanelLayout("Jobs", [new PanelColumn("state", "State", 96), PanelColumn.Modified])];
+
+new PanelEntry(job.Name)
+{
+    Cells = new Dictionary<string, CellValue> { ["state"] = new(job.State, job.StateOrder) },
+    Tone = job.Failed ? RowTone.Bad : RowTone.Normal,
+    Group = job.Running ? 0 : 1,    // sorted first
+    Tag = job,                      // your own data, back in EnterAsync and the operations
+};
+
+// IPanelCommands: shown in F9 > Panel, with an optional key
+public IReadOnlyList<PanelCommand> Commands => [new("Purge", "Shift+F8", PurgeAsync)];
+```
+
+### Recipe: a panel you draw yourself
+
+Target `net10.0-windows` with `<UseWPF>true</UseWPF>`, reference `HabilisTerminal.Plugins.Sdk.Wpf` as well, and implement `IPanelView` on the provider. Use `HostBrushes` keys so the view follows the theme, and keep elements non-focusable: the keyboard belongs to the panel. See `plugins/Habilis.Gpu`.
+
+## 9. Lifecycle
+
+```
+constructor       once, on load. Fast, no network.
+Initialize(host)  once, right after. base.Initialize sets Host. Fast, no network.
+  OpenAddressAsync / OpenFileAsync / menu item  -> a new IPanelProvider each time a panel opens one
+    ListAsync, EnterAsync, GoUpAsync, operations   any number, off the UI thread or awaited
+    DisposeAsync                                   when the panel leaves it, and before a shutdown
+ShutdownAsync     on unload or reload, after every panel has closed. 5 s at most.
+```
+
+- A reload makes a **new** plugin object in a new load context: fields do not survive. Keep what must survive in `Host.Settings`.
+- After a shutdown, nothing may run. A leftover `Task.Run` loop or timer keeps the old code in memory and still runs.
+- The app does not call `ShutdownAsync` when it exits.
+
+## 10. Checklist before calling a plugin done
+
+- [ ] It loads with `habi-plugin.ps1 load`, and `list` shows `loaded`.
+- [ ] `reload` with a panel open returns to the same place, with `panelsReopened` equal to `panelsClosed`.
+- [ ] `oldVersionFreed` is `true` after a second reload. `false` means something still holds it: a static, a thread, a timer.
+- [ ] `unload` removes its menu entries, and its prefix then runs in the shell as usual.
+- [ ] Cancel on the waiting card stops a slow listing.
+- [ ] A failing call shows a plain message, not an exception's text meant for developers.
+- [ ] Folder history (Alt+F12) reopens a place inside it.
+- [ ] Tests run without network and only in temporary folders.
+- [ ] A README: what it does, how to install it, settings, permissions.
+
+## 11. Common mistakes
+
+| Symptom | Cause |
+|---|---|
+| `load_failed`: "has no public class derived from Plugin" | The class is `internal`, or abstract |
+| `load_failed`: "has 2 plugin classes" | Only one public class may derive from `Plugin`; make the other internal |
+| `incompatible_sdk` | `"sdk"` asks for a newer SDK than the app has |
+| `MissingMethodException` or `TypeLoadException` in `list` | A copy of the SDK sits in the plugin's folder, or the plugin uses a member newer than its `"sdk"` |
+| A dependency's `FileNotFoundException` | The project lacks `<EnableDynamicLoading>true</EnableDynamicLoading>`, so there is no `.deps.json` and no copies |
+| `plugin.json` missing from the output | It is not in the project with `CopyToOutputDirectory` |
+| Enter on your file opens another program | The name does not end in your `FileExtensions`, or `OpenFileAsync` returned null |
+| ".." never leaves the panel | `GoUpAsync` returns true at the top |
+| After a reload the panel goes back to the local folder | `Location` is not something `OpenAddressAsync` or `OpenFileAsync` can open |
+| `oldVersionFreed: false` every time | A timer, a thread, a static or an event subscription is left. Only the first reload after the app's start reports `false` regardless |
+| The window hangs | A property does slow work, or `.Result` on the UI thread |
+
+## 12. Known limits
+
+- Folders loaded through the API are not remembered across restarts.
+- The cursor returns to the top after a reload, and does not move onto a file named in an address.
+- A plugin the app loaded at startup reports `oldVersionFreed: false` on its first reload, and its files stay locked until the app restarts. Develop from your build folder with `load`, which never locks it.
+- Whether the AWS plugins free their memory on unload has not been checked: tests never open them with real credentials.

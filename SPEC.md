@@ -310,7 +310,7 @@ Common rules:
 - Directories are compared by presence only. No content compare, no recursion.
 
 ### 8.1 Archives as folders (issue #51)
-As Far's arclite, on 7-Zip's `7z.dll` (26.04, shipped next to `habi.exe` per architecture; `third_party/7-Zip`).
+As Far's arclite, on 7-Zip's `7z.dll` (26.04, `third_party/7-Zip`). This is the plugin `plugins/Habilis.Archives` (#149), on the SDK's file formats (`docs/plugins.md`).
 - **Enter** on a file with an archive's extension (zip, 7z, rar, tar, gz, bz2, xz, iso, cab...)
   opens it as a folder in a plugin panel; when it is no archive after all, Enter does what it does with any file.
   Everything else 7-Zip can read but that is a document or a program (doc, xls, docx, xlsx, jar, apk, exe, msi, disk

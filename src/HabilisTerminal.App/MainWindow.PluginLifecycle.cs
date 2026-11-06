@@ -47,9 +47,10 @@ public partial class MainWindow : IPluginApiHandler
         if (fresh.Manifest is null || fresh.Instance is null)
         {
             var code = fresh.Error?.Contains("needs SDK", StringComparison.Ordinal) == true ? PluginApiException.IncompatibleSdk : PluginApiException.LoadFailed;
-            if (_plugins.Find(fresh.Id) is null)
+            if (expectedId is null && _plugins.Find(fresh.Id) is not { Instance: not null })
             {
-                // Nothing runs under that id: the list keeps the reason for the developer.
+                // A first load that failed: the list keeps the reason for the developer, once.
+                _plugins.RemoveFailed(source);
                 _plugins.Add(fresh);
             }
 
