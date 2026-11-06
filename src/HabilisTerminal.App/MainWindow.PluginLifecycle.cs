@@ -29,7 +29,8 @@ public partial class MainWindow : IPluginApiHandler
 
     Task<IReadOnlyList<PluginApiEntry>> IPluginApiHandler.ListAsync() =>
         OnUiAsync<IReadOnlyList<PluginApiEntry>>(() => Task.FromResult<IReadOnlyList<PluginApiEntry>>(_plugins.Plugins.Select(p => new PluginApiEntry(
-            p.Id, p.Name, p.Manifest?.Version, p.Manifest?.Sdk, p.Folder, p.Source, p.Instance is null ? "failed" : "loaded", p.Error, p.ErrorDetail, p.Context?.IsCollectible == true)).ToList()));
+            p.Id, p.Name, p.Manifest?.Version, p.Manifest?.Sdk, p.Folder, p.Source, p.Instance is null ? "failed" : "loaded", p.Error, p.ErrorDetail, p.Context?.IsCollectible == true,
+            p.Instance?.GetType().Module.ModuleVersionId.ToString("N"))).ToList()));
 
     Task<PluginApiOutcome> IPluginApiHandler.LoadAsync(string folder) => OnUiAsync(() => InstallAsync(Path.GetFullPath(folder), null));
 
@@ -40,6 +41,33 @@ public partial class MainWindow : IPluginApiHandler
 
     Task<PluginApiOutcome> IPluginApiHandler.UnloadAsync(string id) => OnUiAsync(() => UninstallAsync(id));
 
+    Task<PluginApiPanelState> IPluginApiHandler.OpenPanelAsync(string target) => OnUiAsync(async () =>
+    {
+        var panel = _active;
+        var opened = File.Exists(target)
+            ? (await OpenFileInPluginAsync(panel, Path.GetFullPath(target), string.Empty, anyFormat: true)).Opened
+            : await NavigateOrOpenAsync(panel, target);
+        return opened
+            ? PanelState(panel)
+            : throw new PluginApiException(PluginApiException.NotFound, panel.Message ?? $"Nothing opened \"{target}\".");
+    });
+
+    Task<PluginApiPanelState> IPluginApiHandler.PanelStateAsync() => OnUiAsync(() => Task.FromResult(PanelState(_active)));
+
+    private const int MaxReportedRows = 1000;
+
+    private static PluginApiPanelState PanelState(FilePanel panel)
+    {
+        var rows = Enumerable.Range(0, panel.State.Count).Select(panel.State.ItemAt).Where(i => !i.IsParent).ToList();
+        return new PluginApiPanelState(
+            panel.Plugin?.Id,
+            panel.Provider?.Location ?? panel.CurrentPath,
+            panel.Provider?.Title,
+            panel.Message,
+            rows.Count,
+            [.. rows.Take(MaxReportedRows).Select(i => new PluginApiPanelEntry(i.Name, i.Entry.IsDirectory, i.Entry.Length))]);
+    }
+
     /// <summary>Loads a plugin from a temporary copy, so its build output stays free to overwrite, in place of any running copy.</summary>
     private async Task<PluginApiOutcome> InstallAsync(string source, string? expectedId)
     {
@@ -47,6 +75,7 @@ public partial class MainWindow : IPluginApiHandler
         if (fresh.Manifest is null || fresh.Instance is null)
         {
             var code = fresh.Error?.Contains("needs SDK", StringComparison.Ordinal) == true ? PluginApiException.IncompatibleSdk : PluginApiException.LoadFailed;
+            DeleteCopyLater(fresh.Folder, fresh.Context);
             if (expectedId is null && _plugins.Find(fresh.Id) is not { Instance: not null })
             {
                 // A first load that failed: the list keeps the reason for the developer, once.
@@ -59,6 +88,7 @@ public partial class MainWindow : IPluginApiHandler
 
         if (expectedId is not null && !string.Equals(expectedId, fresh.Id, StringComparison.OrdinalIgnoreCase))
         {
+            DeleteCopyLater(fresh.Folder, fresh.Context);
             throw new PluginApiException(PluginApiException.LoadFailed, $"{source} now holds the plugin \"{fresh.Id}\", not \"{expectedId}\".");
         }
 
@@ -147,8 +177,51 @@ public partial class MainWindow : IPluginApiHandler
 
         _plugins.Remove(running);
         var context = running.Context;
+        var folder = running.Folder;
         running = null;
-        return (closed, context is null ? null : await UnloadAsync(context));
+        if (context is null)
+        {
+            return (closed, null);
+        }
+
+        var freed = await UnloadAsync(context);
+        if (freed)
+        {
+            DeleteCopyLater(folder, null);
+        }
+
+        return (closed, freed);
+    }
+
+    /// <summary>Removes a temporary copy once the runtime lets go of its files; what stays is cleaned at the next start.</summary>
+    private static void DeleteCopyLater(string folder, System.Runtime.Loader.AssemblyLoadContext? unloadFirst)
+    {
+        if (!folder.StartsWith(PluginShadowRoot, StringComparison.OrdinalIgnoreCase))
+        {
+            return;
+        }
+
+        if (unloadFirst is { IsCollectible: true })
+        {
+            unloadFirst.Unload();
+        }
+
+        _ = Task.Run(async () =>
+        {
+            for (var i = 0; i < 20 && Directory.Exists(folder); i++)
+            {
+                try
+                {
+                    GC.Collect();
+                    GC.WaitForPendingFinalizers();
+                    Directory.Delete(folder, recursive: true);
+                }
+                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+                {
+                    await Task.Delay(250);
+                }
+            }
+        });
     }
 
     /// <summary>Whether the code really left memory: a static or a running thread of the plugin keeps it alive until the app restarts.</summary>

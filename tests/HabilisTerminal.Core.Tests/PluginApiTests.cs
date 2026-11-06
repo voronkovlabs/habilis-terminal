@@ -12,7 +12,7 @@ public class PluginApiTests
         public string? LastCall { get; private set; }
 
         public Task<IReadOnlyList<PluginApiEntry>> ListAsync() =>
-            Task.FromResult<IReadOnlyList<PluginApiEntry>>([new PluginApiEntry("a.b", "A", "1.0.0", "1.5", @"C:\run", @"C:\src", "loaded", null, null, true)]);
+            Task.FromResult<IReadOnlyList<PluginApiEntry>>([new PluginApiEntry("a.b", "A", "1.0.0", "1.5", @"C:\run", @"C:\src", "loaded", null, null, true, "build")]);
 
         public Task<PluginApiOutcome> LoadAsync(string folder)
         {
@@ -26,6 +26,15 @@ public class PluginApiTests
 
         public Task<PluginApiOutcome> UnloadAsync(string id) =>
             throw new PluginApiException(PluginApiException.NotFound, $"No plugin \"{id}\".");
+
+        public Task<PluginApiPanelState> OpenPanelAsync(string target)
+        {
+            LastCall = "open " + target;
+            return PanelStateAsync();
+        }
+
+        public Task<PluginApiPanelState> PanelStateAsync() =>
+            Task.FromResult(new PluginApiPanelState("a.b", "a:/", "A", null, 1, [new PluginApiPanelEntry("x.txt", false, 5)]));
     }
 
     private readonly FakeHandler _handler = new();
@@ -60,6 +69,19 @@ public class PluginApiTests
         Assert.Equal(@"load C:\build", _handler.LastCall);
         Assert.True(load.GetProperty("result").GetProperty("oldVersionFreed").GetBoolean());
         Assert.False(load.TryGetProperty("id", out _));
+    }
+
+    [Fact]
+    public async Task A_panel_opens_and_its_rows_can_be_read()
+    {
+        var open = await Ask("""{ "method": "panels.open", "params": { "target": "a:/" } }""");
+        Assert.Equal("open a:/", _handler.LastCall);
+        Assert.Equal("a:/", open.GetProperty("result").GetProperty("location").GetString());
+
+        var state = await Ask("""{ "method": "panels.state" }""");
+        var row = state.GetProperty("result").GetProperty("entries")[0];
+        Assert.Equal("x.txt", row.GetProperty("name").GetString());
+        Assert.False(row.GetProperty("isFolder").GetBoolean());
     }
 
     [Theory]

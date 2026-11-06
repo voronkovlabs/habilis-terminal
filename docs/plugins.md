@@ -20,22 +20,25 @@ unload while the app runs, so developing one needs no restart.
 
 ## Quick start
 
-You need the .NET 10 SDK and a running Habilis Terminal. `New-Plugin.ps1` and `habi-plugin.ps1` ship next to `habi.exe`, and are in `tools/plugins/` in the repository.
+You need the .NET 10 SDK and a running Habilis Terminal. `New-Plugin.ps1` and `habi-plugin.ps1` ship next to `habi.exe`, and are in `tools/plugins/` in the repository. They are not on `PATH`:
 
 ```powershell
-New-Plugin.ps1 -Name MyPanel -Id me.mypanel -Path C:\work -Kind Panel -Prefix my
+$habi = "$env:LOCALAPPDATA\HabilisTerminal\current"    # the folder of habi.exe
+& "$habi\New-Plugin.ps1" -Name MyPanel -Id me.mypanel -Path C:\work -Kind Panel -Prefix my
 dotnet build C:\work\MyPanel -c Release
-habi-plugin.ps1 load C:\work\MyPanel\bin\Release\net10.0
+& "$habi\habi-plugin.ps1" load C:\work\MyPanel\bin\Release\net10.0
 ```
 
 The plugin now runs: press F11, or type `my:` on the command line. Change the code, then:
 
 ```powershell
 dotnet build C:\work\MyPanel -c Release
-habi-plugin.ps1 reload me.mypanel
+& "$habi\habi-plugin.ps1" reload me.mypanel
 ```
 
-If it does not work, `habi-plugin.ps1 list -Json` shows why, with the whole exception.
+If it does not work, `habi-plugin.ps1 list -Json` shows why, with the whole exception. `habi-plugin.ps1 open my: -Json` opens it and returns the rows, so you can check it without a window.
+
+The generated project compiles against `HabilisTerminal.Plugins.Sdk.dll` in the folder of `habi.exe`, with its comments in the `.xml` beside it. If that folder moves, change `HabiDir` in the project. The samples are in the repository, at https://github.com/voronkovlabs/habilis-terminal/tree/main/plugins.
 
 To keep it after a restart, copy `bin\Release\net10.0` to `%LOCALAPPDATA%\HabilisTerminal\plugins\me.mypanel\`.
 
@@ -57,7 +60,9 @@ For a format, use `-Kind FileFormat -Extension myf`, then press Enter on a `.myf
 | Throw `PluginException` with a plain message for what the user should read | Anything else shows as "<plugin> failed: ..." |
 | Stop timers in `DisposeAsync`; stop threads and free native libraries in `ShutdownAsync` | What keeps running keeps the old code in memory after a reload |
 | Find its own files through `Host.PluginDirectory` | During development it runs from a temporary copy |
-| Leave no partial file behind after a failed or cancelled transfer | The user would take it for the whole file |
+| Leave no partial file behind after a failed or cancelled transfer: write beside the target, then move into place | The user would take it for the whole file |
+| Treat what is inside a file as untrusted: a name such as `../../x` must not write outside `LocalFolder` | Opening someone's file could overwrite anything the user can |
+| Look at a file's size and first bytes before reading it in `OpenFileAsync` | Ctrl+PgDn asks about any file, however large |
 
 **A plugin must not:**
 
@@ -144,7 +149,8 @@ public abstract class Plugin
 
 public sealed record PluginMenuItem(string Title, Func<CancellationToken, Task<IPanelProvider?>> Open);
 
-// SDK 1.5. InnerPath: a place inside the file, from folder history. AnyFormat: Ctrl+PgDn, so look at the content.
+// SDK 1.5. InnerPath: a place inside the file such as docs\\sub, or empty; from folder history, so it may be gone. Compare it
+// the way your format compares names. AnyFormat: Ctrl+PgDn or a location from history, so look at the content.
 public sealed record FileOpenRequest(string Path, string InnerPath, bool AnyFormat);
 ```
 `OpenAddressAsync` gets the full text after Enter on the command line, e.g. `s3://bucket/path/` or
@@ -188,7 +194,7 @@ public interface IPanelProvider : IAsyncDisposable
 // token; a listing also shows the count of entries so far, so yield batches as they arrive. IPluginWindow.Refresh and
 // IPanelViewHost.Refresh show no card: they are for live panels.
 
-public sealed record PanelEntry(string Name, bool IsFolder, long? Size = null, DateTime? Modified = null)
+public sealed record PanelEntry(string Name, bool IsFolder = false, long? Size = null, DateTime? Modified = null)
 {
     public IReadOnlyDictionary<string, CellValue>? Cells { get; init; }   // custom columns
     public int Group { get; init; }                                      // sorted first: e.g. running jobs
@@ -222,6 +228,47 @@ Optional capabilities, by interface:
 
 Every operation gets an `IOperationProgress` (current item, items and bytes done / total) and a cancellation token
 from the host. The host shows it in its operation toasts with Cancel.
+
+The contracts of the operations, in full. The same with comments is in `HabilisTerminal.Plugins.Sdk.xml`, next to the SDK:
+
+```csharp
+public interface IGetFiles
+{
+    bool CanMove { get; }                  // F6 from the panel is offered
+    Task<OperationOutcome> GetFilesAsync(TransferRequest request, IOperationProgress progress, CancellationToken token);
+}
+public interface IPutFiles
+{
+    Task<OperationOutcome> PutFilesAsync(IReadOnlyList<string> localPaths, Func<string, Task<OverwriteChoice>> askOverwrite, IOperationProgress progress, CancellationToken token);
+}
+public interface IDeleteEntries { Task<OperationOutcome> DeleteAsync(IReadOnlyList<PanelEntry> entries, IOperationProgress progress, CancellationToken token); }
+public interface IMakeFolder { Task MakeFolderAsync(string name, CancellationToken token); }
+public interface IViewEntry { Task<(string Title, string Text)?> ViewAsync(PanelEntry entry, CancellationToken token); } // null: view a temporary copy, through IGetFiles
+public interface IQuickViewEntry { string? QuickView(PanelEntry entry); }  // asked on every cursor move: from data you have
+public interface IPanelCommands { IReadOnlyList<PanelCommand> Commands { get; } }
+
+public sealed class TransferRequest { IReadOnlyList<PanelEntry> Entries; string LocalFolder; bool Move; Func<string, Task<OverwriteChoice>> AskOverwrite; }
+public enum OverwriteChoice { Overwrite, Skip, OverwriteAll, SkipAll, Cancel }
+public sealed record OperationOutcome(int Succeeded, int Skipped, int Failed, string? Message = null);
+public interface IOperationProgress { void SetTotals(long? items, long? bytes); void Begin(string item); void AddBytes(long bytes); void CompleteItem(); }
+public sealed record InfoLine(string Label, string Value);
+```
+
+### The operations contract
+
+| Question | Answer |
+|---|---|
+| Who remembers "Overwrite all" and "Skip all"? | **The plugin.** The host may ask again each time. If the user chose a policy up front, the host answers at once |
+| The user cancels on the card | The token fires. Throw `OperationCanceledException` (`token.ThrowIfCancellationRequested`): the host shows nothing further, and re-lists the panel |
+| The user answers Cancel to `AskOverwrite` | Stop, and return an outcome with what was done so far |
+| One item fails, the rest can go on | Count it in `Failed` and go on. The host shows "N failed, M done", or your `Message` if you give one |
+| The whole operation cannot go on | Throw `PluginException`: the host shows the message in a dialog |
+| Can the user move around the panel during an operation? | **Yes.** Operations run in the background on a thread-pool thread. Take what you need from your current location at the start, or carry it in `PanelEntry.Tag` |
+| `PanelEntry.Modified` | Local time is converted; UTC and unspecified are taken as UTC |
+| `EnterAsync` returns false for a file | The host views it, as F3 does |
+| F3 | `IViewEntry` first. If absent, or it returns null: `GetFilesAsync` into a temporary folder, then the viewer. Neither: "Not supported" |
+| Ctrl+R | Calls `ListAsync` again on the same provider. Re-read your source there, if it can change |
+| A slow `OpenFileAsync` or `OpenAddressAsync` | After 0.4 s the host shows a card with Cancel, which cancels the token |
 
 ### Errors
 A plugin throws `PluginException(message)` for errors the user should read ("The credentials have expired: run
@@ -286,7 +333,7 @@ Credentials stay in memory; nothing is logged.
 
 ### Recipe: a file format
 
-A file that looks like a folder, as archives do. **The app needs no change:** a plugin claims the extension and gives a panel. `plugins/Habilis.Samples.FileFormat` is a whole one in one file; copy it.
+A file that looks like a folder, as archives do. **The app needs no change:** a plugin claims the extension and gives a panel. `plugins/Habilis.Samples.FileFormat` is a whole one in one file ([on GitHub](https://github.com/voronkovlabs/habilis-terminal/blob/main/plugins/Habilis.Samples.FileFormat/BundlePlugin.cs)); copy it. What `New-Plugin.ps1 -Kind FileFormat` generates is only a start: it does not look at the content or go anywhere.
 
 ```csharp
 public sealed class MyFormatPlugin : Plugin
@@ -322,6 +369,12 @@ Then add what the format can do:
 | `IPutFiles`, `IDeleteEntries`, `IMakeFolder` | F5 / F6 in, F8, F7. Write a new file next to the old one, then replace it, so a failure leaves it whole. See `Habilis.Archives` |
 
 An encrypted format asks with `await Host.Dialogs.InputSecretAsync(...)` and keeps the answer in memory.
+
+Before reading a file in `OpenFileAsync`, check its size and first bytes, and reject inner names that could leave the target folder. The sample does both.
+
+### Recipe: testing a plugin
+
+Reference the plugin from a test project and call it directly, with no app and no window. `plugins/Habilis.Samples.FileFormat.Tests` is a small example with a do-nothing `IOperationProgress`; `plugins/Habilis.Aws.Tests/FakeHost.cs` is a whole fake `IPluginHost` with scripted dialogs, which you can copy. A plugin's own logic is checked this way, and how it looks in the app with `habi-plugin.ps1 open` and `state`.
 
 ### Recipe: a panel with its own data
 
@@ -366,14 +419,22 @@ ShutdownAsync     on unload or reload, after every panel has closed. 5 s at most
 
 ## 10. Checklist before calling a plugin done
 
-- [ ] It loads with `habi-plugin.ps1 load`, and `list` shows `loaded`.
-- [ ] `reload` with a panel open returns to the same place, with `panelsReopened` equal to `panelsClosed`.
-- [ ] `oldVersionFreed` is `true` after a second reload. `false` means something still holds it: a static, a thread, a timer.
-- [ ] `unload` removes its menu entries, and its prefix then runs in the shell as usual.
+Through the API (`habi-plugin.ps1`), with no window:
+
+- [ ] It loads with `load`, and `list` shows `loaded`.
+- [ ] `open` shows the rows you expect, and a place inside it opens too.
+- [ ] `reload` with a panel open returns to the same place, with `panelsReopened` equal to `panelsClosed`, and `buildId` has changed.
+- [ ] `oldVersionFreed` is `true`. `false` means something still holds it: a static, a thread, a timer.
+- [ ] A panel plugin: `unload` removes its menu entries, and its prefix then runs in the shell as usual.
+- [ ] A format plugin: `open` on a file that is not its format gives `not_found`, and after `unload` Enter opens its files in their own program.
+- [ ] Tests run without network and only in temporary folders.
+
+In a window:
+
 - [ ] Cancel on the waiting card stops a slow listing.
 - [ ] A failing call shows a plain message, not an exception's text meant for developers.
 - [ ] Folder history (Alt+F12) reopens a place inside it.
-- [ ] Tests run without network and only in temporary folders.
+- [ ] A format plugin: ".." at the top returns to the file with the cursor on it, and Ctrl+PgDn on another file does not hang or take it.
 - [ ] A README: what it does, how to install it, settings, permissions.
 
 ## 11. Common mistakes
@@ -389,7 +450,7 @@ ShutdownAsync     on unload or reload, after every panel has closed. 5 s at most
 | Enter on your file opens another program | The name does not end in your `FileExtensions`, or `OpenFileAsync` returned null |
 | ".." never leaves the panel | `GoUpAsync` returns true at the top |
 | After a reload the panel goes back to the local folder | `Location` is not something `OpenAddressAsync` or `OpenFileAsync` can open |
-| `oldVersionFreed: false` every time | A timer, a thread, a static or an event subscription is left. Only the first reload after the app's start reports `false` regardless |
+| `oldVersionFreed: false` every time | A timer, a thread, a static or an event subscription is left. Two cases report `false` regardless: the first reload of a plugin the app loaded at startup, and a plugin whose WPF view has been shown (§12) |
 | The window hangs | A property does slow work, or `.Result` on the UI thread |
 
 ## 12. Known limits
@@ -397,4 +458,5 @@ ShutdownAsync     on unload or reload, after every panel has closed. 5 s at most
 - Folders loaded through the API are not remembered across restarts.
 - The cursor returns to the top after a reload, and does not move onto a file named in an address.
 - A plugin the app loaded at startup reports `oldVersionFreed: false` on its first reload, and its files stay locked until the app restarts. Develop from your build folder with `load`, which never locks it.
+- A plugin whose WPF view has been shown (`IPanelView`) reports `oldVersionFreed: false`: WPF keeps hold of the view's types. Reloading works, but each old copy stays in memory until the app restarts. This is seen with the GPU plugin.
 - Whether the AWS plugins free their memory on unload has not been checked: tests never open them with real credentials.

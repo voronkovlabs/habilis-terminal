@@ -15,14 +15,16 @@ param(
     [Parameter(Mandatory)][string]$Path,
     # Panel: a list opened from F11, the drive menu and an address. FileFormat: a file opened as a folder.
     [ValidateSet('Panel', 'FileFormat')][string]$Kind = 'Panel',
-    # For Panel: the address prefix, without the colon.
-    [string]$Prefix = 'hello',
-    # For FileFormat: the file extension, without the dot.
-    [string]$Extension = 'hello',
+    # For Panel, required: the address prefix, without the colon.
+    [string]$Prefix,
+    # For FileFormat, required: the file extension, without the dot.
+    [string]$Extension,
     # The folder of habi.exe, whose HabilisTerminal.Plugins.Sdk.dll the plugin compiles against. Found by default.
     [string]$AppFolder
 )
 $ErrorActionPreference = 'Stop'
+if ($Kind -eq 'FileFormat' -and -not $Extension) { throw 'A FileFormat plugin needs -Extension.' }
+if ($Kind -eq 'Panel' -and -not $Prefix) { throw 'A Panel plugin needs -Prefix.' }
 
 function Find-Sdk {
     $name = 'HabilisTerminal.Plugins.Sdk.dll'
@@ -53,11 +55,13 @@ New-Item $project -ItemType Directory -Force | Out-Null
     <ImplicitUsings>enable</ImplicitUsings>
     <!-- Dependencies are copied next to the plugin; the host loads them with its .deps.json. -->
     <EnableDynamicLoading>true</EnableDynamicLoading>
+    <!-- The folder of habi.exe. If it moves, change this, or build with -p:HabiDir=<folder>. -->
+    <HabiDir Condition="'`$(HabiDir)' == ''">$(Split-Path $sdk)</HabiDir>
   </PropertyGroup>
   <ItemGroup>
     <!-- The host provides the SDK at run time: Private=false keeps a copy out of the plugin folder. -->
     <Reference Include="HabilisTerminal.Plugins.Sdk">
-      <HintPath>$sdk</HintPath>
+      <HintPath>`$(HabiDir)\HabilisTerminal.Plugins.Sdk.dll</HintPath>
       <Private>false</Private>
     </Reference>
     <None Include="plugin.json" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
@@ -81,7 +85,9 @@ $entryPoints = if ($Kind -eq 'FileFormat') {
 
     public override Task<IPanelProvider?> OpenFileAsync(FileOpenRequest request, CancellationToken cancellationToken)
     {
-        // Return null when the content is not yours: Ctrl+PgDn asks about any file.
+        // A start. Ctrl+PgDn asks about any file, however large: look at its size and first bytes, and return null when
+        // the content is not yours. Go to request.InnerPath if it still exists. See the recipe in docs/plugins.md, and
+        // https://github.com/voronkovlabs/habilis-terminal/tree/main/plugins/Habilis.Samples.FileFormat for a whole format.
         return Task.FromResult<IPanelProvider?>(new Panel(request.Path));
     }
 "@

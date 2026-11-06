@@ -14,15 +14,23 @@ habi-plugin.ps1 load C:\work\MyPlugin\bin\Release\net10.0   # first time: from i
 dotnet build C:\work\MyPlugin -c Release                    # after each change...
 habi-plugin.ps1 reload my.plugin                            # ...reads the same folder again
 habi-plugin.ps1 list                                        # what runs, and why something failed
+habi-plugin.ps1 open my:/some/place                         # opens it in the active panel, as the user would
+habi-plugin.ps1 state                                       # the active panel's place and rows
 habi-plugin.ps1 unload my.plugin
 ```
+
+The scripts are not on `PATH`: use their full path. In an installed app that is `%LOCALAPPDATA%\HabilisTerminal\current\`.
 
 | Option | What it does |
 |---|---|
 | `-ProcessId N` | Which app to talk to. By default `HABI_PID`, set in the app's own consoles, then the only `habi` running. With several it lists them and asks. |
 | `-Json` | Prints the reply as it came, for scripts. The exit code stays 0; read `ok`. |
 
-Without `-Json` a failure prints `code: message` to stderr and exits with 1.
+Without `-Json` a failure prints `code: message` to stderr and exits with 1. Failures the script finds itself (`no_app`, a folder that does not exist) look the same.
+
+**Checking a reload took effect:** `buildId` in `list` changes with every compiled change. The manifest's version does not.
+
+**Checking a plugin without a window:** `open` then `state -Json` show the rows the user would see. F3, F5 and the dialogs still need a window, or a test that calls the provider directly (see [plugins.md](plugins.md), §8).
 
 ## What happens on a load or reload
 
@@ -32,7 +40,7 @@ Without `-Json` a failure prints `code: message` to stderr and exits with 1.
 4. Its panels close in every console tab, `ShutdownAsync` runs (5 s at most), and the old copy is unloaded.
 5. The new copy is initialised, and its panels reopen at the same `Location` when an address or a file can open them. The cursor returns to the top.
 
-`plugins.load` of an id that already runs replaces it, wherever the new folder is. **Folders loaded this way are not remembered:** after a restart the app has its installed plugins again. To keep a plugin, install it (see [plugins.md](plugins.md), §3).
+Temporary copies are removed once the old version is freed; what stays is cleaned at the next start. `plugins.load` of an id that already runs replaces it, wherever the new folder is. **Folders loaded this way are not remembered:** after a restart the app has its installed plugins again. To keep a plugin, install it (see [plugins.md](plugins.md), §3).
 
 ### `oldVersionFreed`
 
@@ -60,12 +68,16 @@ Fields with no value are left out.
 | Method | Params | Result |
 |---|---|---|
 | `api.version` | | `{ api, sdk, host }`: this protocol's version (1), the SDK the app implements, the app's version |
-| `plugins.list` | | An array of `{ id, name, version, sdk, folder, source, state, error, errorDetail, collectible }` |
+| `plugins.list` | | An array of `{ id, name, version, sdk, folder, source, state, error, errorDetail, collectible, buildId }` |
 | `plugins.load` | `{ folder }`: a full path | An outcome |
 | `plugins.reload` | `{ id }` | An outcome |
 | `plugins.unload` | `{ id }` | An outcome |
+| `panels.open` | `{ target }`: an address, a path, a place inside a file | A panel state. `not_found` when nothing opened it, with the panel's message |
+| `panels.state` | | A panel state |
 
 In a list, `state` is `loaded` or `failed`. `folder` is where it runs from, `source` where a reload reads it. `error` is the message and `errorDetail` the whole exception.
+
+A panel state is the active panel's `{ plugin, location, title, message, count, entries }`, with `entries` as `{ name, isFolder, size }`, at most 1000, without `..`. `plugin` and `title` are left out for a local folder.
 
 An outcome is `{ id, state, oldVersionFreed, panelsClosed, panelsReopened, error }`. `state` is `loaded`, `failed` (it loaded but `Initialize` threw: see `error`; the old copy is already gone) or `unloaded`. `oldVersionFreed` is left out when no old copy ran.
 
@@ -80,6 +92,7 @@ An outcome is `{ id, state, oldVersionFreed, panelsClosed, panelsReopened, error
 | `load_failed` | The new version did not load: no manifest, a broken assembly, no `Plugin` class, a different id on reload | Read `message`; the running copy is unchanged |
 | `incompatible_sdk` | The plugin needs a newer SDK than this app has | Update the app, or lower `"sdk"` |
 | `internal` | Something unexpected | Report it |
+| `no_app` | From the script: no app, or several, or it cannot be reached | Start it, or use `-ProcessId` |
 
 ### Calling it without the script
 

@@ -6,7 +6,14 @@ using System.Text.Json.Serialization;
 namespace HabilisTerminal.Core.Plugins;
 
 /// <summary>A plugin as <c>plugins.list</c> reports it (docs/plugin-api.md).</summary>
-public sealed record PluginApiEntry(string Id, string Name, string? Version, string? Sdk, string Folder, string Source, string State, string? Error, string? ErrorDetail, bool Collectible);
+/// <param name="BuildId">Changes with every compiled change, so that a reload can be seen to have taken effect.</param>
+public sealed record PluginApiEntry(string Id, string Name, string? Version, string? Sdk, string Folder, string Source, string State, string? Error, string? ErrorDetail, bool Collectible, string? BuildId);
+
+/// <summary>One row of a panel, as <c>panels.state</c> reports it.</summary>
+public sealed record PluginApiPanelEntry(string Name, bool IsFolder, long Size);
+
+/// <summary>The active panel, so that a plugin can be checked without a window (<c>panels.open</c>, <c>panels.state</c>).</summary>
+public sealed record PluginApiPanelState(string? Plugin, string Location, string? Title, string? Message, int Count, IReadOnlyList<PluginApiPanelEntry> Entries);
 
 /// <summary>What a load, reload or unload did. <paramref name="OldVersionFreed"/>: null when there was no old copy.</summary>
 public sealed record PluginApiOutcome(string Id, string State, bool? OldVersionFreed, int PanelsClosed, int PanelsReopened, string? Error);
@@ -38,6 +45,11 @@ public interface IPluginApiHandler
     Task<PluginApiOutcome> ReloadAsync(string id);
 
     Task<PluginApiOutcome> UnloadAsync(string id);
+
+    /// <summary>Opens an address or a file in the active panel, as the user would.</summary>
+    Task<PluginApiPanelState> OpenPanelAsync(string target);
+
+    Task<PluginApiPanelState> PanelStateAsync();
 }
 
 /// <summary>
@@ -140,6 +152,8 @@ public sealed class PluginApiServer(string pipeName, IPluginApiHandler handler, 
         "plugins.load" => await handler.LoadAsync(Text(root, "folder")).ConfigureAwait(false),
         "plugins.reload" => await handler.ReloadAsync(Text(root, "id")).ConfigureAwait(false),
         "plugins.unload" => await handler.UnloadAsync(Text(root, "id")).ConfigureAwait(false),
+        "panels.open" => await handler.OpenPanelAsync(Text(root, "target")).ConfigureAwait(false),
+        "panels.state" => await handler.PanelStateAsync().ConfigureAwait(false),
         _ => throw new PluginApiException(PluginApiException.UnknownMethod, $"There is no method \"{method}\"."),
     };
 

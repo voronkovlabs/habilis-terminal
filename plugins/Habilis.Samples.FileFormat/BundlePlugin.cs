@@ -10,6 +10,9 @@ namespace Habilis.Samples.FileFormat;
 /// </summary>
 public sealed class BundlePlugin : Plugin
 {
+    /// <summary>Ctrl+PgDn asks about any file, however large: look before reading it all.</summary>
+    private const long MaxBundleBytes = 16 * 1024 * 1024;
+
     public override IEnumerable<string> FileExtensions => ["habibundle"];
 
     public override async Task<IPanelProvider?> OpenFileAsync(FileOpenRequest request, CancellationToken cancellationToken)
@@ -18,6 +21,11 @@ public sealed class BundlePlugin : Plugin
         string text;
         try
         {
+            if (new FileInfo(request.Path).Length > MaxBundleBytes)
+            {
+                return null;
+            }
+
             text = await File.ReadAllTextAsync(request.Path, cancellationToken).ConfigureAwait(false);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
@@ -40,7 +48,14 @@ internal sealed class Bundle
 
     public IReadOnlyDictionary<string, string> Files { get; }
 
-    /// <summary>Null when the text is not a bundle: it must start with an inner file's marker.</summary>
+    /// <summary>
+    /// The content of a file is not to be trusted: "../../x" must not be able to write outside the folder F5 copies to.
+    /// </summary>
+    public static bool IsSafePath(string path) =>
+        path.Length > 0 && !path.Contains('\\', StringComparison.Ordinal) && !path.Contains(':', StringComparison.Ordinal) &&
+        path.Split('/').All(part => part.Length > 0 && part != "." && part != "..");
+
+    /// <summary>Null when the text is not a bundle: it must start with an inner file's marker, and hold only safe paths.</summary>
     public static Bundle? Parse(string text)
     {
         if (!text.StartsWith(Marker, StringComparison.Ordinal))
@@ -61,7 +76,12 @@ internal sealed class Bundle
                     files[current] = content.ToString();
                 }
 
-                current = line[Marker.Length..].Trim().Trim('/');
+                current = line[Marker.Length..].Trim();
+                if (!IsSafePath(current))
+                {
+                    return null;
+                }
+
                 content.Clear();
             }
             else
@@ -167,21 +187,32 @@ internal sealed class BundlePanel : IPanelProvider, IGetFiles, IViewEntry
         ArgumentNullException.ThrowIfNull(progress);
         var copied = 0;
         var skipped = 0;
+
+        // The user can move around the panel while a copy runs: take the folder now.
+        var folder = _folder;
+
+        // The host asks again each time: the plugin remembers an answer "for all".
+        OverwriteChoice? forAll = null;
         foreach (var entry in request.Entries)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            var prefix = Inner(entry.Name);
+            var prefix = folder.Length == 0 ? entry.Name : folder + "/" + entry.Name;
             var sources = entry.IsFolder
                 ? _bundle.Files.Keys.Where(p => p.StartsWith(prefix + "/", StringComparison.OrdinalIgnoreCase)).ToList()
                 : [prefix];
             foreach (var source in sources)
             {
                 progress.Begin(source);
-                var relative = _folder.Length == 0 ? source : source[(_folder.Length + 1)..];
+                var relative = folder.Length == 0 ? source : source[(folder.Length + 1)..];
                 var target = Path.Combine(request.LocalFolder, relative.Replace('/', '\\'));
                 if (File.Exists(target))
                 {
-                    var choice = await request.AskOverwrite(relative).ConfigureAwait(false);
+                    var choice = forAll ?? await request.AskOverwrite(relative).ConfigureAwait(false);
+                    if (choice is OverwriteChoice.OverwriteAll or OverwriteChoice.SkipAll)
+                    {
+                        forAll = choice;
+                    }
+
                     if (choice == OverwriteChoice.Cancel)
                     {
                         return new OperationOutcome(copied, skipped, 0);
@@ -194,8 +225,19 @@ internal sealed class BundlePanel : IPanelProvider, IGetFiles, IViewEntry
                     }
                 }
 
+                // A cancel or a failure must leave no partial file: write beside it, then move into place.
                 Directory.CreateDirectory(Path.GetDirectoryName(target)!);
-                await File.WriteAllTextAsync(target, _bundle.Files[source], cancellationToken).ConfigureAwait(false);
+                var partial = target + ".partial";
+                try
+                {
+                    await File.WriteAllTextAsync(partial, _bundle.Files[source], cancellationToken).ConfigureAwait(false);
+                    File.Move(partial, target, overwrite: true);
+                }
+                finally
+                {
+                    File.Delete(partial);
+                }
+
                 progress.CompleteItem();
                 copied++;
             }

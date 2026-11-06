@@ -47,6 +47,35 @@ public sealed class BundlePluginTests : IDisposable
     [Fact]
     public async Task AFileThatIsNoBundleIsNotOurs() => Assert.Null(await Open("just some text", anyFormat: true));
 
+    [Theory]
+    [InlineData("= ../../evil.txt\nx")]
+    [InlineData("= C:/evil.txt\nx")]
+    [InlineData("= a\\b.txt\nx")]
+    [InlineData("= a/../../b.txt\nx")]
+    [InlineData("= /rooted.txt\nx")]
+    public async Task APathThatCouldEscapeMakesItNoBundle(string text) => Assert.Null(await Open(text));
+
+    [Fact]
+    public async Task AnAnswerForAllIsAskedOnceAndNothingPartialStays()
+    {
+        var token = TestContext.Current.CancellationToken;
+        await using var panel = await Open(Sample);
+        var target = Directory.CreateDirectory(Path.Combine(_folder, "out")).FullName;
+        Directory.CreateDirectory(Path.Combine(target, "docs", "more"));
+        await File.WriteAllTextAsync(Path.Combine(target, "docs", "guide.txt"), "old", token);
+        await File.WriteAllTextAsync(Path.Combine(target, "docs", "more", "deep.txt"), "old", token);
+        var asked = 0;
+        var request = new TransferRequest([new PanelEntry("docs", IsFolder: true)], target, move: false, _ =>
+        {
+            asked++;
+            return Task.FromResult(OverwriteChoice.SkipAll);
+        });
+
+        Assert.Equal(new OperationOutcome(0, 2, 0), await panel!.GetFilesAsync(request, new NoProgress(), token));
+        Assert.Equal(1, asked);
+        Assert.Empty(Directory.EnumerateFiles(target, "*.partial", SearchOption.AllDirectories));
+    }
+
     [Fact]
     public async Task APlaceFromHistoryOpensAndAGoneOneShowsTheTop()
     {
