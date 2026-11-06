@@ -9,7 +9,7 @@
     habi-plugin.ps1 list -Json
 #>
 param(
-    [Parameter(Mandatory, Position = 0)][ValidateSet('list', 'load', 'reload', 'unload', 'version', 'open', 'state')][string]$Command,
+    [Parameter(Mandatory, Position = 0)][ValidateSet('list', 'load', 'reload', 'unload', 'version', 'open', 'state', 'commands')][string]$Command,
     # A plugin folder for load, a plugin id for reload and unload, an address or file path for open.
     [Parameter(Position = 1)][string]$Target,
     # The app's process id. By default HABI_PID, set in the app's own consoles, then the only habi running.
@@ -44,6 +44,7 @@ $request = switch ($Command) {
     'list' { @{ method = 'plugins.list' } }
     'version' { @{ method = 'api.version' } }
     'state' { @{ method = 'panels.state' } }
+    'commands' { @{ method = 'commands.list' } }
     'open' {
         if (-not $Target) { Fail 'bad_request' 'open needs an address or a file path.' }
         @{ method = 'panels.open'; params = @{ target = $Target } }
@@ -80,5 +81,6 @@ if (-not $reply.ok) {
     exit 1
 }
 if ($Command -eq 'list') { $reply.result | Format-Table id, version, state, collectible, buildId, source, error -AutoSize | Out-String -Width 200 }
+elseif ($Command -eq 'commands') { $reply.result | Format-Table title, section, keys -AutoSize | Out-String -Width 200 }
 elseif ($Command -in 'open', 'state') { "$($reply.result.location) $($reply.result.message)"; $reply.result.entries | Format-Table name, isFolder, size -AutoSize | Out-String -Width 200 }
 else { $reply.result | Format-List | Out-String -Width 200 }

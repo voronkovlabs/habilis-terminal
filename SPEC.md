@@ -94,6 +94,7 @@ All keys go to the shell / running program, except these globally intercepted on
 - **Ctrl+Tab** — only while panels are visible.
 - **Alt+F4** — closes the window.
 - **Ctrl+Shift+C / Ctrl+Shift+V** — terminal-level copy / paste.
+- **Ctrl+Shift+P** — the command line in the title bar (#155): commands that apply to what is selected, with their keys; a pasted path or address opens that place.
 
 ## 5. Keyboard map (panel focus)
 

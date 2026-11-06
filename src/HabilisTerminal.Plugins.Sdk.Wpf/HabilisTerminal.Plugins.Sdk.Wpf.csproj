@@ -5,7 +5,7 @@
     <UseWPF>true</UseWPF>
     <RootNamespace>HabilisTerminal.Plugins.Wpf</RootNamespace>
     <!-- Its own version, the SDK's, never the app's (issue #60). -->
-    <SdkVersion>1.5.0</SdkVersion>
+    <SdkVersion>1.6.0</SdkVersion>
     <AssemblyVersion>$(SdkVersion).0</AssemblyVersion>
     <FileVersion>$(SdkVersion).0</FileVersion>
     <PackageVersion>$(SdkVersion)</PackageVersion>

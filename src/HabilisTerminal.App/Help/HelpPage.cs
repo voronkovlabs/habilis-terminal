@@ -8,108 +8,6 @@ namespace HabilisTerminal.App.Help;
 /// <summary>F1 (SPEC §5): the keyboard map as a full-window page. Esc, F1 or F10 closes it.</summary>
 public sealed class HelpPage : DockPanel, IPage
 {
-    private static readonly (string Section, (string Keys, string Action)[] Rows)[] KeyMap =
-    [
-        ("Focus and layout",
-        [
-            ("Tab", "Switch panels; completes on a command line with text"),
-            ("Typing", "Goes to the command line; the focus stays on the panel, as in Far"),
-            ("Enter, ←/→, Home/End, Del, Backspace", "Edit or run the command line when it has text, act in the panel when it is empty; Shift selects in the line"),
-            ("Esc", "Clear the command line; on an empty line, collapse the console grown over the panels"),
-            ("Click in the console", "Work inside the console (selection, scrollback); Esc on an empty line comes back"),
-            ("Ctrl+O", "Hide / show panels"),
-            ("Ctrl+F1 / Ctrl+F2", "Hide / show the left / right panel"),
-            ("Ctrl+P", "Hide / show the inactive panel"),
-            ("Ctrl+U", "Swap panels"),
-            ("Ctrl+Up / Ctrl+Down", "Terminal height"),
-            ("Ctrl+Left / Ctrl+Right", "Single-panel width"),
-            ("Alt+F9", "Maximize / restore the window"),
-        ]),
-        ("Navigation",
-        [
-            ("Enter", "Open a folder or archive; run a program in the shell; open other files in their program"),
-            ("Shift+Enter", "Run a program in a new console of its own"),
-            ("Ctrl+PgUp", "Parent folder"),
-            ("Ctrl+PgDn", "Enter the folder under the cursor; on a file: open it as an archive"),
-            ("Ctrl+\\", "Root of the drive"),
-            ("Alt+F1 / Alt+F2", "Drive menu for the left / right panel (items have hotkeys 1, 2, 3...; F4 changes one)"),
-            ("Alt+F12", "Folder history"),
-            ("Alt+F11", "View and edit history"),
-            ("Alt+letter", "Quick search"),
-        ]),
-        ("Selection",
-        [
-            ("Ins", "Toggle selection and move down"),
-            ("Shift+arrows", "Select while moving"),
-            ("Ctrl+click", "Toggle selection"),
-            ("Gray +  /  Gray −", "Select / deselect by mask"),
-            ("Gray *", "Invert selection"),
-        ]),
-        ("Files",
-        [
-            ("F3", "View (on a folder: compute its size; a PDF shows page by page; there Ctrl+F opens the Edge viewer, for search and text selection)"),
-            ("Alt+F3", "Markdown rendered; other files in their associated program"),
-            ("F4 / Shift+F4", "Edit / new file: asks for a name, created when saved"),
-            ("F5 / Shift+F5", "Copy / copy the item under the cursor"),
-            ("F6 / Shift+F6", "Move or rename / rename the item under the cursor"),
-            ("F7", "Make folder"),
-            ("F8 / Del", "Delete (Recycle Bin by default)"),
-            ("Shift+Del", "Delete permanently"),
-            ("Ctrl+A", "Attributes"),
-            ("Right click, Shift+F10, Menu key", "Windows context menu"),
-        ]),
-        ("Panels",
-        [
-            ("Ctrl+1 … Ctrl+5, Ctrl+0", "View modes"),
-            ("Ctrl+F3 … Ctrl+F9", "Sort by name / extension / modified / size / unsorted / created / accessed"),
-            ("Ctrl+F12", "Sort menu"),
-            ("Shift+F12", "Selected first"),
-            ("Ctrl+H", "Hidden and system files"),
-            ("Ctrl+R", "Re-read"),
-            ("Ctrl+L", "Info panel in the other panel (shows a hidden one; again hides it)"),
-            ("Ctrl+Shift+T", "New console, with the panels of the last one closed; each tab keeps its own panels, a long command goes on in its tab"),
-            ("Ctrl+Tab / Ctrl+Shift+Tab", "Next / previous console"),
-            ("Ctrl+Shift+W", "Close the console"),
-            ("Ctrl+Q", "Quick view in the other panel (shows a hidden one; again hides it); on a PDF the mouse wheel turns pages; Tab goes into it, where the arrows scroll it"),
-        ]),
-        ("Command line",
-        [
-            ("Ctrl+Enter", "Insert the file name"),
-            ("Ctrl+F", "Insert the full file name"),
-            ("Ctrl+[ / Ctrl+]", "Insert the left / right panel path"),
-            ("Ctrl+E / Ctrl+X", "Previous / next command"),
-            ("Ctrl+Ins, Ctrl+C", "Copy names to the clipboard (panel focused)"),
-            ("Ctrl+Alt+Ins, Ctrl+Alt+C", "Copy full names to the clipboard"),
-            ("Ctrl+P, Ctrl+U, Ctrl+L, Ctrl+Q", "Panel keys that also work at the prompt (not while a program runs)"),
-        ]),
-        ("Viewer (F3)",
-        [
-            ("F2", "Wrap"),
-            ("F4", "Hex"),
-            ("F7 / Shift+F7", "Find / find next"),
-            ("F8 / Shift+F8", "ANSI ↔ OEM / choose the encoding"),
-            ("Alt+F8", "Go to line, offset or percent"),
-            ("F6", "Edit"),
-        ]),
-        ("Editor (F4)",
-        [
-            ("F2, Ctrl+S / Shift+F2", "Save / save as"),
-            ("F7 / Shift+F7", "Find / find next"),
-            ("Ctrl+F7", "Replace"),
-            ("Shift+F8", "Encoding"),
-            ("Alt+mouse, Alt+Shift+arrows", "Block selection"),
-            ("Ctrl+F10", "Back to the file in the panel"),
-            ("F6", "View"),
-        ]),
-        ("Window",
-        [
-            ("F1", "This help"),
-            ("F9", "Menu"),
-            ("F10", "Exit"),
-            ("Esc", "Close a viewer, editor, settings or this page"),
-        ]),
-    ];
-
     private readonly ScrollViewer _scroll;
 
     public HelpPage()
@@ -130,7 +28,7 @@ public sealed class HelpPage : DockPanel, IPage
         Children.Add(headerBorder);
 
         var columns = new WrapPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(24, 16, 24, 24) };
-        foreach (var (section, rows) in KeyMap)
+        foreach (var (section, rows) in Core.Commands.CommandCatalog.HelpSections)
         {
             var grid = new Grid { Width = 460, Margin = new Thickness(0, 0, 32, 24) };
             grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(170) });

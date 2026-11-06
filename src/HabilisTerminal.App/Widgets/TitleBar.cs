@@ -17,6 +17,13 @@ namespace HabilisTerminal.App.Widgets;
 public sealed class TitleBar : DockPanel
 {
     public const double BarHeight = 30;
+
+    /// <summary>What the box in the title bar says.</summary>
+    public const string CommandBoxText = "Commands and paths · Ctrl+Shift+P";
+
+    private const double CommandBoxMaxWidth = 520;
+    private const double CommandBoxMinWidth = 200;
+    private const double CommandBoxHeight = 22;
     private const double ButtonWidth = 46;
 
     private const int WM_NCHITTEST = 0x0084;
@@ -86,7 +93,13 @@ public sealed class TitleBar : DockPanel
             Children.Add(button);
         }
 
-        Children.Add(new Border { Background = Brushes.Transparent }); // the draggable caption
+        // The draggable caption, with the command line's box in the middle of the window.
+        CommandBox = MakeCommandBox();
+        var caption = new Grid { Background = Brushes.Transparent };
+        caption.Children.Add(CommandBox);
+        Children.Add(caption);
+        caption.SizeChanged += (_, _) => PlaceCommandBox(caption);
+        SizeChanged += (_, _) => PlaceCommandBox(caption);
 
         _window.StateChanged += (_, _) => UpdateMaximizeGlyph();
         _window.Activated += (_, _) => Opacity = 1;
@@ -100,8 +113,58 @@ public sealed class TitleBar : DockPanel
     /// <summary>A menu header was clicked: the index of its group.</summary>
     public event Action<int>? MenuRequested;
 
+    /// <summary>The command line's box (issue #155): typing happens in a pick that opens over it.</summary>
+    public Border CommandBox { get; }
+
+    /// <summary>The command line's box was clicked.</summary>
+    public event Action? CommandBoxRequested;
+
     /// <summary>The feedback icon left of the caption buttons was clicked.</summary>
     public event Action? FeedbackRequested;
+
+    private Border MakeCommandBox()
+    {
+        var text = new TextBlock { Text = CommandBoxText, FontSize = 12, VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis };
+        text.SetResourceReference(TextBlock.ForegroundProperty, "Habi.Placeholder");
+        var box = new Border
+        {
+            Height = CommandBoxHeight,
+            HorizontalAlignment = HorizontalAlignment.Left,
+            VerticalAlignment = VerticalAlignment.Center,
+            BorderThickness = new Thickness(1),
+            CornerRadius = new CornerRadius(3),
+            Child = text,
+            Cursor = Cursors.IBeam,
+        };
+        box.SetResourceReference(Border.BackgroundProperty, "Habi.InputBackground");
+        box.SetResourceReference(Border.BorderBrushProperty, "Habi.InputBorder");
+        WindowChrome.SetIsHitTestVisibleInChrome(box, true);
+        box.MouseLeftButtonDown += (_, e) =>
+        {
+            e.Handled = true;
+            CommandBoxRequested?.Invoke();
+        };
+        return box;
+    }
+
+    /// <summary>In the middle of the window where it fits; else moved aside; hidden when the window is too narrow for it.</summary>
+    private void PlaceCommandBox(FrameworkElement caption)
+    {
+        const double Margin = 8;
+        var available = caption.ActualWidth - (2 * Margin);
+        if (available < CommandBoxMinWidth)
+        {
+            CommandBox.Visibility = Visibility.Collapsed;
+            return;
+        }
+
+        var width = Math.Min(CommandBoxMaxWidth, available);
+        var captionLeft = caption.TranslatePoint(default, this).X;
+        var left = ((ActualWidth - width) / 2) - captionLeft;
+        CommandBox.Width = width;
+        CommandBox.Margin = new Thickness(Math.Clamp(left, Margin, caption.ActualWidth - width - Margin), 0, 0, 0);
+        CommandBox.Visibility = Visibility.Visible;
+    }
 
     /// <summary>Installs the chrome: no system caption, resizable edges, DWM shadow and rounded corners kept.</summary>
     public static void Install(Window window) =>

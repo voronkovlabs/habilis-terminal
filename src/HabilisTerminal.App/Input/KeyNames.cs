@@ -9,6 +9,15 @@ public static class KeyNames
     {
         key = Key.None;
         modifiers = KeyModifiers.None;
+
+        // The gray keys hold a '+' of their own.
+        var gray = text switch { "Gray +" => Key.Add, "Gray −" => Key.Subtract, "Gray *" => Key.Multiply, _ => Key.None };
+        if (gray != Key.None)
+        {
+            key = gray;
+            return true;
+        }
+
         var parts = text.Split('+', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries);
         if (parts.Length == 0)
         {
@@ -41,6 +50,9 @@ public static class KeyNames
             "ESC" => Key.Escape,
             "PGUP" => Key.PageUp,
             "PGDN" => Key.PageDown,
+            "\\" => Key.Oem5,
+            "[" => Key.OemOpenBrackets,
+            "]" => Key.Oem6,
             { Length: 1 } single when char.IsAsciiDigit(single[0]) => Key.D0 + (single[0] - '0'),
             _ => Enum.TryParse<Key>(name, ignoreCase: true, out var parsed) ? parsed : Key.None,
         };

@@ -52,6 +52,11 @@ public partial class MainWindow
                 Close();
                 return true;
 
+            // The command line, from any focus (issue #155).
+            case Key.P when modifiers == (KeyModifiers.Control | KeyModifiers.Shift):
+                Fire(ShowCommandLineAsync());
+                return true;
+
             // Window-level, from any focus, as in Far.
             case Key.F9 when modifiers == KeyModifiers.Alt:
                 _titleBar.ToggleMaximize();

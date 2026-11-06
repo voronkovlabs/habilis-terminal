@@ -7,7 +7,7 @@ Read `docs/plugins.md` before writing a plugin: it has a quick start, the rules,
 2. `dotnet build <project> -c Release`
 3. `tools/plugins/habi-plugin.ps1 load <project>\bin\Release\net10.0`, then `reload <id>` after each build. No restart.
 4. `habi-plugin.ps1 list -Json` shows why something failed, with the whole exception, and a `buildId` that changes with every compiled change.
-5. `habi-plugin.ps1 open <address or file> -Json` opens it in the active panel and returns its rows, and `state` reads them. So you can check a plugin without sending keys.
+5. `habi-plugin.ps1 open <address or file> -Json` opens it in the active panel and returns its rows, `state` reads them, and `commands` lists what the command line would show. So you can check a plugin without sending keys.
 
 A plugin in this folder is built by `tools/plugins/Build-Plugins.ps1` instead, against the SDK package.
 

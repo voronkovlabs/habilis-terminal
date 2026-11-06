@@ -59,12 +59,25 @@ public abstract class Plugin
     /// </summary>
     public virtual Task ShutdownAsync() => Task.CompletedTask;
 
+    /// <summary>
+    /// Commands available anywhere while the plugin is loaded (SDK 1.6): in the command line (Ctrl+Shift+P), under the
+    /// plugin's name. Commands of an open panel belong in <see cref="IPanelCommands"/>; <see cref="MenuItems"/> appear
+    /// there by themselves.
+    /// </summary>
+    public virtual IEnumerable<PluginCommand> Commands => [];
+
     /// <summary>The plugin has a configuration dialog (F9 > Options > Plugins).</summary>
     public virtual bool HasConfiguration => false;
 
     /// <summary>Shows the configuration dialog through <see cref="IPluginHost.Dialogs"/>.</summary>
     public virtual Task ConfigureAsync(CancellationToken cancellationToken) => Task.CompletedTask;
 }
+
+/// <summary>
+/// A command available anywhere. <paramref name="Key"/> uses the host's notation, e.g. "Ctrl+Alt+J"; null: none. A key the
+/// host itself uses is ignored and not shown, as the host's keys win.
+/// </summary>
+public sealed record PluginCommand(string Title, string? Key, Func<CancellationToken, Task> Run);
 
 /// <summary>What <see cref="Plugin.OpenFileAsync"/> is asked to open.</summary>
 /// <param name="Path">The full path of the local file.</param>

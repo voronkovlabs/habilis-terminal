@@ -8,7 +8,7 @@
       reaches every project. Plugins bind to this assembly version, so it must not move with the app (issue #60).
       Change it only with a new SDK version (PluginManifest.HostSdkVersion, plugins' "sdk").
     -->
-    <SdkVersion>1.5.0</SdkVersion>
+    <SdkVersion>1.6.0</SdkVersion>
     <AssemblyVersion>$(SdkVersion).0</AssemblyVersion>
     <FileVersion>$(SdkVersion).0</FileVersion>
     <PackageVersion>$(SdkVersion)</PackageVersion>

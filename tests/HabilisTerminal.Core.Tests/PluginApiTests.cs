@@ -33,6 +33,9 @@ public class PluginApiTests
             return PanelStateAsync();
         }
 
+        public Task<IReadOnlyList<PluginApiCommand>> ListCommandsAsync() =>
+            Task.FromResult<IReadOnlyList<PluginApiCommand>>([new PluginApiCommand("files.copy", "Copy", "Files", "F5")]);
+
         public Task<PluginApiPanelState> PanelStateAsync() =>
             Task.FromResult(new PluginApiPanelState("a.b", "a:/", "A", null, 1, [new PluginApiPanelEntry("x.txt", false, 5)]));
     }
@@ -69,6 +72,13 @@ public class PluginApiTests
         Assert.Equal(@"load C:\build", _handler.LastCall);
         Assert.True(load.GetProperty("result").GetProperty("oldVersionFreed").GetBoolean());
         Assert.False(load.TryGetProperty("id", out _));
+    }
+
+    [Fact]
+    public async Task The_command_list_can_be_read()
+    {
+        var reply = await Ask("""{ "method": "commands.list" }""");
+        Assert.Equal("F5", reply.GetProperty("result")[0].GetProperty("keys").GetString());
     }
 
     [Fact]

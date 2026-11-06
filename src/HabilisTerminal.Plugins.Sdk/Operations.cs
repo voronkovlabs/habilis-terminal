@@ -111,7 +111,14 @@ public interface IPanelCommands
 /// A panel command. <see cref="Key"/> uses the host's notation, e.g. "F8", "Shift+F3", "Ctrl+F"; null: menu only.
 /// A command key takes precedence over the host's own key in this panel.
 /// </summary>
-public sealed record PanelCommand(string Title, string? Key, Func<PanelCommandContext, Task> Run);
+public sealed record PanelCommand(string Title, string? Key, Func<PanelCommandContext, Task> Run)
+{
+    /// <summary>
+    /// False hides the command from the command line (SDK 1.6). Given the entry under the cursor (null on "..") and the
+    /// entries it would work on. Called when the command line opens: answer from data you have.
+    /// </summary>
+    public Func<PanelEntry?, IReadOnlyList<PanelEntry>, bool>? AppliesTo { get; init; }
+}
 
 /// <summary>What a command works on.</summary>
 public sealed class PanelCommandContext(PanelEntry? current, IReadOnlyList<PanelEntry> selected, IOperationProgress progress, CancellationToken cancellationToken)

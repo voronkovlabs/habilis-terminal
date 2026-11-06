@@ -16,6 +16,7 @@ habi-plugin.ps1 reload my.plugin                            # ...reads the same 
 habi-plugin.ps1 list                                        # what runs, and why something failed
 habi-plugin.ps1 open my:/some/place                         # opens it in the active panel, as the user would
 habi-plugin.ps1 state                                       # the active panel's place and rows
+habi-plugin.ps1 commands                                    # what the command line would show now
 habi-plugin.ps1 unload my.plugin
 ```
 
@@ -74,6 +75,7 @@ Fields with no value are left out.
 | `plugins.unload` | `{ id }` | An outcome |
 | `panels.open` | `{ target }`: an address, a path, a place inside a file | A panel state. `not_found` when nothing opened it, with the panel's message |
 | `panels.state` | | A panel state |
+| `commands.list` | | What the command line (Ctrl+Shift+P) would show now, in its order: an array of `{ id, title, section, keys }`. A panel opened with `panels.open` counts |
 
 In a list, `state` is `loaded` or `failed`. `folder` is where it runs from, `source` where a reload reads it. `error` is the message and `errorDetail` the whole exception.
 

@@ -15,6 +15,9 @@ public sealed record PluginApiPanelEntry(string Name, bool IsFolder, long Size);
 /// <summary>The active panel, so that a plugin can be checked without a window (<c>panels.open</c>, <c>panels.state</c>).</summary>
 public sealed record PluginApiPanelState(string? Plugin, string Location, string? Title, string? Message, int Count, IReadOnlyList<PluginApiPanelEntry> Entries);
 
+/// <summary>A row of the command line, as <c>commands.list</c> reports it.</summary>
+public sealed record PluginApiCommand(string Id, string Title, string Section, string? Keys);
+
 /// <summary>What a load, reload or unload did. <paramref name="OldVersionFreed"/>: null when there was no old copy.</summary>
 public sealed record PluginApiOutcome(string Id, string State, bool? OldVersionFreed, int PanelsClosed, int PanelsReopened, string? Error);
 
@@ -50,6 +53,9 @@ public interface IPluginApiHandler
     Task<PluginApiPanelState> OpenPanelAsync(string target);
 
     Task<PluginApiPanelState> PanelStateAsync();
+
+    /// <summary>What the command line would show now, in its order.</summary>
+    Task<IReadOnlyList<PluginApiCommand>> ListCommandsAsync();
 }
 
 /// <summary>
@@ -154,6 +160,7 @@ public sealed class PluginApiServer(string pipeName, IPluginApiHandler handler, 
         "plugins.unload" => await handler.UnloadAsync(Text(root, "id")).ConfigureAwait(false),
         "panels.open" => await handler.OpenPanelAsync(Text(root, "target")).ConfigureAwait(false),
         "panels.state" => await handler.PanelStateAsync().ConfigureAwait(false),
+        "commands.list" => await handler.ListCommandsAsync().ConfigureAwait(false),
         _ => throw new PluginApiException(PluginApiException.UnknownMethod, $"There is no method \"{method}\"."),
     };
 

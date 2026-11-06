@@ -22,6 +22,10 @@ public sealed class DemoPlugin : Plugin
 
     public override IEnumerable<string> AddressCommands => ["cd"];
 
+    /// <summary>In the command line while the plugin is loaded, wherever the keyboard is.</summary>
+    public override IEnumerable<PluginCommand> Commands =>
+        [new("Say hello", "Ctrl+Alt+J", _ => Host.Dialogs.ShowMessageAsync("Demo", "Hello from a command of the demo plugin."))];
+
     public override bool HasConfiguration => true;
 
     /// <summary>"demo:" or "demo:/folder/sub".</summary>
@@ -184,7 +188,7 @@ internal sealed class DemoPanel(IPluginHost host, DemoNode folder) : IPanelProvi
                 _folder.Add(name.Trim(), folder: false, $"Created {DateTime.Now:G}");
             }
         }),
-        new("Show a message", null, _ => host.Dialogs.ShowMessageAsync("Demo", "Plugin dialogs are drawn by the host in its own theme.")),
+        new("Show a message", null, _ => host.Dialogs.ShowMessageAsync("Demo", "Plugin dialogs are drawn by the host in its own theme.")) { AppliesTo = (_, selected) => selected.Count > 0 },
     ];
 
     public async IAsyncEnumerable<IReadOnlyList<PanelEntry>> ListAsync([EnumeratorCancellation] CancellationToken cancellationToken)

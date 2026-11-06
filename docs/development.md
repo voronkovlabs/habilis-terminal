@@ -63,6 +63,9 @@ dotnet test -c Release --no-build
   - Installing into the owner's profile is not allowed.
   - Multi-monitor, DPI and installer checks therefore need the owner (issues #2, #3).
 
+## The command list
+Every command is in `src/HabilisTerminal.Core/Commands/CommandCatalog.cs`: id, section, title, key, when it applies. The F9 menu, F1 help and the command line (Ctrl+Shift+P, `MainWindow.CommandList.cs`) take them from there. A new key needs a line there as well as its `case`; a catalog command runs as its key does, through `PanelKey`, unless `RunFor` says otherwise. In a viewer or editor it presses the real key.
+
 ## Keyboard routing: things learned the hard way
 - **Order of processing.** WPF handles a key message in `HwndSource.ThreadFilterMessage` before `GlobalKeyHook` sees it in `ThreadPreprocessMessage`.
 - **Arrow keys.** An arrow that no element handles runs WPF directional navigation and is marked handled. `DirectionalNavigation="None"` does not stop it, so arrows are taken in the window's `PreviewKeyDown` (`MainWindow.OnPreviewArrowKey`).

@@ -15,7 +15,7 @@ public sealed partial record PluginManifest(string Id, string Name, string Versi
     public bool Collectible { get; init; } = true;
 
     /// <summary>The SDK version this host implements.</summary>
-    public static Version HostSdkVersion { get; } = new(1, 5);
+    public static Version HostSdkVersion { get; } = new(1, 6);
 
     /// <summary>Reads and checks a manifest; the exception message is shown to the user.</summary>
     /// <exception cref="InvalidDataException">Missing or invalid fields.</exception>

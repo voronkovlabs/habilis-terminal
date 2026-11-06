@@ -67,6 +67,9 @@ public sealed record AppState
 
     public IReadOnlyList<FileHistoryEntry> FileHistory { get; init; } = [];
 
+    /// <summary>The command line's recent commands, most recent first, by id (issue #155).</summary>
+    public IReadOnlyList<string> RecentCommands { get; init; } = [];
+
     /// <summary>Hotkeys of plugin items in the drive menu ("pluginId/title" → key, issue #66).</summary>
     public IReadOnlyDictionary<string, string> PluginHotkeys { get; init; } = new Dictionary<string, string>();
 }

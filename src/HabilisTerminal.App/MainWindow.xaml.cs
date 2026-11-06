@@ -51,6 +51,7 @@ public partial class MainWindow : Window
             }
         };
         _titleBar.FeedbackRequested += ShowFeedback;
+        _titleBar.CommandBoxRequested += () => Fire(ShowCommandLineAsync());
         DockPanel.SetDock(_titleBar, Dock.Top);
         Root.Children.Insert(0, _titleBar);
 

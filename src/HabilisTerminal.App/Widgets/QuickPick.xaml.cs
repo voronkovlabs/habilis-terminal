@@ -22,6 +22,12 @@ public sealed record QuickPickOptions
     /// </summary>
     public Func<string, bool>? IsFreeText { get; init; }
 
+    /// <summary>The list for what is typed, in place of filtering the items given (the command line, issue #155).</summary>
+    public Func<string, IReadOnlyList<QuickPickItem>>? ItemsFor { get; init; }
+
+    /// <summary>Opens over the target, as wide as it or wider, as if typing in the target itself.</summary>
+    public bool OverTarget { get; init; }
+
     /// <summary>Del on an item (e.g. disconnect a drive); the item list is not changed automatically.</summary>
     public Action<QuickPickItem>? OnDelete { get; init; }
 
@@ -51,7 +57,7 @@ public sealed partial class QuickPick : UserControl
         TitleText.Text = options.Title;
         TitleText.Visibility = string.IsNullOrEmpty(options.Title) ? Visibility.Collapsed : Visibility.Visible;
         Placeholder.Text = options.Placeholder;
-        List.Visibility = items.Count == 0 ? Visibility.Collapsed : Visibility.Visible;
+        List.Visibility = items.Count == 0 && options.ItemsFor is null ? Visibility.Collapsed : Visibility.Visible;
 
         Filter.Text = options.InitialText;
         Filter.TextChanged += (_, _) => ApplyFilter();
@@ -82,8 +88,19 @@ public sealed partial class QuickPick : UserControl
         };
 
         // Centered horizontally near the top of the target, like the VS Code quick pick.
-        popup.HorizontalOffset = Math.Max(0, (target.ActualWidth - pick.Width) / 2);
-        popup.VerticalOffset = 8;
+        if (options.OverTarget)
+        {
+            const double Padding = 7; // the frame around the filter box, so that it lies over the target
+            pick.Width = Math.Max(pick.Width, target.ActualWidth + (2 * Padding));
+            popup.HorizontalOffset = (target.ActualWidth - pick.Width) / 2;
+            popup.VerticalOffset = -Padding;
+        }
+        else
+        {
+            popup.HorizontalOffset = Math.Max(0, (target.ActualWidth - pick.Width) / 2);
+            popup.VerticalOffset = 8;
+        }
+
         popup.Closed += (_, _) => pick._result.TrySetResult(null);
         popup.Opened += (_, _) =>
         {
@@ -103,7 +120,9 @@ public sealed partial class QuickPick : UserControl
     {
         var text = Filter.Text.Trim();
         Placeholder.Visibility = Filter.Text.Length == 0 ? Visibility.Visible : Visibility.Collapsed;
-        var visible = text.Length == 0
+        var visible = _options.ItemsFor is { } itemsFor
+            ? itemsFor(text)
+            : text.Length == 0
             ? _items
             : _options.IsFreeText?.Invoke(text) == true
             ? []

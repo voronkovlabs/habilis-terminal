@@ -143,11 +143,13 @@ public abstract class Plugin
     public virtual IEnumerable<string> FileExtensions { get; }         // SDK 1.5: "zip", "tar.gz": opened as a folder
     public virtual Task<IPanelProvider?> OpenFileAsync(FileOpenRequest request, CancellationToken token); // SDK 1.5
     public virtual Task ShutdownAsync();                               // SDK 1.5: being unloaded
+    public virtual IEnumerable<PluginCommand> Commands { get; }        // SDK 1.6: anywhere, in the command line
     public virtual bool HasConfiguration { get; }
     public virtual Task ConfigureAsync(CancellationToken token);       // F9 > Options > Plugins, Alt+Shift+F9
 }
 
 public sealed record PluginMenuItem(string Title, Func<CancellationToken, Task<IPanelProvider?>> Open);
+public sealed record PluginCommand(string Title, string? Key, Func<CancellationToken, Task> Run);   // SDK 1.6
 
 // SDK 1.5. InnerPath: a place inside the file such as docs\\sub, or empty; from folder history, so it may be gone. Compare it
 // the way your format compares names. AnyFormat: Ctrl+PgDn or a location from history, so look at the content.
@@ -398,6 +400,26 @@ new PanelEntry(job.Name)
 public IReadOnlyList<PanelCommand> Commands => [new("Purge", "Shift+F8", PurgeAsync)];
 ```
 
+### Recipe: commands in the command line
+
+The command line (Ctrl+Shift+P, in the title bar) shows the commands that apply now, with their keys. A plugin is in it in three ways:
+
+| What | Shown | Declared by |
+|---|---|---|
+| Commands of an open panel | While that panel is active | `IPanelCommands`. Set `AppliesTo` to hide one for the current entry |
+| Commands available anywhere | While the plugin is loaded | `Plugin.Commands` |
+| Opening the plugin | While the plugin is loaded, as `Open: <title>` | `MenuItems`: nothing more to do |
+
+```csharp
+public override IEnumerable<PluginCommand> Commands =>
+    [new("Refresh the cache", "Ctrl+Alt+J", token => RefreshAsync(token))];
+
+public IReadOnlyList<PanelCommand> Commands =>
+    [new("Purge", "Shift+F8", PurgeAsync) { AppliesTo = (current, selected) => selected.Count > 0 }];
+```
+
+The host's own commands are hidden for what a provider does not support: Copy needs `IGetFiles`, Delete `IDeleteEntries`, Make folder `IMakeFolder`. Keys: a panel command's key goes before the host's in that panel; a global command's key is ignored and not shown if the host uses it. `AppliesTo` runs when the command line opens, so it must return at once. `habi-plugin.ps1 commands` shows the list with no window.
+
 ### Recipe: a panel you draw yourself
 
 Target `net10.0-windows` with `<UseWPF>true</UseWPF>`, reference `HabilisTerminal.Plugins.Sdk.Wpf` as well, and implement `IPanelView` on the provider. Use `HostBrushes` keys so the view follows the theme, and keep elements non-focusable: the keyboard belongs to the panel. See `plugins/Habilis.Gpu`.
@@ -426,6 +448,7 @@ Through the API (`habi-plugin.ps1`), with no window:
 - [ ] `reload` with a panel open returns to the same place, with `panelsReopened` equal to `panelsClosed`, and `buildId` has changed.
 - [ ] `oldVersionFreed` is `true`. `false` means something still holds it: a static, a thread, a timer.
 - [ ] A panel plugin: `unload` removes its menu entries, and its prefix then runs in the shell as usual.
+- [ ] `commands` lists its commands while its panel is open, with their keys, and none that do not apply.
 - [ ] A format plugin: `open` on a file that is not its format gives `not_found`, and after `unload` Enter opens its files in their own program.
 - [ ] Tests run without network and only in temporary folders.
 
@@ -450,7 +473,7 @@ In a window:
 | Enter on your file opens another program | The name does not end in your `FileExtensions`, or `OpenFileAsync` returned null |
 | ".." never leaves the panel | `GoUpAsync` returns true at the top |
 | After a reload the panel goes back to the local folder | `Location` is not something `OpenAddressAsync` or `OpenFileAsync` can open |
-| `oldVersionFreed: false` every time | A timer, a thread, a static or an event subscription is left. Two cases report `false` regardless: the first reload of a plugin the app loaded at startup, and a plugin whose WPF view has been shown (§12) |
+| `oldVersionFreed: false` every time | A timer, a thread, a static or an event subscription is left. Three cases report `false` regardless: the first reload of a plugin the app loaded at startup, a plugin whose WPF view has been shown, and one whose rows the command line has just shown (§12) |
 | The window hangs | A property does slow work, or `.Result` on the UI thread |
 
 ## 12. Known limits
@@ -459,4 +482,5 @@ In a window:
 - The cursor returns to the top after a reload, and does not move onto a file named in an address.
 - A plugin the app loaded at startup reports `oldVersionFreed: false` on its first reload, and its files stay locked until the app restarts. Develop from your build folder with `load`, which never locks it.
 - A plugin whose WPF view has been shown (`IPanelView`) reports `oldVersionFreed: false`: WPF keeps hold of the view's types. Reloading works, but each old copy stays in memory until the app restarts. This is seen with the GPU plugin.
+- A plugin whose commands were shown in the command line since its last reload reports `oldVersionFreed: false` on the next reload, and that one copy stays in memory until the app restarts. The cause is not known; emptying the list when it closes did not help. The next reload reports `true` if the box was not opened in between.
 - Whether the AWS plugins free their memory on unload has not been checked: tests never open them with real credentials.

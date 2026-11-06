@@ -240,6 +240,11 @@ public partial class MainWindow : IPluginWindow
             return true;
         }
 
+        if (!(panel.IsPlugin && FindCommand(panel, key, modifiers) is not null) && RunPluginGlobalKey(key, modifiers))
+        {
+            return true;
+        }
+
         if (panel.IsPlugin)
         {
             if (FindCommand(panel, key, modifiers) is { } command)
