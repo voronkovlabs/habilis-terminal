@@ -42,25 +42,69 @@ public sealed class SevenZipArchive : IDisposable
 
     /// <summary>
     /// Extracts <paramref name="targets"/> (item index → file path; folders are created). A failed item leaves no
-    /// partial file. Returns the indices that failed with the reason.
+    /// partial file. Returns the indices that failed with the reason. A wrong password is asked for again until the
+    /// items come out or the question is cancelled (issue #157); <see cref="PasswordWasWrong"/> tells the question.
     /// </summary>
     /// <param name="password">Asked for encrypted items when no password is known yet; null skips them.</param>
     /// <exception cref="OperationCanceledException">Cancelled; the item in progress is removed.</exception>
     public IReadOnlyDictionary<uint, string> Extract(
         IReadOnlyDictionary<uint, string> targets, Action<long> bytesWritten, Action<ArchiveItem> itemStarted, Func<string?>? password, CancellationToken cancellationToken)
     {
-        var indices = targets.Keys.Order().ToArray();
-        using var callback = new ExtractCallback(this, targets, bytesWritten, itemStarted, () => _password ??= password?.Invoke(), cancellationToken);
-        var result = _archive.Extract(indices, (uint)indices.Length, 0, callback);
-
-        cancellationToken.ThrowIfCancellationRequested();
-        if (result != SevenZipIds.S_OK && callback.Failures.Count == 0)
+        var failures = new Dictionary<uint, string>();
+        var remaining = targets;
+        while (true)
         {
-            throw new IOException($"7-Zip could not extract from {System.IO.Path.GetFileName(FilePath)} (0x{result:X8}).");
-        }
+            var indices = remaining.Keys.Order().ToArray();
+            using var callback = new ExtractCallback(this, remaining, bytesWritten, itemStarted, () => _password ??= password?.Invoke(), cancellationToken);
+            var result = _archive.Extract(indices, (uint)indices.Length, 0, callback);
 
-        return callback.Failures;
+            cancellationToken.ThrowIfCancellationRequested();
+            if (callback.PasswordRefused)
+            {
+                // The question was cancelled: what has not come out does not.
+                var reason = PasswordWasWrong ? "Wrong password." : "No password was given.";
+                foreach (var index in indices.Where(i => !Items[(int)i].IsFolder && !callback.Done.Contains(i)))
+                {
+                    failures[index] = reason;
+                }
+
+                return failures;
+            }
+
+            if (result != SevenZipIds.S_OK && callback.Failures.Count == 0)
+            {
+                throw new IOException($"7-Zip could not extract from {System.IO.Path.GetFileName(FilePath)} (0x{result:X8}).");
+            }
+
+            foreach (var (index, reason) in callback.Failures.Where(f => !callback.PasswordFailures.Contains(f.Key)))
+            {
+                failures[index] = reason;
+            }
+
+            if (callback.PasswordFailures.Count == 0)
+            {
+                PasswordWasWrong = false;
+                return failures;
+            }
+
+            if (password is null)
+            {
+                foreach (var index in callback.PasswordFailures)
+                {
+                    failures[index] = callback.Failures[index];
+                }
+
+                return failures;
+            }
+
+            _password = null;
+            PasswordWasWrong = true;
+            remaining = callback.PasswordFailures.ToDictionary(i => i, i => remaining[i]);
+        }
     }
+
+    /// <summary>The last password given did not fit: the next question says so.</summary>
+    public bool PasswordWasWrong { get; private set; }
 
     /// <summary>The password given while opening or extracting, for reopening an updated copy.</summary>
     public string? Password => _password;
@@ -145,6 +189,15 @@ public sealed class SevenZipArchive : IDisposable
 
         public Dictionary<uint, string> Failures { get; } = [];
 
+        /// <summary>Items that failed in a way a wrong password explains.</summary>
+        public HashSet<uint> PasswordFailures { get; } = [];
+
+        /// <summary>Items that came out.</summary>
+        public HashSet<uint> Done { get; } = [];
+
+        /// <summary>The question for the password was cancelled.</summary>
+        public bool PasswordRefused { get; private set; }
+
         public int SetTotal(ulong total) => SevenZipIds.S_OK;
 
         public int SetCompleted(IntPtr completeValue) => cancellationToken.IsCancellationRequested ? SevenZipIds.E_ABORT : SevenZipIds.S_OK;
@@ -197,8 +250,19 @@ public sealed class SevenZipArchive : IDisposable
             }
 
             var ok = operationResult == SevenZipIds.ResultOk;
-            if (!ok)
+            if (ok)
             {
+                Done.Add(_currentIndex);
+            }
+            else
+            {
+                // The older zip cipher checks a password by one byte only, so a wrong one can show as damage instead.
+                if (operationResult == SevenZipIds.ResultWrongPassword ||
+                    (owner.Items[(int)_currentIndex].Encrypted && operationResult is SevenZipIds.ResultCrcError or SevenZipIds.ResultDataError))
+                {
+                    PasswordFailures.Add(_currentIndex);
+                }
+
                 Failures[_currentIndex] = operationResult switch
                 {
                     SevenZipIds.ResultWrongPassword => "Wrong password.",
@@ -216,6 +280,7 @@ public sealed class SevenZipArchive : IDisposable
         public int CryptoGetTextPassword(out string? result)
         {
             result = password();
+            PasswordRefused = result is null;
             return result is null ? SevenZipIds.E_ABORT : SevenZipIds.S_OK;
         }
 

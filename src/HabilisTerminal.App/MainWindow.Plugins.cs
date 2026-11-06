@@ -408,6 +408,10 @@ public partial class MainWindow : IPluginWindow
                 {
                     OpenViewer(file, panel);
                 }
+                else
+                {
+                    Report(panel, outcome); // issue #157: nothing to view must say why
+                }
 
                 return;
             }

@@ -75,9 +75,10 @@ public sealed class SevenZipLibrary
     /// Opens <paramref name="path"/> with the formats its extension names; with <paramref name="anyFormat"/> every
     /// other format is tried after them (Ctrl+PgDn: by signature). Null when no format accepts the file.
     /// </summary>
-    /// <param name="password">Asked when the archive's headers are encrypted; null cancels.</param>
+    /// <param name="password">Asked when the archive's headers are encrypted; null cancels. True: the last one was wrong.</param>
     /// <exception cref="IOException">The file cannot be read.</exception>
-    public SevenZipArchive? Open(string path, bool anyFormat, Func<string?>? password = null)
+    /// <exception cref="OperationCanceledException">The question for the password was cancelled.</exception>
+    public SevenZipArchive? Open(string path, bool anyFormat, Func<bool, string?>? password = null)
     {
         var extension = Path.GetExtension(path).TrimStart('.');
         var byExtension = Formats.Where(f => f.Extensions.Contains(extension, StringComparer.OrdinalIgnoreCase)).ToList();
@@ -85,8 +86,10 @@ public sealed class SevenZipLibrary
         var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete, 64 * 1024, FileOptions.RandomAccess);
         var input = new InStream(stream);
         string? remembered = null;
-        var callback = new OpenCallback(() => remembered ??= password?.Invoke());
-        foreach (var format in candidates)
+        var wrong = false;
+        var callback = new OpenCallback(() => remembered ??= password?.Invoke(wrong));
+        var formats = new Queue<ArchiveFormat>(candidates);
+        while (formats.TryDequeue(out var format))
         {
             var archive = Create(format.ClassId);
             if (archive is null)
@@ -114,10 +117,20 @@ public sealed class SevenZipLibrary
             }
 
             Release(archive);
-            if (callback.PasswordAsked && remembered is null)
+            if (callback.PasswordAsked)
             {
-                // The user cancelled the password: stop trying other formats.
-                break;
+                if (remembered is null)
+                {
+                    // The user cancelled the password: stop trying other formats.
+                    input.Dispose();
+                    throw new OperationCanceledException();
+                }
+
+                // This format has encrypted names and could not read them: the password was wrong. Ask again (issue #157).
+                remembered = null;
+                wrong = true;
+                callback = new OpenCallback(() => remembered ??= password?.Invoke(wrong));
+                formats = new Queue<ArchiveFormat>([format, .. formats]);
             }
         }
 

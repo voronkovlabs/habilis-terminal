@@ -44,6 +44,6 @@ public sealed class ArchivesPlugin : Plugin
     }
 
     /// <summary>Asked from 7-Zip's thread, which waits for the answer.</summary>
-    private string? AskPassword(string archiveName) =>
-        Host.Dialogs.InputSecretAsync("Password", $"'{archiveName}' is encrypted. Password:").GetAwaiter().GetResult();
+    private string? AskPassword(string prompt) =>
+        Host.Dialogs.InputSecretAsync("Password", prompt).GetAwaiter().GetResult();
 }

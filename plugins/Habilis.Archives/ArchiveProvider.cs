@@ -59,6 +59,9 @@ public sealed class ArchiveProvider : IPanelProvider, IGetFiles, IPutFiles, IDel
 
     private Level Top => _levels.Peek();
 
+    private static string PasswordPrompt(string name, bool wrong) =>
+        wrong ? $"Wrong password for '{name}'. Try again:" : $"'{name}' is encrypted. Password:";
+
     /// <summary>"512 B", "1.2 KB", "34 MB".</summary>
     private static string Compact(long bytes, CultureInfo culture)
     {
@@ -78,12 +81,12 @@ public sealed class ArchiveProvider : IPanelProvider, IGetFiles, IPutFiles, IDel
     /// Opens <paramref name="path"/> as an archive: by its extension, or with <paramref name="anyFormat"/> by
     /// signature. Null when 7z.dll is missing or no format accepts the file.
     /// </summary>
-    /// <param name="askPassword">Asked (with the archive name) for encrypted archives; null cancels.</param>
+    /// <param name="askPassword">Asked for encrypted archives, with the text of the question; null cancels.</param>
     /// <exception cref="IOException">The file cannot be read.</exception>
     public static ArchiveProvider? TryOpen(string path, bool anyFormat, Func<string, string?> askPassword, SevenZipLibrary? library = null)
     {
         library ??= SevenZipLibrary.Default;
-        var archive = library?.Open(path, anyFormat, () => askPassword(Path.GetFileName(path)));
+        var archive = library?.Open(path, anyFormat, wrong => askPassword(PasswordPrompt(Path.GetFileName(path), wrong)));
         return archive is null ? null : new ArchiveProvider(library!, archive, askPassword);
     }
 
@@ -162,8 +165,8 @@ public sealed class ArchiveProvider : IPanelProvider, IGetFiles, IPutFiles, IDel
         var folder = Path.Combine(Path.GetTempPath(), "HabilisTerminal", "archives", Guid.NewGuid().ToString("N")[..8]);
         var copy = Path.Combine(folder, entry.Name);
         var archive = Top.Archive;
-        var failures = await Task.Run(() => archive.Extract(new Dictionary<uint, string> { [item.Index] = copy }, _ => { }, _ => { }, () => _askPassword(entry.Name), cancellationToken), cancellationToken);
-        var nested = failures.Count == 0 && File.Exists(copy) ? await OpenOnPoolAsync(copy, anyFormat: false, () => _askPassword(entry.Name)) : null;
+        var failures = await Task.Run(() => archive.Extract(new Dictionary<uint, string> { [item.Index] = copy }, _ => { }, _ => { }, () => _askPassword(PasswordPrompt(entry.Name, archive.PasswordWasWrong)), cancellationToken), cancellationToken);
+        var nested = failures.Count == 0 && File.Exists(copy) ? await OpenOnPoolAsync(copy, anyFormat: false, wrong => _askPassword(PasswordPrompt(entry.Name, wrong))) : null;
         if (nested is null)
         {
             DeleteQuietly(folder);
@@ -276,7 +279,7 @@ public sealed class ArchiveProvider : IPanelProvider, IGetFiles, IPutFiles, IDel
 
                     progress.Begin(item.Path);
                 },
-                () => _askPassword(Path.GetFileName(archive.FilePath)),
+                () => _askPassword(PasswordPrompt(Path.GetFileName(archive.FilePath), archive.PasswordWasWrong)),
                 cancellationToken),
             cancellationToken);
         if (started > 0)
@@ -416,7 +419,7 @@ public sealed class ArchiveProvider : IPanelProvider, IGetFiles, IPutFiles, IDel
     // 7z.dll objects have no COM proxies, so they are created and used on thread-pool (MTA) threads only: an object
     // created on the UI thread (STA) could not be called from the pool, where extraction and updates run.
 
-    private Task<SevenZipArchive?> OpenOnPoolAsync(string path, bool anyFormat, Func<string?> password) =>
+    private Task<SevenZipArchive?> OpenOnPoolAsync(string path, bool anyFormat, Func<bool, string?> password) =>
         Task.Run(() => _library.Open(path, anyFormat, password));
 
     private void EnsureWritable()
@@ -510,7 +513,7 @@ public sealed class ArchiveProvider : IPanelProvider, IGetFiles, IPutFiles, IDel
     private async Task ReopenAsync(Level level, string path, string? password)
     {
         _levels.Pop();
-        var archive = await OpenOnPoolAsync(path, anyFormat: true, () => password ?? _askPassword(Path.GetFileName(path)))
+        var archive = await OpenOnPoolAsync(path, anyFormat: true, wrong => (wrong ? null : password) ?? _askPassword(PasswordPrompt(Path.GetFileName(path), wrong)))
             ?? throw new PluginException($"{Path.GetFileName(path)} cannot be opened after the change.");
         var reopened = new Level(archive, level.DisplayPath, level.OuterFolder, level.TempFolder);
         _levels.Push(reopened);

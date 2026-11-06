@@ -8,6 +8,178 @@ public class ArchiveTests
 {
     private static readonly DateTime Stamp = new(2025, 3, 4, 5, 6, 8, DateTimeKind.Utc);
 
+    /// <summary>A 7z with encrypted names, password "sesame", holding inside.txt with "hello". Made with 7-Zip.</summary>
+    private const string EncryptedNames7z = "N3q8ryccAASNCHnvkAAAAAAAAAAvAAAAAAAAAIR7NrnJfgVuMOXUEEBQ/WnSFj3zafZta04OZ6HpWR2zZCx9XegfPzNvqya1WXPY7tHbA6nKgBt52xmO3UYf+khKjYRUb8BUJNo2T8rDknPt2UvW26eZDFn1OuY+/NR0GHUa5H7NS9dAo8qJM/XYQBqKdbVdcGe567ZCycqz87ojE1NWuBoCaZlJXKx5CZGAbWpA4RMXBhABCYCAAAcLAQABJAbxBwESUw88gm4v0zRo6C9e3uuZcj02DHIKAYkjHO4AAA==";
+
+    /// <summary>A zip with the older cipher: the plugin writes no passwords, and .NET's zip neither.</summary>
+    private static string MakeEncryptedZip(TestSandbox sandbox, string password, string name, string content)
+    {
+        uint[] table = Enumerable.Range(0, 256).Select(n =>
+        {
+            var c = (uint)n;
+            for (var k = 0; k < 8; k++)
+            {
+                c = (c & 1) != 0 ? 0xEDB88320 ^ (c >> 1) : c >> 1;
+            }
+
+            return c;
+        }).ToArray();
+        uint Step(uint crc, byte b) => table[(crc ^ b) & 0xFF] ^ (crc >> 8);
+
+        uint k0 = 0x12345678, k1 = 0x23456789, k2 = 0x34567890;
+        void Update(byte b)
+        {
+            k0 = Step(k0, b);
+            k1 = ((k1 + (k0 & 0xFF)) * 134775813) + 1;
+            k2 = Step(k2, (byte)(k1 >> 24));
+        }
+
+        byte Encrypt(byte b)
+        {
+            var t = (ushort)(k2 | 2);
+            var result = (byte)(b ^ (byte)((t * (t ^ 1)) >> 8));
+            Update(b);
+            return result;
+        }
+
+        foreach (var b in System.Text.Encoding.UTF8.GetBytes(password))
+        {
+            Update(b);
+        }
+
+        var plain = System.Text.Encoding.UTF8.GetBytes(content);
+        var crc = plain.Aggregate(0xFFFFFFFF, Step) ^ 0xFFFFFFFF;
+        byte[] header = [.. Enumerable.Range(0, 11).Select(i => (byte)i), (byte)(crc >> 24)];
+        var data = header.Concat(plain).Select(Encrypt).ToArray();
+        var nameBytes = System.Text.Encoding.UTF8.GetBytes(name);
+        var path = Path.Combine(sandbox.Path, "locked.zip");
+        using var writer = new BinaryWriter(File.Create(path));
+
+        void Common()
+        {
+            writer.Write((ushort)20);
+            writer.Write((ushort)1);
+            writer.Write((ushort)0);
+            writer.Write((ushort)0);
+            writer.Write((ushort)0x5A21);
+            writer.Write(crc);
+            writer.Write(data.Length);
+            writer.Write(plain.Length);
+            writer.Write((ushort)nameBytes.Length);
+            writer.Write((ushort)0);
+        }
+
+        writer.Write(0x04034B50);
+        Common();
+        writer.Write(nameBytes);
+        writer.Write(data);
+        var central = (int)writer.BaseStream.Position;
+        writer.Write(0x02014B50);
+        writer.Write((ushort)20);
+        Common();
+        writer.Write((ushort)0);
+        writer.Write((ushort)0);
+        writer.Write((ushort)0);
+        writer.Write(0);
+        writer.Write(0);
+        writer.Write(nameBytes);
+        var centralSize = (int)writer.BaseStream.Position - central;
+        writer.Write(0x06054B50);
+        writer.Write((ushort)0);
+        writer.Write((ushort)0);
+        writer.Write((ushort)1);
+        writer.Write((ushort)1);
+        writer.Write(centralSize);
+        writer.Write(central);
+        writer.Write((ushort)0);
+        return path;
+    }
+
+    private static TransferRequest CopyOut(string target, string name) =>
+        new([new PanelEntry(name)], target, move: false, _ => Task.FromResult(OverwriteChoice.Overwrite));
+
+    [Fact]
+    public async Task A_wrong_password_is_asked_again_and_says_so()
+    {
+        using var sandbox = new TestSandbox();
+        var zip = MakeEncryptedZip(sandbox, "sesame", "secret.txt", "the secret");
+        var target = Directory.CreateDirectory(Path.Combine(sandbox.Path, "out")).FullName;
+        var asked = new List<string>();
+        var answers = new Queue<string?>(["wrong", "also wrong", "sesame"]);
+        await using var provider = ArchiveProvider.TryOpen(zip, anyFormat: false, prompt =>
+        {
+            asked.Add(prompt);
+            return answers.Dequeue();
+        })!;
+
+        var outcome = await provider.GetFilesAsync(CopyOut(target, "secret.txt"), new CountingProgress(), CancellationToken.None);
+
+        Assert.Equal(new OperationOutcome(1, 0, 0), outcome);
+        Assert.Equal("the secret", File.ReadAllText(Path.Combine(target, "secret.txt")));
+        Assert.Equal(3, asked.Count);
+        Assert.Contains("is encrypted", asked[0], StringComparison.Ordinal);
+        Assert.Contains("Wrong password", asked[1], StringComparison.Ordinal);
+        Assert.Contains("Wrong password", asked[2], StringComparison.Ordinal);
+
+        // The right one is remembered.
+        File.Delete(Path.Combine(target, "secret.txt"));
+        Assert.Equal(new OperationOutcome(1, 0, 0), await provider.GetFilesAsync(CopyOut(target, "secret.txt"), new CountingProgress(), CancellationToken.None));
+        Assert.Equal(3, asked.Count);
+    }
+
+    [Fact]
+    public async Task Giving_up_after_a_wrong_password_reports_it_and_leaves_no_file()
+    {
+        using var sandbox = new TestSandbox();
+        var zip = MakeEncryptedZip(sandbox, "sesame", "secret.txt", "the secret");
+        var target = Directory.CreateDirectory(Path.Combine(sandbox.Path, "out")).FullName;
+        var answers = new Queue<string?>(["wrong", null]);
+        await using var provider = ArchiveProvider.TryOpen(zip, anyFormat: false, _ => answers.Dequeue())!;
+
+        var outcome = await provider.GetFilesAsync(CopyOut(target, "secret.txt"), new CountingProgress(), CancellationToken.None);
+
+        Assert.Equal(1, outcome.Failed);
+        Assert.Equal("Wrong password.", outcome.Message);
+        Assert.Empty(Directory.EnumerateFiles(target));
+    }
+
+    [Fact]
+    public async Task Cancelling_the_first_question_says_no_password_was_given()
+    {
+        using var sandbox = new TestSandbox();
+        var zip = MakeEncryptedZip(sandbox, "sesame", "secret.txt", "the secret");
+        var target = Directory.CreateDirectory(Path.Combine(sandbox.Path, "out")).FullName;
+        await using var provider = ArchiveProvider.TryOpen(zip, anyFormat: false, _ => null)!;
+
+        var outcome = await provider.GetFilesAsync(CopyOut(target, "secret.txt"), new CountingProgress(), CancellationToken.None);
+
+        Assert.Equal(1, outcome.Failed);
+        Assert.Equal("No password was given.", outcome.Message);
+    }
+
+    [Fact]
+    public async Task Encrypted_names_ask_again_after_a_wrong_password_and_cancelling_is_not_an_error()
+    {
+        using var sandbox = new TestSandbox();
+        var path = Path.Combine(sandbox.Path, "names.7z");
+        File.WriteAllBytes(path, Convert.FromBase64String(EncryptedNames7z));
+        var asked = new List<string>();
+        var answers = new Queue<string?>(["wrong", "sesame"]);
+        await using (var provider = ArchiveProvider.TryOpen(path, anyFormat: false, prompt =>
+        {
+            asked.Add(prompt);
+            return answers.Dequeue();
+        }))
+        {
+            Assert.NotNull(provider);
+            Assert.Equal(["inside.txt"], await Names(provider));
+        }
+
+        Assert.Contains("is encrypted", asked[0], StringComparison.Ordinal);
+        Assert.Contains("Wrong password", asked[1], StringComparison.Ordinal);
+        Assert.Throws<OperationCanceledException>(() => ArchiveProvider.TryOpen(path, anyFormat: false, _ => null));
+    }
+
     [Fact]
     public void The_bundled_7z_dll_loads_and_reads_the_common_formats()
     {
