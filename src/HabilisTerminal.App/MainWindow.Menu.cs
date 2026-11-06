@@ -311,6 +311,7 @@ public partial class MainWindow
             new DialogButton<int>("_OK", 0, IsDefault: true, IsCancel: true),
             new DialogButton<int>("Third-party _notices", 1),
             new DialogButton<int>("_GitHub", 2),
+            new DialogButton<int>("_LinkedIn", 3),
         ], 0);
 
         var notices = Path.Combine(AppContext.BaseDirectory, "ThirdPartyNotices.txt");
@@ -321,6 +322,10 @@ public partial class MainWindow
                 break;
             case 2:
                 App.OpenInBrowser(Updates.UpdateService.RepositoryUrl);
+                FocusActivePanel();
+                break;
+            case 3:
+                App.OpenInBrowser("https://www.linkedin.com/in/sergei-v-voronkov");
                 FocusActivePanel();
                 break;
             default:
