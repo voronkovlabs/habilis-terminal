@@ -172,7 +172,11 @@ public static class CommandCatalog
         new("files.copy", Files, "Copy", "F5", CanCopy) { DynamicTitle = c => Items(c, "Copy") },
         new("files.copyHere", Files, "Copy the item under the cursor", "Shift+F5", c => Local(c) && c.Cursor is CursorKind.File or CursorKind.Folder),
         new("files.move", Files, "Rename or move", "F6", CanMoveItems) { DynamicTitle = c => c.ActiveIsPlugin ? Items(c, "Move") : Items(c, "Rename or move") },
-        new("files.rename", Files, "Rename the item under the cursor", "Shift+F6", c => Local(c) && c.Cursor is CursorKind.File or CursorKind.Folder),
+        new("files.rename", Files, "Rename", "F2", c => Local(c) && c.Cursor is CursorKind.File or CursorKind.Folder)
+        {
+            DynamicTitle = c => c.CursorName is { } name ? $"Rename \"{name}\"" : "Rename",
+            Help = "Rename the file or folder under the cursor: only its name. Shift+F6 also moves it",
+        },
         new("files.mkdir", Files, "Make folder", "F7", c => HasPanel(c) && (!c.ActiveIsPlugin || c.CanMakeFolder)),
         new("files.delete", Files, "Delete", "F8", c => HasItems(c) && (!c.ActiveIsPlugin || c.CanDelete))
         {
@@ -284,7 +288,7 @@ public static class CommandCatalog
         ]))];
 
     /// <summary>The keys the app itself answers to: a plugin's global command cannot take one of them.</summary>
-    public static IReadOnlySet<string> HostKeys { get; } = All.Where(c => c.Keys is not null).Select(c => c.Keys!).ToHashSet(StringComparer.OrdinalIgnoreCase);
+    public static IReadOnlySet<string> HostKeys { get; } = All.Where(c => c.Keys is not null).Select(c => c.Keys!).Append("Shift+F6").ToHashSet(StringComparer.OrdinalIgnoreCase);
 
     public static AppCommand Get(string id) => ById[id];
 

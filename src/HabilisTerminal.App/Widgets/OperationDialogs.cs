@@ -72,6 +72,16 @@ public static class OperationDialogs
         return accepted && !string.IsNullOrWhiteSpace(name.Text) ? (name.Text, multiple.IsChecked == true) : null;
     }
 
+    /// <summary>F2: a new name, with the part before the extension selected for typing over; null when cancelled.</summary>
+    public static string? Rename(Window owner, string name, bool isFolder)
+    {
+        var box = new TextBox { Text = name };
+        box.Loaded += (_, _) => box.Select(0, Core.Operations.RenameItem.EditableLength(name, isFolder));
+        var accepted = ThemedDialog.Show(owner, $"Rename '{name}'", box,
+            [new DialogButton<bool>("Rename", true, IsDefault: true), new DialogButton<bool>("Cancel", false, IsCancel: true)], false, box);
+        return accepted ? box.Text : null;
+    }
+
     /// <summary>Shift+F4: the name of the file to edit; null when cancelled.</summary>
     public static string? NewFile(Window owner)
     {

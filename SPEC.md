@@ -146,7 +146,8 @@ Far Manager defaults unless noted.
 | F8 / Shift+Del | Delete (per setting) / delete permanently |
 | F9 | Menu: Left / Files / Commands / Options / Right, the headers in the title bar (VS Code-styled) |
 | F10 | Exit (confirmation configurable, as in Far) |
-| F2, F11 | Unassigned in v1 |
+| F2 | Rename the file or folder under the cursor: one field with the name, the part before the extension selected; the cursor stays on it; nothing is overwritten (#159) |
+| F11 | Unassigned in v1 |
 
 Compare folders has no default hotkey (Far behaviour); it is available from F9 → Commands.
 

@@ -137,6 +137,44 @@ public partial class MainWindow
         }
     }
 
+    /// <summary>F2: only a new name for what is under the cursor, and the cursor stays on it (issue #159).</summary>
+    private async Task RenameCurrentAsync(FilePanel panel)
+    {
+        if (panel.State.Count == 0 || panel.State.Current.IsParent)
+        {
+            return;
+        }
+
+        var item = panel.State.Current;
+        var folder = panel.CurrentPath;
+        var name = OperationDialogs.Rename(this, item.Name, item.Entry.IsDirectory);
+        panel.Focus();
+        if (name is null)
+        {
+            return;
+        }
+
+        try
+        {
+            if (!await Task.Run(() => Core.Operations.RenameItem.Rename(folder, item.Name, name)))
+            {
+                return;
+            }
+
+            FilePanel.InvalidateFolderSizes(folder);
+            await panel.NavigateAsync(folder, name.Trim());
+            if (Other(panel) is { IsPlugin: false } other && string.Equals(other.CurrentPath, folder, StringComparison.OrdinalIgnoreCase))
+            {
+                await other.ReloadAsync();
+            }
+        }
+        catch (Exception ex) when (ex is ArgumentException or IOException or UnauthorizedAccessException)
+        {
+            OperationDialogs.Message(this, "Rename", ex.Message);
+            panel.Focus();
+        }
+    }
+
     private async Task EditAttributesAsync(FilePanel panel)
     {
         var entries = panel.State.TargetEntries();

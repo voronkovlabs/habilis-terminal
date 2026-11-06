@@ -320,6 +320,19 @@ public partial class MainWindow
                 Fire(CopyOrMoveAsync(panel, move: true, inPlace: modifiers == KeyModifiers.Shift));
                 return true;
 
+            // Rename what is under the cursor, whatever is marked (issue #159).
+            case Key.F2 when modifiers == KeyModifiers.None:
+                if (panel.IsPlugin)
+                {
+                    panel.Message = $"Not supported by {panel.Plugin!.Name}.";
+                }
+                else
+                {
+                    Fire(RenameCurrentAsync(panel));
+                }
+
+                return true;
+
             case Key.F7 when modifiers == KeyModifiers.None:
                 Fire(MakeDirectoryAsync(panel));
                 return true;

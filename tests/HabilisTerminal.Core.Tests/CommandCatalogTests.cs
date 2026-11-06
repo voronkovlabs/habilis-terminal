@@ -74,6 +74,18 @@ public partial class CommandCatalogTests
     }
 
     [Fact]
+    public void Rename_works_on_the_item_under_the_cursor_whatever_is_marked()
+    {
+        var rename = CommandCatalog.Get("files.rename");
+        Assert.Equal("F2", rename.Keys);
+        Assert.Equal("Rename \"a.txt\"", rename.TitleIn(OnFile with { Marked = 3 }));
+        Assert.Contains("files.rename", Ids(OnFile with { Cursor = CursorKind.Folder, CursorName = "sub" }));
+        Assert.DoesNotContain("files.rename", Ids(new CommandContext { Cursor = CursorKind.Parent }));
+        Assert.DoesNotContain("files.rename", Ids(OnFile with { ActiveIsPlugin = true }));
+        Assert.Contains("Shift+F6", CommandCatalog.HostKeys);
+    }
+
+    [Fact]
     public void A_plugin_panel_hides_what_it_does_not_support()
     {
         var plain = OnFile with { ActiveIsPlugin = true };

@@ -30,6 +30,7 @@ public partial class MainWindow
                 MenuRow("files.edit"),
                 MenuRow("files.new"),
                 MenuRow("files.copy"),
+                MenuRow("files.rename"),
                 MenuRow("files.move"),
                 MenuRow("files.mkdir"),
                 MenuRow("files.delete"),
