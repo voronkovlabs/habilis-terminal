@@ -40,7 +40,7 @@
                 <TextBox x:Name="Filter" Background="{DynamicResource Habi.InputBackground}" Foreground="{DynamicResource Habi.Foreground}"
                          CaretBrush="{DynamicResource Habi.Foreground}" BorderBrush="{DynamicResource Habi.Accent}" BorderThickness="1"
                          Padding="6,4" />
-                <TextBlock x:Name="Placeholder" IsHitTestVisible="False" Margin="9,5,0,0"
+                <TextBlock x:Name="Placeholder" IsHitTestVisible="False" Margin="15,9,0,0"
                            Foreground="{DynamicResource Habi.Placeholder}" />
             </Grid>
             <ListBox x:Name="List" MaxHeight="420" Background="Transparent" BorderThickness="0"
