@@ -113,6 +113,35 @@ public class PerfTests
     }
 
     [Fact]
+    public void The_report_says_what_the_ui_thread_waited_for_and_whether_the_machine_stood()
+    {
+        var at = new DateTime(2026, 11, 5, 10, 1, 0, DateTimeKind.Utc);
+        var period = Period() with
+        {
+            Stalls =
+            [
+                new PerfStall(at, 3000, 0, 0, "panel.render.text", null, "wait: PageIn", 2500, 96),
+                new PerfStall(at, 1000, 0, 0, "panel.render.text", null, "wait: PageIn", 700, 90),
+                new PerfStall(at, 500, 450, 0, null, null, "running", 3, 40),
+            ],
+        };
+        var body = PerfReport.Build([period], "1", "W", 1).Body;
+
+        Assert.Contains("| wait: PageIn | 2 | 4000 | 3000 | 2500 | 96% |", body, StringComparison.Ordinal);
+        Assert.Contains("| running | 1 | 500 | 500 | 3 | 40% |", body, StringComparison.Ordinal);
+        Assert.Contains("| panel.render.text | - | wait: PageIn | 2500 | 96% |", body, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Stalls_saved_by_an_older_version_still_make_a_report()
+    {
+        var body = PerfReport.Build([Period() with { Stalls = [new PerfStall(DateTime.UtcNow, 200, 100, 0, "key", null)] }], "1", "W", 1).Body;
+
+        Assert.DoesNotContain("as Windows saw it", body, StringComparison.Ordinal);
+        Assert.Contains("| key | - | - | - | - |", body, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void A_stall_with_nothing_named_says_so()
     {
         var period = Period() with { Stalls = [new PerfStall(DateTime.UtcNow, 200, 100, 0, null, null)] };

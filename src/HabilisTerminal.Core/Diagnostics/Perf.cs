@@ -9,7 +9,10 @@ namespace HabilisTerminal.Core.Diagnostics;
 public sealed record PerfOperation(string Name, string? Detail, long Count, double WallMs, double? CpuMs, double MaxWallMs, int[] Buckets);
 
 /// <summary>The UI thread did not answer for a while. CpuMs tells computing from waiting; Operation is what was under way.</summary>
-public sealed record PerfStall(DateTime At, double WallMs, double CpuMs, int GarbageCollections, string? Operation, string? Dispatched);
+/// <param name="ThreadState">What Windows said the UI thread was doing, most often seen during the stall: "running", "ready" or "wait: reason".</param>
+/// <param name="WatchdogLateMs">How late the measuring thread woke at worst: a large value means the whole machine stood, not only the UI thread.</param>
+/// <param name="MemoryLoad">Percent of the machine's physical memory in use when the stall ended.</param>
+public sealed record PerfStall(DateTime At, double WallMs, double CpuMs, int GarbageCollections, string? Operation, string? Dispatched, string? ThreadState = null, double? WatchdogLateMs = null, int? MemoryLoad = null);
 
 /// <summary>CPU of the threads with one name over a period: a thread's description, or the module it started in.</summary>
 public sealed record PerfThread(string Name, double CpuMs);
@@ -92,11 +95,11 @@ public static class Perf
         _ => "over 100k",
     };
 
-    public static void RecordStall(double wallMs, double cpuMs, int collections, string? operation, string? dispatched)
+    public static void RecordStall(double wallMs, double cpuMs, int collections, string? operation, string? dispatched, string? threadState = null, double? watchdogLateMs = null, int? memoryLoad = null)
     {
         lock (Stalls)
         {
-            Stalls.Add(new PerfStall(DateTime.UtcNow, wallMs, cpuMs, collections, operation, dispatched));
+            Stalls.Add(new PerfStall(DateTime.UtcNow, wallMs, cpuMs, collections, operation, dispatched, threadState, watchdogLateMs, memoryLoad));
         }
     }
 

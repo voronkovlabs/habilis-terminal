@@ -26,6 +26,7 @@ public sealed class FileListView : FrameworkElement
     private static double FontSize = 13;
     private static int FontVersion;
     private int _renderedFontVersion;
+    private bool _firstTextOfRender;
     private static readonly Geometry LinkGeometry = Geometry.Parse("M9,15 L15,9 M11,9 L15,9 L15,13");
 
     private readonly Dictionary<(string Text, Brush Brush, bool Bold), FormattedText> _textCache = [];
@@ -72,6 +73,31 @@ public sealed class FileListView : FrameworkElement
 
     /// <summary>The panel sizes folders in the background: folders not sized yet show an empty size cell.</summary>
     public bool AutoSizedFolders { get; set; }
+
+    /// <summary>
+    /// Stands for the folder sizes on screen. A count ticks several times a second, mostly for folders not on screen or
+    /// in the other panel, and redrawing for those changes nothing (performance reports #156, #162).
+    /// </summary>
+    public int VisibleFolderSizes()
+    {
+        if (_state is null)
+        {
+            return 0;
+        }
+
+        var hash = default(HashCode);
+        var (top, count) = VisibleRange;
+        for (var index = top; index < Math.Min(_state.Count, top + count); index++)
+        {
+            var item = _state.ItemAt(index);
+            if (!item.IsParent && item.Entry.IsDirectory)
+            {
+                hash.Add(_state.FolderSizeOf(item.Name));
+            }
+        }
+
+        return hash.ToHashCode();
+    }
 
     /// <summary>First visible index and the number of visible slots.</summary>
     public (int Top, int Count) VisibleRange => (_topIndex, PageSize);
@@ -203,6 +229,7 @@ public sealed class FileListView : FrameworkElement
             _renderedFontVersion = FontVersion;
         }
 
+        _firstTextOfRender = true;
         var pixelsPerDip = VisualTreeHelper.GetDpi(this).PixelsPerDip;
         var columns = ColumnCount;
         var rows = RowsPerColumn;
@@ -563,7 +590,9 @@ public sealed class FileListView : FrameworkElement
             _textCache[(text, brush, bold)] = formatted;
         }
 
-        using var drawing = Core.Diagnostics.Perf.Measure("panel.render.text");
+        // Most of the waiting in the reports is in the header, which is drawn first: this tells its text from being first.
+        using var drawing = Core.Diagnostics.Perf.Measure(_firstTextOfRender ? "panel.render.first-text" : "panel.render.text");
+        _firstTextOfRender = false;
 
         // Setting it, even to the same value, throws away the layout the cache is there to keep (issue #136).
         if (formatted.MaxTextWidth != width)

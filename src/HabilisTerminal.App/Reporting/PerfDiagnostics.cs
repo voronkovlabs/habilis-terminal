@@ -19,6 +19,7 @@ internal static class PerfDiagnostics
     private const long SendAtBytes = 1024 * 1024;
     private const long MaxKeptBytes = 20 * 1024 * 1024;
     private const double StallMs = 100;
+    private const long ThreadStateEveryMs = 250;
     private const uint ThreadQueryLimitedInformation = 0x0800;
     private static readonly TimeSpan FlushEvery = TimeSpan.FromSeconds(30);
     private static readonly TimeSpan SampleThreadsEvery = TimeSpan.FromSeconds(5);
@@ -178,9 +179,14 @@ internal static class PerfDiagnostics
             string? operation = null;
             string? dispatched = null;
             var sampled = false;
+            var late = 0d;
+            var nextState = 0L;
+            Dictionary<string, int>? states = null;
             while (Volatile.Read(ref answered) == 0 && _running && !dispatcher.HasShutdownStarted)
             {
+                var beforeSleep = Stopwatch.GetTimestamp();
                 Thread.Sleep(10);
+                late = Math.Max(late, Stopwatch.GetElapsedTime(beforeSleep).TotalMilliseconds - 10);
 
                 // What is under way when it first counts as a stall is what is most likely to blame.
                 if (!sampled && Stopwatch.GetElapsedTime(start).TotalMilliseconds >= StallMs)
@@ -188,17 +194,66 @@ internal static class PerfDiagnostics
                     sampled = true;
                     operation = Perf.UiOperation;
                     dispatched = _dispatched ?? (MessageName(_lastMessage) is { } message ? PerfReport.WindowMessagePrefix + message : null);
+                    states = [];
+                }
+
+                // Listing the threads costs a few milliseconds, so only during a stall and not often.
+                if (sampled && Environment.TickCount64 >= nextState)
+                {
+                    nextState = Environment.TickCount64 + ThreadStateEveryMs;
+                    if (UiThreadState() is { } state)
+                    {
+                        states![state] = states.GetValueOrDefault(state) + 1;
+                    }
                 }
             }
 
             var wall = Stopwatch.GetElapsedTime(start).TotalMilliseconds;
             if (sampled && wall >= StallMs)
             {
-                Perf.RecordStall(wall, Perf.ThreadCpuMs(uiThread) - cpuBefore, GC.CollectionCount(0) - collectionsBefore, operation, dispatched);
+                var mostSeen = states is { Count: > 0 } ? states.MaxBy(pair => pair.Value).Key : null;
+                Perf.RecordStall(wall, Perf.ThreadCpuMs(uiThread) - cpuBefore, GC.CollectionCount(0) - collectionsBefore, operation, dispatched, mostSeen, late, MemoryLoad());
             }
 
             Thread.Sleep(50);
         }
+    }
+
+    /// <summary>What Windows says the UI thread is doing: a page-in, a lock, a kernel wait, or waiting for a processor.</summary>
+    private static string? UiThreadState()
+    {
+        try
+        {
+            using var process = Process.GetCurrentProcess();
+            foreach (ProcessThread thread in process.Threads)
+            {
+                using (thread)
+                {
+                    if (thread.Id == _uiThreadId)
+                    {
+                        return thread.ThreadState switch
+                        {
+                            System.Diagnostics.ThreadState.Running => "running",
+                            System.Diagnostics.ThreadState.Ready or System.Diagnostics.ThreadState.Standby => "ready",
+                            System.Diagnostics.ThreadState.Wait => $"wait: {thread.WaitReason}",
+                            var other => other.ToString().ToLowerInvariant(),
+                        };
+                    }
+                }
+            }
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or System.ComponentModel.Win32Exception or NotSupportedException)
+        {
+            // The thread ended or the list could not be read: this sample says nothing.
+        }
+
+        return null;
+    }
+
+    private static int? MemoryLoad()
+    {
+        var status = new MemoryStatusEx { Length = (uint)Marshal.SizeOf<MemoryStatusEx>() };
+        return GlobalMemoryStatusEx(ref status) ? (int)status.MemoryLoad : null;
     }
 
     private static void Flush()
@@ -425,6 +480,24 @@ internal static class PerfDiagnostics
             Interlocked.Exchange(ref _sending, 0);
         }
     }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct MemoryStatusEx
+    {
+        public uint Length;
+        public uint MemoryLoad;
+        public ulong TotalPhys;
+        public ulong AvailPhys;
+        public ulong TotalPageFile;
+        public ulong AvailPageFile;
+        public ulong TotalVirtual;
+        public ulong AvailVirtual;
+        public ulong AvailExtendedVirtual;
+    }
+
+    [DllImport("kernel32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool GlobalMemoryStatusEx(ref MemoryStatusEx buffer);
 
     [DllImport("kernel32.dll")]
     private static extern uint GetCurrentThreadId();

@@ -106,14 +106,17 @@ public static class PerfReport
             }
 
             text.AppendLine();
-            text.AppendLine("Longest ones:");
+            AppendThreadStates(text, stalls);
+            text.AppendLine("Longest ones. Watchdog late: how late the measuring thread woke at worst, so a large value means the whole machine stood, not only the UI thread.");
             text.AppendLine();
-            text.AppendLine("| At, s | ms | CPU share | Collections | Named operation | Dispatched |");
-            text.AppendLine("|---:|---:|---:|---:|---|---|");
+            text.AppendLine("| At, s | ms | CPU share | Collections | Named operation | Dispatched | UI thread | Watchdog late, ms | Memory in use |");
+            text.AppendLine("|---:|---:|---:|---:|---|---|---|---:|---:|");
             var start = periods.Min(p => p.Start);
             foreach (var stall in stalls.Take(MaxLongestStalls))
             {
-                text.AppendLine(culture, $"| {(stall.At - start).TotalSeconds:0} | {stall.WallMs:0} | {Share(stall.CpuMs, stall.WallMs)} | {stall.GarbageCollections} | {Cell(stall.Operation ?? "-")} | {Cell(stall.Dispatched ?? "-")} |");
+                var late = stall.WatchdogLateMs is { } value ? string.Create(culture, $"{value:0}") : "-";
+                var memory = stall.MemoryLoad is { } load ? string.Create(culture, $"{load}%") : "-";
+                text.AppendLine(culture, $"| {(stall.At - start).TotalSeconds:0} | {stall.WallMs:0} | {Share(stall.CpuMs, stall.WallMs)} | {stall.GarbageCollections} | {Cell(stall.Operation ?? "-")} | {Cell(stall.Dispatched ?? "-")} | {Cell(stall.ThreadState ?? "-")} | {late} | {memory} |");
             }
 
             text.AppendLine();
@@ -132,6 +135,28 @@ public static class PerfReport
         }
 
         return new IssueDraft($"Performance report {version}", text.ToString(), ["performance"]);
+    }
+
+    /// <summary>What the stalls wait for, by what Windows said about the UI thread: PageIn is the disk, UserRequest usually a lock.</summary>
+    private static void AppendThreadStates(StringBuilder text, List<PerfStall> stalls)
+    {
+        var known = stalls.Where(s => s.ThreadState is not null).ToList();
+        if (known.Count == 0)
+        {
+            return;
+        }
+
+        var culture = CultureInfo.InvariantCulture;
+        text.AppendLine("What the UI thread was doing, as Windows saw it (the state most often seen during each stall):");
+        text.AppendLine();
+        text.AppendLine("| UI thread | Count | Total ms | Longest ms | Worst watchdog late, ms | Highest memory in use |");
+        text.AppendLine("|---|---:|---:|---:|---:|---:|");
+        foreach (var group in known.GroupBy(s => s.ThreadState!).OrderByDescending(g => g.Sum(s => s.WallMs)))
+        {
+            text.AppendLine(culture, $"| {Cell(group.Key)} | {group.Count()} | {group.Sum(s => s.WallMs):0} | {group.Max(s => s.WallMs):0} | {group.Max(s => s.WatchdogLateMs ?? 0):0} | {group.Max(s => s.MemoryLoad ?? 0)}% |");
+        }
+
+        text.AppendLine();
     }
 
     /// <summary>Where the process's CPU went, including what no measuring point covers.</summary>

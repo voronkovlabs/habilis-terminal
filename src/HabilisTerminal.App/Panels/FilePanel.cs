@@ -45,6 +45,7 @@ public sealed partial class FilePanel : Border
     private bool _isActive;
     private bool _autoSizing;
     private int _sizesRepaintQueued;
+    private int _shownFolderSizes;
     private static FolderSizeWorker? s_sizeWorker;
 
     public FilePanel(string side)
@@ -506,7 +507,13 @@ public sealed partial class FilePanel : Border
             Dispatcher.BeginInvoke(() =>
             {
                 _sizesRepaintQueued = 0;
-                _list.InvalidateVisual();
+                var shown = _list.VisibleFolderSizes();
+                if (shown != _shownFolderSizes)
+                {
+                    _shownFolderSizes = shown;
+                    _list.InvalidateVisual();
+                }
+
                 UpdateStatus();
             }, DispatcherPriority.Background);
         }
