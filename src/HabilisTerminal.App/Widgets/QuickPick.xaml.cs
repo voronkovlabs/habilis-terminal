@@ -16,6 +16,12 @@ public sealed record QuickPickOptions
     /// <summary>Enter accepts the typed text when no item matches (or when there are no items at all).</summary>
     public bool AllowFreeText { get; init; }
 
+    /// <summary>
+    /// Text that means itself, not a filter (a path in the drive menu, issue #142): the list shows nothing and Enter
+    /// gives the text. It could otherwise match an item's description and open that.
+    /// </summary>
+    public Func<string, bool>? IsFreeText { get; init; }
+
     /// <summary>Del on an item (e.g. disconnect a drive); the item list is not changed automatically.</summary>
     public Action<QuickPickItem>? OnDelete { get; init; }
 
@@ -99,6 +105,8 @@ public sealed partial class QuickPick : UserControl
         Placeholder.Visibility = Filter.Text.Length == 0 ? Visibility.Visible : Visibility.Collapsed;
         var visible = text.Length == 0
             ? _items
+            : _options.IsFreeText?.Invoke(text) == true
+            ? []
             : _items.Where(i => i.Label.Contains(text, StringComparison.CurrentCultureIgnoreCase) ||
                                 i.Description.Contains(text, StringComparison.CurrentCultureIgnoreCase)).ToList();
         List.ItemsSource = visible;
@@ -167,7 +175,11 @@ public sealed partial class QuickPick : UserControl
 
     private void AcceptSelected()
     {
-        if (List.SelectedItem is QuickPickItem item && (List.Items.Count > 0 && !(_options.AllowFreeText && _items.Count == 0)))
+        if (_options.IsFreeText?.Invoke(Filter.Text.Trim()) == true)
+        {
+            Complete(new QuickPickResult(null, Filter.Text));
+        }
+        else if (List.SelectedItem is QuickPickItem item && (List.Items.Count > 0 && !(_options.AllowFreeText && _items.Count == 0)))
         {
             Complete(new QuickPickResult(item, Filter.Text));
         }

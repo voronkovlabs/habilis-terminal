@@ -211,6 +211,21 @@ public class NavigationTests
         Assert.Equal("S3 · staging · b/a/", panel.Title);
     }
 
+    [Theory]
+    [InlineData("s3://b/a/x.txt", "s3://b/a/")] // an object: its folder
+    [InlineData("s3://b/x.txt", "s3://b/")]
+    [InlineData("s3://b/a", "s3://b/a/")] // a folder without its final "/"
+    [InlineData("s3://b/a/", "s3://b/a/")]
+    [InlineData("s3://b", "s3://b/")]
+    [InlineData("s3:", "s3:")]
+    public async Task An_address_of_a_file_opens_its_folder(string address, string location)
+    {
+        var plugin = new S3Plugin { Connect = _ => new FakeS3().Add("b", "a/x.txt", "x").Add("b", "x.txt", "y") };
+        plugin.Initialize(new FakeHost());
+        var panel = (S3Panel)(await plugin.OpenAddressAsync(address, CancellationToken.None))!;
+        Assert.Equal(location, panel.Location);
+    }
+
     [Fact]
     public async Task Cd_in_the_console_is_caught_and_its_address_opens_the_place()
     {

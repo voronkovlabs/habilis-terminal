@@ -23,8 +23,18 @@ public sealed class S3Plugin : Plugin
 
     public override bool HasConfiguration => true;
 
-    public override Task<IPanelProvider?> OpenAddressAsync(string address, CancellationToken cancellationToken) =>
-        OpenAsync(S3Location.Parse(address));
+    public override async Task<IPanelProvider?> OpenAddressAsync(string address, CancellationToken cancellationToken)
+    {
+        var provider = await OpenAsync(S3Location.Parse(address)).ConfigureAwait(false);
+
+        // Without a final "/" the address may be an object's: then its folder opens (issue #142).
+        if (provider is S3Panel panel && !address.TrimEnd().EndsWith('/'))
+        {
+            await panel.GoToFolderIfFileAsync(cancellationToken).ConfigureAwait(false);
+        }
+
+        return provider;
+    }
 
     public override async Task ConfigureAsync(CancellationToken cancellationToken)
     {

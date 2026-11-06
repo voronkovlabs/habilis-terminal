@@ -407,6 +407,31 @@ internal sealed partial class S3Panel : IPanelProvider, IPanelCommands, IGetFile
         }
     }
 
+    /// <summary>
+    /// The location was parsed as a folder; if an object has that name, its folder is the place to show. When this
+    /// cannot be asked, the location stays: listing it will show what is wrong.
+    /// </summary>
+    internal async Task GoToFolderIfFileAsync(CancellationToken cancellationToken)
+    {
+        if (_location.Bucket is not { } bucket || _location.Prefix.Length == 0)
+        {
+            return;
+        }
+
+        try
+        {
+            var region = await RegionOfAsync(bucket, cancellationToken).ConfigureAwait(false);
+            if (await Api.HeadObjectAsync(region, bucket, _location.Prefix[..^1], cancellationToken).ConfigureAwait(false) is not null)
+            {
+                _location = _location.Up();
+            }
+        }
+        catch (Exception ex) when (!IsCancel(ex, cancellationToken))
+        {
+            // As the comment above says.
+        }
+    }
+
     private async Task<bool> CanListAsync(string bucket, string prefix, CancellationToken cancellationToken)
     {
         try

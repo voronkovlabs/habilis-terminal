@@ -811,14 +811,57 @@ public partial class MainWindow
         return await QuickPick.ShowAsync(panel, items, new QuickPickOptions
         {
             Title = $"Change drive ({panel.Side.ToLowerInvariant()} panel)",
-            Placeholder = "Drive letter, hotkey or name · F4 changes an item's hotkey",
+            Placeholder = "Drive letter, hotkey or name, or paste a path or address · F4 changes an item's hotkey",
+            IsFreeText = IsPastedLocation,
             OnDelete = item => DisconnectOrEject(item),
             CommandKeys = [Key.F4],
         });
     }
 
+    /// <summary>A full path, or an address with a prefix some plugin registered (issue #142).</summary>
+    private bool IsPastedLocation(string text)
+    {
+        var clean = Core.Panels.TypedLocation.Clean(text);
+        return Core.Panels.TypedLocation.IsPath(clean) || _plugins.ForAddress(clean) is not null;
+    }
+
+    /// <summary>A pasted place: a file's path goes to its folder with the cursor on it. The disk may be slow or gone, so it is asked off the UI thread.</summary>
+    private async Task OpenPastedLocationAsync(FilePanel panel, string text)
+    {
+        var clean = Core.Panels.TypedLocation.Clean(text);
+        if (!Core.Panels.TypedLocation.IsPath(clean))
+        {
+            await NavigateOrOpenAsync(panel, clean);
+            return;
+        }
+
+        var path = Path.GetFullPath(Core.Panels.TypedLocation.ToWindowsPath(clean));
+        if (await Task.Run(() => File.Exists(path)) && Path.GetDirectoryName(path) is { } folder)
+        {
+            await panel.NavigateAsync(folder, Path.GetFileName(path));
+            return;
+        }
+
+        await NavigateOrOpenAsync(panel, path);
+    }
+
     private async Task OnDriveChosenAsync(FilePanel panel, QuickPickResult? result, FilePanel previouslyActive, bool fromTerminal)
     {
+        if (result is { Item: null, Text.Length: > 0 })
+        {
+            LeaveOtherContent(panel);
+            if (!IsShown(panel))
+            {
+                SetPanelVisibility(panel == _left || Workspace.LeftVisible, panel == _right || Workspace.RightVisible);
+            }
+
+            Activate(panel);
+            FocusActivePanel();
+            await OpenPastedLocationAsync(panel, result.Text);
+            SyncShellDirectory();
+            return;
+        }
+
         // A choice turns a quick view or info panel back into a file panel at that place, as in Far (issue #75).
         if (result?.Item is not null && result.Command is null)
         {
