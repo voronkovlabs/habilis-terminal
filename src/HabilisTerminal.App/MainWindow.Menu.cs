@@ -299,7 +299,7 @@ public partial class MainWindow
         }
 
         Line($"Version {version} ({mode})");
-        Line("© 2026 Sergey Voronkov, Voronkov Labs");
+        Line("© 2026 Sergei Voronkov, Voronkov Labs");
         Line($".NET {Environment.Version}, {System.Runtime.InteropServices.RuntimeInformation.ProcessArchitecture.ToString().ToLowerInvariant()}", "Habi.DescriptionStyle");
         Line($"Shell: {App.FindPwsh()}", "Habi.DescriptionStyle");
         Line($"Settings: {App.Paths.SettingsFile}", "Habi.DescriptionStyle");

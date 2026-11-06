@@ -6,11 +6,11 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
     <AnalysisLevel>latest-recommended</AnalysisLevel>
-    <Authors>Sergey Voronkov</Authors>
+    <Authors>Sergei Voronkov</Authors>
     <Product>Habilis Terminal</Product>
     <!-- Release builds pass -p:Version from the git tag. -->
     <Version>0.1.0</Version>
-    <Copyright>Copyright (c) 2026 Sergey Voronkov</Copyright>
+    <Copyright>Copyright (c) 2026 Sergei Voronkov</Copyright>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
   </PropertyGroup>
 </Project>

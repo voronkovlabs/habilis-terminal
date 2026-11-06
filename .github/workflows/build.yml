@@ -79,7 +79,7 @@ jobs:
             # Previous release for delta updates; the first release has none.
             dotnet vpk download github --repoUrl $env:REPO_URL --channel $rid --outputDir "releases/$rid" --token $env:GH_TOKEN
             dotnet vpk pack --packId HabilisTerminal --packVersion $version --packDir $publish --mainExe habi.exe `
-              --packTitle "Habilis Terminal" --packAuthors "Sergey Voronkov" --icon src/HabilisTerminal.App/Assets/habi.ico `
+              --packTitle "Habilis Terminal" --packAuthors "Sergei Voronkov" --icon src/HabilisTerminal.App/Assets/habi.ico `
               --runtime $rid --channel $rid --outputDir "releases/$rid" --noPortable
             if ($LASTEXITCODE) { exit $LASTEXITCODE }
 

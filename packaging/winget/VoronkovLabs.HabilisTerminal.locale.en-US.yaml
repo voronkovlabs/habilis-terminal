@@ -4,7 +4,7 @@ PackageVersion: 0.1.0
 PackageLocale: en-US
 Publisher: Voronkov Labs
 PublisherUrl: https://github.com/voronkovlabs
-Author: Sergey Voronkov
+Author: Sergei Voronkov
 PackageName: Habilis Terminal
 PackageUrl: https://github.com/voronkovlabs/habilis-terminal
 License: MIT
