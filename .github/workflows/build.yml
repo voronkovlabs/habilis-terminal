@@ -99,6 +99,16 @@ jobs:
             if ($LASTEXITCODE) { exit $LASTEXITCODE }
           }
           gh release upload ${{ github.ref_name }} artifacts/*.zip --clobber
+      - name: Keep only the last two releases
+        shell: pwsh
+        # A failure here must not fail a release that is already out.
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # The releases go; their git tags stay, as the findings refer to them.
+          $old = gh release list --limit 1000 --exclude-drafts --json tagName,publishedAt --jq 'sort_by(.publishedAt) | reverse | .[2:] | .[].tagName'
+          foreach ($tag in $old) { gh release delete $tag --yes }
       - uses: actions/upload-artifact@v4
         with:
           name: release-${{ github.ref_name }}

@@ -75,6 +75,7 @@ Every command is in `src/HabilisTerminal.Core/Commands/CommandCatalog.cs`: id, s
 - **Focus model (issue #90).** The Win32 focus always stays in the console; the active panel "has the keys" as a window state (`FocusedPanel()`, `FilePanel.HasKeys`), not as WPF focus. `GlobalKeyHook` takes the console's keyboard messages in `ComponentDispatcher.ThreadFilterMessage`, before WPF, offers key-downs to `OnGlobalKey` and dispatches the rest to the console itself. Without that, WPF (which has no focused element while a child window has the Win32 focus) runs its keyboard navigation on arrows and focuses the first panel. A panel taking the WPF focus (a click, `panel.Focus()`) means "this panel gets the keys": `OnPanelGotFocus` puts the Win32 focus back into the console. A left click in the console is console mode; Esc on an empty line there comes back. `PutFocusInTerminal` clears WPF's focused element, so activating the window again does not restore a panel.
 
 ## Releases
+- **Only the last two releases are kept** (the owner's wish): a step in `build.yml` deletes older ones after each release. Their git tags stay.
 - **Pushing a tag `vX.Y.Z`** runs `.github/workflows/build.yml`. It publishes self-contained builds per RID, runs `vpk pack --noPortable` (installer and update packages), builds our own portable zip with the `portable` marker, and publishes to GitHub Releases.
 - **Never create or move a tag without the owner's explicit go-ahead.** A tag publishes binaries.
 - **Code signing:** none yet, so SmartScreen warns about the installer (issue #13).
