@@ -183,7 +183,13 @@ public sealed class ShellHost : IDisposable
             _options.WorkingDirectory,
             columns,
             rows,
-            new Dictionary<string, string> { [ChannelVariable] = ChannelDirectory });
+            new Dictionary<string, string>
+            {
+                [ChannelVariable] = ChannelDirectory,
+
+                // Tools started in this console find the app they run in (tools/plugins/habi-plugin.ps1).
+                ["HABI_PID"] = Environment.ProcessId.ToString(System.Globalization.CultureInfo.InvariantCulture),
+            });
 
         _session = ConPtySession.Start(startInfo, OnOutput, OnExited);
     }

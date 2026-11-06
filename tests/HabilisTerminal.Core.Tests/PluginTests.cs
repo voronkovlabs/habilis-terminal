@@ -94,6 +94,106 @@ public class PluginTests
         Assert.Same(typeof(Plugin).Assembly, plugin.GetType().BaseType!.Assembly); // the host's SDK
     }
 
+    private const string TestPluginFile = "HabilisTerminal.TestPlugin.dll";
+
+    private static string MakeTestPluginFolder(string root)
+    {
+        var folder = Path.Combine(root, "sample");
+        Directory.CreateDirectory(folder);
+        File.Copy(Path.Combine(AppContext.BaseDirectory, TestPluginFile), Path.Combine(folder, TestPluginFile));
+        File.WriteAllText(Path.Combine(folder, PluginManifest.FileName), $$"""{ "id": "test.sample", "name": "Sample", "version": "1.0.0", "assembly": "{{TestPluginFile}}", "sdk": "1.0" }""");
+        return folder;
+    }
+
+    [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]
+    private static WeakReference LoadAndUnload(string folder, string source)
+    {
+        var loaded = PluginLoader.Load(folder, source);
+        Assert.Null(loaded.Error);
+        Assert.Equal(source, loaded.Source);
+        Assert.True(loaded.Context!.IsCollectible);
+        return PluginLoader.Unload(loaded.Context);
+    }
+
+    [Fact]
+    public async Task A_plugin_in_a_temporary_copy_unloads_and_its_source_stays_free_to_overwrite()
+    {
+        using var sandbox = new TestSandbox();
+        var source = MakeTestPluginFolder(sandbox.Path);
+        var shadows = Path.Combine(sandbox.Path, "shadow");
+
+        var copy = PluginLoader.ShadowCopy(source, shadows);
+        Assert.NotEqual(source, copy);
+        var weak = LoadAndUnload(copy, source);
+
+        // The source was never locked: a build can write over it while the copy runs.
+        File.WriteAllText(Path.Combine(source, TestPluginFile), "rebuilt");
+
+        for (var i = 0; i < 30 && weak.IsAlive; i++)
+        {
+            GC.Collect();
+            GC.WaitForPendingFinalizers();
+            await Task.Delay(100, TestContext.Current.CancellationToken);
+        }
+
+        Assert.False(weak.IsAlive, "the load context was not freed");
+
+        // The copy's files follow shortly after: the runtime lets go of them as it finishes the unload.
+        var deleted = false;
+        for (var i = 0; i < 50 && !deleted; i++)
+        {
+            GC.Collect();
+            GC.WaitForPendingFinalizers();
+            try
+            {
+                Directory.Delete(shadows, recursive: true);
+                deleted = true;
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                await Task.Delay(100, TestContext.Current.CancellationToken);
+            }
+        }
+
+        Assert.True(deleted, "the temporary copy stayed locked");
+    }
+
+    [Fact]
+    public void Temporary_copies_of_apps_that_have_gone_are_cleaned_and_a_running_ones_stay()
+    {
+        using var sandbox = new TestSandbox();
+        var mine = Directory.CreateDirectory(Path.Combine(sandbox.Path, Environment.ProcessId.ToString(CultureInfo.InvariantCulture), "x")).FullName;
+        var gone = Directory.CreateDirectory(Path.Combine(sandbox.Path, "999999999", "x")).FullName;
+        PluginLoader.CleanShadowCopies(sandbox.Path);
+        PluginLoader.CleanShadowCopies(Path.Combine(sandbox.Path, "absent"));
+        Assert.True(Directory.Exists(mine));
+        Assert.False(Directory.Exists(gone));
+    }
+
+    [Fact]
+    public void A_plugin_that_cannot_load_keeps_its_source_and_the_reason()
+    {
+        using var sandbox = new TestSandbox();
+        var folder = Path.Combine(sandbox.Path, "bad");
+        Directory.CreateDirectory(folder);
+        File.WriteAllText(Path.Combine(folder, PluginManifest.FileName), """{ "id": "bad", "name": "Bad", "version": "1.0.0", "assembly": "Bad.dll", "sdk": "1.0" }""");
+        File.WriteAllText(Path.Combine(folder, "Bad.dll"), "not an assembly");
+
+        var loaded = PluginLoader.Load(folder, @"C:\source");
+
+        Assert.Null(loaded.Instance);
+        Assert.Equal(@"C:\source", loaded.Source);
+        Assert.NotNull(loaded.Error);
+        Assert.NotNull(loaded.ErrorDetail);
+    }
+
+    [Theory]
+    [InlineData("", true)]
+    [InlineData(""", "collectible": false""", false)]
+    [InlineData(""", "collectible": true""", true)]
+    public void A_manifest_may_ask_not_to_be_collectible(string extra, bool collectible) =>
+        Assert.Equal(collectible, PluginManifest.Parse($$"""{ "id": "a", "name": "x", "version": "1", "assembly": "a.dll", "sdk": "1.0"{{extra}} }""").Collectible);
+
     [Fact]
     public void Sdk_assembly_version_is_the_sdk_version_not_the_app_version()
     {

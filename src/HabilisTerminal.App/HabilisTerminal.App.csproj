@@ -43,6 +43,8 @@
     <Resource Include="Assets\habi.ico" />
     <None Include="..\..\ThirdPartyNotices.txt" Link="ThirdPartyNotices.txt" CopyToOutputDirectory="PreserveNewest" />
     <None Include="..\..\LICENSE" Link="LICENSE.txt" CopyToOutputDirectory="PreserveNewest" />
+    <!-- The client of the plugin API (issue #150): whoever writes a plugin needs it without the repository. -->
+    <None Include="..\..\tools\plugins\habi-plugin.ps1" Link="habi-plugin.ps1" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
   <ItemGroup Condition="'$(CrashReportToken)' != ''">
     <!-- The release workflow passes the crash and feedback report token (CRASH_REPORT_TOKEN, base64 of the reversed

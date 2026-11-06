@@ -8,6 +8,12 @@ public sealed partial record PluginManifest(string Id, string Name, string Versi
 {
     public const string FileName = "plugin.json";
 
+    /// <summary>
+    /// False keeps the plugin's code in memory after an unload, for code that cannot run in a collectible load context
+    /// (optional, default true). Reloading still works; the old copy stays until the app restarts.
+    /// </summary>
+    public bool Collectible { get; init; } = true;
+
     /// <summary>The SDK version this host implements.</summary>
     public static Version HostSdkVersion { get; } = new(1, 5);
 
@@ -30,7 +36,10 @@ public sealed partial record PluginManifest(string Id, string Name, string Versi
                 ? text
                 : throw new InvalidDataException($"{FileName} has no \"{name}\".");
 
-        var manifest = new PluginManifest(Read("id"), Read("name"), Read("version"), Read("assembly"), Read("sdk"));
+        var manifest = new PluginManifest(Read("id"), Read("name"), Read("version"), Read("assembly"), Read("sdk"))
+        {
+            Collectible = !root.TryGetProperty("collectible", out var collectible) || collectible.ValueKind != JsonValueKind.False,
+        };
         if (!IdPattern().IsMatch(manifest.Id))
         {
             throw new InvalidDataException($"Plugin id \"{manifest.Id}\" may contain only letters, digits, '.', '-' and '_'.");

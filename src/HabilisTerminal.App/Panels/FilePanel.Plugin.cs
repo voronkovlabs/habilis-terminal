@@ -26,6 +26,9 @@ public sealed partial class FilePanel
     /// <summary>Enter on a plugin entry that is not a folder: the window views it.</summary>
     public event Action<FilePanel, PanelEntry>? PluginEntryActivated;
 
+    /// <summary>The last plugin panel's disposal: a plugin may be unloaded only after it.</summary>
+    internal Task PluginClosing { get; private set; } = Task.CompletedTask;
+
     /// <summary>The panel shows a plugin rather than a folder.</summary>
     public bool IsPlugin => _session is not null;
 
@@ -315,7 +318,7 @@ public sealed partial class FilePanel
         State.SetExtension(null);
         _pluginViewHost.Content = null;
         UpdateBody();
-        _ = DisposeQuietlyAsync(session.Provider);
+        PluginClosing = DisposeQuietlyAsync(session.Provider);
     }
 
     private static async Task DisposeQuietlyAsync(IPanelProvider provider)

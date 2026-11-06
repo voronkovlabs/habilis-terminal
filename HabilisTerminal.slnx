@@ -10,6 +10,7 @@
   <Folder Name="/tests/">
     <Project Path="tests/HabilisTerminal.Core.Benchmarks/HabilisTerminal.Core.Benchmarks.csproj" />
     <Project Path="tests/HabilisTerminal.Core.Tests/HabilisTerminal.Core.Tests.csproj" />
+    <Project Path="tests/HabilisTerminal.TestPlugin/HabilisTerminal.TestPlugin.csproj" />
     <Project Path="tests/HabilisTerminal.Shell.Tests/HabilisTerminal.Shell.Tests.csproj" />
     <Project Path="tests/HabilisTerminal.Themes.Tests/HabilisTerminal.Themes.Tests.csproj" />
   </Folder>

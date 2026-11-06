@@ -21,16 +21,23 @@ public partial class MainWindow : IPluginWindow
 
     private void LoadPlugins()
     {
-        var settingsDirectory = App.Paths.PluginSettingsDirectory;
-        var tempRoot = Path.Combine(Path.GetTempPath(), Core.Settings.AppPaths.ProductFolder, "plugins");
-        var dialogs = new PluginDialogs(this, () => _active);
-        _plugins.LoadAll(App.Paths, plugin => new PluginHostServices(plugin, dialogs, this, settingsDirectory, tempRoot));
+        _plugins.LoadAll(App.Paths, HostFor);
         foreach (var failed in _plugins.Plugins.Where(p => p.Error is not null))
         {
             Trace($"plugin {failed.Id} not loaded: {failed.Error}");
         }
 
+        StartPluginApi();
     }
+
+    private PluginHostServices HostFor(LoadedPlugin plugin) => new(
+        plugin,
+        new PluginDialogs(this, () => _active),
+        this,
+        App.Paths.PluginSettingsDirectory,
+        Path.Combine(Path.GetTempPath(), Core.Settings.AppPaths.ProductFolder, "plugins"));
+
+    private LoadedPlugin InitializePlugin(LoadedPlugin plugin) => PluginManager.Initialize(plugin, HostFor);
 
     /// <summary>Opens a folder, or a plugin address ("s3://...", "sqs:...") from history or the drive menu.</summary>
     private async Task<bool> NavigateOrOpenAsync(FilePanel panel, string target)
@@ -58,6 +65,7 @@ public partial class MainWindow : IPluginWindow
     /// <summary>The panel a plugin returns; Failed when it could not say, which is shown and is not the same as "not mine".</summary>
     private async Task<(IPanelProvider? Provider, bool Failed)> AskPluginAsync(FilePanel panel, LoadedPlugin plugin, Func<CancellationToken, Task<IPanelProvider?>> open)
     {
+        using var busy = _plugins.BeginOperation(plugin);
         try
         {
             using var wait = new WaitCard(Toasts, $"Opening {plugin.Name}");
@@ -186,10 +194,26 @@ public partial class MainWindow : IPluginWindow
             return;
         }
 
-        var result = await QuickPick.ShowAsync(panel, items, new QuickPickOptions { Title = "Plugins", Placeholder = "Filter plugins" });
+        var result = await QuickPick.ShowAsync(panel, items, new QuickPickOptions { Title = "Plugins", Placeholder = "Filter plugins · F5 reloads a plugin", CommandKeys = [Key.F5] });
         panel.Focus();
+        if (result is { Command: Key.F5, Item.Tag: LoadedPlugin reloading })
+        {
+            try
+            {
+                var outcome = await InstallAsync(reloading.Source, reloading.Id);
+                panel.Message = outcome.Error ?? $"{reloading.Name} reloaded.";
+            }
+            catch (PluginApiException ex)
+            {
+                panel.Message = ex.Message;
+            }
+
+            return;
+        }
+
         if (result?.Item?.Tag is LoadedPlugin { Instance: { } instance } chosen && PluginManager.Guard(chosen, () => instance.HasConfiguration, false))
         {
+            using var busy = _plugins.BeginOperation(chosen);
             try
             {
                 await instance.ConfigureAsync(CancellationToken.None);
@@ -298,6 +322,7 @@ public partial class MainWindow : IPluginWindow
     private async Task RunPluginCommandAsync(FilePanel panel, PanelCommand command)
     {
         var plugin = panel.Plugin!;
+        using var busy = _plugins.BeginOperation(plugin);
         using var control = new OperationControl();
         var progress = new PluginProgress(Dispatcher, () => Toasts.Add(command.Title, control));
         progress.ShowAfter(TimeSpan.FromMilliseconds(400));
@@ -329,6 +354,7 @@ public partial class MainWindow : IPluginWindow
     private async Task PluginViewAsync(FilePanel panel, PanelEntry entry)
     {
         var plugin = panel.Plugin!;
+        using var busy = _plugins.BeginOperation(plugin);
         var provider = panel.Provider!;
         try
         {
@@ -393,6 +419,7 @@ public partial class MainWindow : IPluginWindow
     private async Task PluginGetFilesAsync(FilePanel source, bool move)
     {
         var plugin = source.Plugin!;
+        using var busy = _plugins.BeginOperation(plugin);
         if (source.Provider is not IGetFiles getter || (move && !getter.CanMove))
         {
             source.Message = move ? $"Moving from {plugin.Name} is not supported." : $"Copying from {plugin.Name} is not supported.";
@@ -433,6 +460,7 @@ public partial class MainWindow : IPluginWindow
     private async Task PluginPutFilesAsync(FilePanel source, FilePanel target, bool move)
     {
         var plugin = target.Plugin!;
+        using var busy = _plugins.BeginOperation(plugin);
         if (target.Provider is not IPutFiles putter)
         {
             source.Message = $"Copying into {plugin.Name} is not supported.";
@@ -485,6 +513,7 @@ public partial class MainWindow : IPluginWindow
     private async Task PluginDeleteAsync(FilePanel panel)
     {
         var plugin = panel.Plugin!;
+        using var busy = _plugins.BeginOperation(plugin);
         if (panel.Provider is not IDeleteEntries deleter)
         {
             panel.Message = $"Deleting is not supported by {plugin.Name}.";
@@ -506,6 +535,7 @@ public partial class MainWindow : IPluginWindow
     private async Task PluginMakeFolderAsync(FilePanel panel)
     {
         var plugin = panel.Plugin!;
+        using var busy = _plugins.BeginOperation(plugin);
         if (panel.Provider is not IMakeFolder maker)
         {
             panel.Message = $"Making folders is not supported by {plugin.Name}.";

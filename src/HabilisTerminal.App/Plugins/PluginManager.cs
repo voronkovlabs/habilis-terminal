@@ -12,6 +12,7 @@ namespace HabilisTerminal.App.Plugins;
 internal sealed class PluginManager
 {
     private readonly List<LoadedPlugin> _plugins = [];
+    private readonly Dictionary<string, int> _operations = new(StringComparer.OrdinalIgnoreCase);
 
     public IReadOnlyList<LoadedPlugin> Plugins => _plugins;
 
@@ -27,20 +28,54 @@ internal sealed class PluginManager
     {
         foreach (var folder in PluginLoader.Discover(Roots(paths)))
         {
-            var loaded = PluginLoader.Load(folder);
-            if (loaded is { Instance: { } plugin })
-            {
-                try
-                {
-                    plugin.Initialize(hostFor(loaded));
-                }
-                catch (Exception ex) when (ex is not OutOfMemoryException)
-                {
-                    loaded = loaded with { Instance = null, Error = $"Initialisation failed: {ex.Message}" };
-                }
-            }
+            _plugins.Add(Initialize(PluginLoader.Load(folder), hostFor));
+        }
+    }
 
-            _plugins.Add(loaded);
+    /// <summary>A loaded plugin made ready to use; a failure is kept with its reason.</summary>
+    public static LoadedPlugin Initialize(LoadedPlugin loaded, Func<LoadedPlugin, IPluginHost> hostFor)
+    {
+        if (loaded is { Instance: { } plugin })
+        {
+            try
+            {
+                plugin.Initialize(hostFor(loaded));
+            }
+            catch (Exception ex) when (ex is not OutOfMemoryException)
+            {
+                return loaded with { Instance = null, Error = $"Initialisation failed: {ex.Message}", ErrorDetail = ex.ToString() };
+            }
+        }
+
+        return loaded;
+    }
+
+    public LoadedPlugin? Find(string id) => _plugins.Find(p => string.Equals(p.Id, id, StringComparison.OrdinalIgnoreCase));
+
+    public void Add(LoadedPlugin plugin) => _plugins.Add(plugin);
+
+    public void Remove(LoadedPlugin plugin) => _plugins.Remove(plugin);
+
+    /// <summary>An operation of the plugin is under way: it may not be unloaded until the result is disposed.</summary>
+    public IDisposable BeginOperation(LoadedPlugin plugin)
+    {
+        _operations[plugin.Id] = _operations.GetValueOrDefault(plugin.Id) + 1;
+        return new Operation(this, plugin.Id);
+    }
+
+    public bool IsBusy(string id) => _operations.GetValueOrDefault(id) > 0;
+
+    private sealed class Operation(PluginManager manager, string id) : IDisposable
+    {
+        private bool _ended;
+
+        public void Dispose()
+        {
+            if (!_ended)
+            {
+                _ended = true;
+                manager._operations[id]--;
+            }
         }
     }
 

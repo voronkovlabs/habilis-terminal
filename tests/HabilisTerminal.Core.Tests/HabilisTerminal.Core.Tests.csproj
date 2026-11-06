@@ -11,5 +11,6 @@
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\..\src\HabilisTerminal.Core\HabilisTerminal.Core.csproj" />
+    <ProjectReference Include="..\HabilisTerminal.TestPlugin\HabilisTerminal.TestPlugin.csproj" ReferenceOutputAssembly="false" OutputItemType="Content" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 </Project>
