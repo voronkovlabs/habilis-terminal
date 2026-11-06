@@ -88,6 +88,9 @@ All keys are handled by the panels, except:
   Typing a command with panels visible works like in Far; focus stays in the terminal afterwards.
 - Quick search is **Alt+letter**, as in Far.
 
+### goto
+`goto <path or address>` typed at the prompt (#152) does what a paste into the drive menu does: a folder opens, a file's path opens its folder with the cursor on it, a plugin's address opens the plugin. It is also taken relative to the shell's folder, with `~` and `%VARIABLES%`. The line does not reach the shell, and goes into its history. A program waiting for input gets the line as usual.
+
 ### Terminal focus
 All keys go to the shell / running program, except these globally intercepted ones:
 - **Ctrl+O** — always (even while a program runs).

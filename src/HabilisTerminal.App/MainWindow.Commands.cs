@@ -863,6 +863,13 @@ public partial class MainWindow
         await NavigateOrOpenAsync(panel, path);
     }
 
+    /// <summary>"goto" in the console (issue #152): the active panel goes there, as a paste into the drive menu does.</summary>
+    private void OnGoto(string text, string? shellFolder)
+    {
+        var target = Core.Panels.TypedLocation.ForGoto(text, shellFolder ?? _active.LocalPath, t => _plugins.ForAddress(t) is not null);
+        Fire(OnDriveChosenAsync(_active, new QuickPickResult(null, target), _active, fromTerminal: false));
+    }
+
     private async Task OnDriveChosenAsync(FilePanel panel, QuickPickResult? result, FilePanel previouslyActive, bool fromTerminal)
     {
         if (result is { Item: null, Text.Length: > 0 })

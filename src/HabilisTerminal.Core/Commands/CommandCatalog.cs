@@ -273,6 +273,7 @@ public static class CommandCatalog
         (Layout, "Esc", "Clear the command line; on an empty line, collapse the console grown over the panels"),
         (Layout, "Click in the console", "Work inside the console (selection, scrollback); Esc on an empty line comes back"),
         (Navigation, "Alt+letter", "Quick search"),
+        (Navigation, "goto <path>", "Typed in the console: the panel goes there, as a paste into the drive menu does. A file's path opens its folder with the cursor on it; plugin addresses work too. Also relative to the console's folder, with ~ and %VARIABLES%"),
         (Selection, "Shift+arrows", "Select while moving"),
         (Selection, "Ctrl+click", "Toggle selection"),
         (CommandLine, "Ctrl+P, Ctrl+U, Ctrl+L, Ctrl+Q", "Panel keys that also work at the prompt (not while a program runs)"),

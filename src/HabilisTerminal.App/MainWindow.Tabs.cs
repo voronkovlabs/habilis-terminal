@@ -85,6 +85,13 @@ public partial class MainWindow
                 OnPluginAddress(address);
             }
         });
+        host.GotoEntered += text => Dispatcher.BeginInvoke(() =>
+        {
+            if (tab == _tab)
+            {
+                OnGoto(text, host.CurrentDirectory);
+            }
+        });
         host.CommandLineAccepted += line => Dispatcher.BeginInvoke(() => tab.CommandLine = line);
         host.CommandFinished += code => Dispatcher.BeginInvoke(() => tab.LastExitCode = code);
         host.AddressPrefixes = _plugins.Prefixes();

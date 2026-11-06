@@ -252,6 +252,39 @@ public class ShellHostTests
     }
 
     [Fact]
+    public async Task Goto_reports_what_follows_it_instead_of_running_it()
+    {
+        using var shell = new TestShell();
+        var targets = new System.Collections.Concurrent.ConcurrentQueue<string>();
+        shell.Host.GotoEntered += targets.Enqueue;
+        await shell.WaitIdleAsync();
+
+        foreach (var (line, expected) in new[]
+        {
+            (@"goto C:\Program Files\a b.txt", @"C:\Program Files\a b.txt"),
+            (@"  GOTO   ""C:\x y""  ", @"""C:\x y"""),
+            ("goto s3://bucket/a/", "s3://bucket/a/"),
+        })
+        {
+            shell.Host.Write(line + "\r");
+            await TestShell.WaitUntilAsync(() => !targets.IsEmpty, "goto message for: " + line);
+            Assert.True(targets.TryDequeue(out var target));
+            Assert.Equal(expected, target);
+        }
+
+        // Without a target, or as part of something else, it is an ordinary line.
+        shell.Host.Write("function gotox { 'GOTO-' + 'X' }\r");
+        await shell.WaitIdleAsync();
+        shell.Host.Write("gotox y\r");
+        await shell.WaitForTextAsync("GOTO-X");
+        shell.Host.Write("function goto { 'BARE-' + 'GOTO' }\r");
+        await shell.WaitIdleAsync();
+        shell.Host.Write("goto\r");
+        await shell.WaitForTextAsync("BARE-GOTO");
+        Assert.Empty(targets);
+    }
+
+    [Fact]
     public async Task Enter_on_a_registered_command_reports_the_address_instead_of_running_it()
     {
         using var shell = new TestShell();

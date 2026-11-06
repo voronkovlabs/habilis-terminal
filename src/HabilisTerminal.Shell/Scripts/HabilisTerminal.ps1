@@ -140,11 +140,15 @@ Set-PSReadLineKeyHandler -Chord F24 -BriefDescription HabilisTerminalRequest -De
 # opens the plugin panel instead of running the line, as Far's command-line prefixes do. Habilis Terminal keeps the
 # prefixes, one per line, in the 'prefixes' file of the channel. A plugin can also catch a command in front of its
 # address ("cd s3://bucket/", issue #140): the 'commands' file holds "cd s3", one per line. Other lines run as before.
-function global:__HabiOpenAddress($line, $address) {
+function global:__HabiSendLine($line, $message, $text) {
     [Microsoft.PowerShell.PSConsoleReadLine]::AddToHistory($line)
     [Microsoft.PowerShell.PSConsoleReadLine]::RevertLine()
-    $encoded = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($address))
-    [Console]::Write((__HabiOsc "7731;habi;open-address;$encoded"))
+    $encoded = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($text))
+    [Console]::Write((__HabiOsc "7731;habi;$message;$encoded"))
+}
+
+function global:__HabiOpenAddress($line, $address) {
+    __HabiSendLine $line 'open-address' $address
 }
 
 function global:__HabiEnter($key, $arg) {
@@ -153,6 +157,13 @@ function global:__HabiEnter($key, $arg) {
     $line = $null
     $cursor = $null
     [Microsoft.PowerShell.PSConsoleReadLine]::GetBufferState([ref] $line, [ref] $cursor)
+
+    # "goto <path or address>" (issue #152): the panel goes there, as a paste into the drive menu does.
+    if ($line -match '^\s*goto\s+(\S.*?)\s*$') {
+        __HabiSendLine $line 'goto' $Matches[1]
+        return
+    }
+
     $prefixes = Join-Path $state.Channel 'prefixes'
     # "sqs:" alone counts too (the plugin's default location).
     if ($line -match '^\s*([A-Za-z][A-Za-z0-9]*):(\S|\s*$)' -and (Test-Path -LiteralPath $prefixes)) {

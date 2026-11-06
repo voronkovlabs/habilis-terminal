@@ -84,6 +84,9 @@ public sealed class ShellHost : IDisposable
     /// </summary>
     public event Action<string>? AddressEntered;
 
+    /// <summary>Enter on "goto &lt;text&gt;": the text, which the shell did not run (issue #152). Background thread.</summary>
+    public event Action<string>? GotoEntered;
+
     /// <summary>
     /// A command was accepted: the console row its output starts at and the console's rows and columns (issue #82).
     /// Raised from the output thread before the command's output reaches <see cref="Output"/>.
@@ -348,6 +351,18 @@ public sealed class ShellHost : IDisposable
 
             case ShellEvent.Message { Name: "focus-panel" }:
                 FocusPanelRequested?.Invoke();
+                break;
+
+            case ShellEvent.Message { Name: "goto" } go when go.Arguments.Count == 1:
+                try
+                {
+                    GotoEntered?.Invoke(System.Text.Encoding.UTF8.GetString(Convert.FromBase64String(go.Arguments[0])));
+                }
+                catch (FormatException)
+                {
+                    // A garbled message: nowhere to go.
+                }
+
                 break;
 
             case ShellEvent.Message { Name: "open-address" } open when open.Arguments.Count == 1:
