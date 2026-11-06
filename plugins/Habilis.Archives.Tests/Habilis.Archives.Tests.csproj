@@ -1,0 +1,24 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <EnableDynamicLoading>false</EnableDynamicLoading>
+    <!-- Test names read as sentences; the tests were written against the app's rules. -->
+    <NoWarn>$(NoWarn);CA1707;CA1515;CA1852;CA1861;CA2007;CA1031;CA1063;CA1816;CA1812;CA1849;CA1859;CA5392;CA1711;xUnit1051;xUnit1031</NoWarn>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="HabilisTerminal.Plugins.Sdk" />
+    <PackageReference Include="xunit.v3" />
+  </ItemGroup>
+  <ItemGroup>
+    <Using Include="Xunit" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\Habilis.Archives\Habilis.Archives.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <!-- 7-Zip is a Windows DLL reached through COM. -->
+    <AssemblyAttribute Include="System.Runtime.Versioning.SupportedOSPlatformAttribute">
+      <_Parameter1>windows</_Parameter1>
+    </AssemblyAttribute>
+  </ItemGroup>
+</Project>

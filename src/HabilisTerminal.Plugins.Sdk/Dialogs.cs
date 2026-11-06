@@ -14,6 +14,9 @@ public interface IPluginDialogs
     /// <summary>One line of text; null when cancelled.</summary>
     Task<string?> InputAsync(string title, string prompt, string? initialValue = null);
 
+    /// <summary>One line the screen must not show, such as a password (SDK 1.5); null when cancelled. Keep the answer in memory only.</summary>
+    Task<string?> InputSecretAsync(string title, string prompt) => InputAsync(title, prompt);
+
     /// <summary>Picks one of <paramref name="choices"/> (filterable list); null when cancelled.</summary>
     Task<string?> ChooseAsync(string title, IReadOnlyList<string> choices, string? current = null);
 

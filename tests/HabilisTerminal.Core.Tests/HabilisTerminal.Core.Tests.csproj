@@ -12,8 +12,4 @@
   <ItemGroup>
     <ProjectReference Include="..\..\src\HabilisTerminal.Core\HabilisTerminal.Core.csproj" />
   </ItemGroup>
-  <ItemGroup>
-    <!-- The archive tests (issue #51) run against the real 7z.dll; the test host is x64. -->
-    <None Include="..\..\third_party\7-Zip\win-x64\7z.dll" Link="7z.dll" CopyToOutputDirectory="PreserveNewest" />
-  </ItemGroup>
 </Project>

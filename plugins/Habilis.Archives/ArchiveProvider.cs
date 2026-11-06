@@ -1,8 +1,7 @@
 using System.Globalization;
-using HabilisTerminal.Core.FileSystem;
 using HabilisTerminal.Plugins;
 
-namespace HabilisTerminal.Core.Archives;
+namespace Habilis.Archives;
 
 /// <summary>
 /// An archive shown as a folder in a panel (issue #51), as Far's arclite: Enter / Ctrl+PgDn goes in, ".." at the top
@@ -48,7 +47,7 @@ public sealed class ArchiveProvider : IPanelProvider, IGetFiles, IPutFiles, IDel
                 new InfoLine("Format", Top.Archive.Format.Name),
                 new InfoLine("Files", tree.FileCount.ToString("N0", culture)),
                 new InfoLine("Folders", tree.FolderCount.ToString("N0", culture)),
-                new InfoLine("Size", SizeFormat.Compact(tree.TotalSize, culture)),
+                new InfoLine("Size", Compact(tree.TotalSize, culture)),
             ];
         }
     }
@@ -59,6 +58,21 @@ public sealed class ArchiveProvider : IPanelProvider, IGetFiles, IPutFiles, IDel
     public bool CanWrite => _levels.Count == 1 && Top.Archive.Format.CanWrite;
 
     private Level Top => _levels.Peek();
+
+    /// <summary>"512 B", "1.2 KB", "34 MB".</summary>
+    private static string Compact(long bytes, CultureInfo culture)
+    {
+        string[] units = ["B", "KB", "MB", "GB", "TB"];
+        double value = bytes;
+        var unit = 0;
+        while (value >= 1024 && unit < units.Length - 1)
+        {
+            value /= 1024;
+            unit++;
+        }
+
+        return unit == 0 ? $"{bytes.ToString(culture)} B" : $"{value.ToString(value < 10 ? "0.0" : "0", culture)} {units[unit]}";
+    }
 
     /// <summary>
     /// Opens <paramref name="path"/> as an archive: by its extension, or with <paramref name="anyFormat"/> by
@@ -74,35 +88,30 @@ public sealed class ArchiveProvider : IPanelProvider, IGetFiles, IPutFiles, IDel
     }
 
     /// <summary>
-    /// A location from folder history (<c>C:\data\a.zip\docs</c>): the longest existing file is the archive, the
-    /// rest a folder inside it. Null when no part is an archive.
+    /// Opens a file and shows a place inside it (from folder history), or the top when that place is gone. Null when
+    /// 7z.dll is missing or no format accepts the file.
     /// </summary>
-    public static ArchiveProvider? TryOpenLocation(string location, Func<string, string?> askPassword, SevenZipLibrary? library = null)
+    /// <exception cref="IOException">The file cannot be read.</exception>
+    public static ArchiveProvider? TryOpen(string path, string innerPath, bool anyFormat, Func<string, string?> askPassword, SevenZipLibrary? library = null)
     {
-        var file = location.TrimEnd('\\');
-        while (file.Length > 0 && !File.Exists(file))
-        {
-            var cut = file.LastIndexOf('\\');
-            if (cut <= 2)
-            {
-                return null;
-            }
-
-            file = file[..cut];
-        }
-
-        if (file.Length == 0 || TryOpen(file, anyFormat: true, askPassword, library) is not { } provider)
+        if (TryOpen(path, anyFormat, askPassword, library) is not { } provider)
         {
             return null;
         }
 
-        var inner = location.Length > file.Length ? location[file.Length..].Trim('\\') : string.Empty;
-        if (provider.Top.Tree.IsFolder(inner))
+        if (innerPath.Length > 0 && provider.Top.Tree.IsFolder(innerPath))
         {
-            provider._folder = inner;
+            provider._folder = innerPath;
         }
 
         return provider;
+    }
+
+    /// <summary>The extensions Enter opens as folders: what is an archive to the user and 7-Zip here reads.</summary>
+    public static IReadOnlyList<string> ExtensionsOpenedOnEnter(SevenZipLibrary? library = null)
+    {
+        library ??= SevenZipLibrary.Default;
+        return library is null ? [] : [.. OpenedOnEnter.Where(library.Extensions.Contains)];
     }
 
     /// <summary>True when the extension is that of an archive (Enter tries to open such files as folders).</summary>
@@ -150,7 +159,7 @@ public sealed class ArchiveProvider : IPanelProvider, IGetFiles, IPutFiles, IDel
         }
 
         // An archive inside: open it from a temporary copy.
-        var folder = Path.Combine(Path.GetTempPath(), Settings.AppPaths.ProductFolder, "archives", Guid.NewGuid().ToString("N")[..8]);
+        var folder = Path.Combine(Path.GetTempPath(), "HabilisTerminal", "archives", Guid.NewGuid().ToString("N")[..8]);
         var copy = Path.Combine(folder, entry.Name);
         var archive = Top.Archive;
         var failures = await Task.Run(() => archive.Extract(new Dictionary<uint, string> { [item.Index] = copy }, _ => { }, _ => { }, () => _askPassword(entry.Name), cancellationToken), cancellationToken);

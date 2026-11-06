@@ -23,16 +23,16 @@ internal sealed class PluginManager
             .Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
 
     /// <summary>Loads and initialises every plugin; failures are kept with their reason.</summary>
-    public void LoadAll(AppPaths paths, Func<PluginManifest, IPluginHost> hostFor)
+    public void LoadAll(AppPaths paths, Func<LoadedPlugin, IPluginHost> hostFor)
     {
         foreach (var folder in PluginLoader.Discover(Roots(paths)))
         {
             var loaded = PluginLoader.Load(folder);
-            if (loaded is { Instance: { } plugin, Manifest: { } manifest })
+            if (loaded is { Instance: { } plugin })
             {
                 try
                 {
-                    plugin.Initialize(hostFor(manifest));
+                    plugin.Initialize(hostFor(loaded));
                 }
                 catch (Exception ex) when (ex is not OutOfMemoryException)
                 {
@@ -68,6 +68,21 @@ internal sealed class PluginManager
     /// <summary>All registered prefixes (for the command-line hook).</summary>
     public IReadOnlyList<string> Prefixes() =>
         Loaded.SelectMany(p => Guard(p, () => p.Instance!.Prefixes.ToList(), [])).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+
+    /// <summary>The name ends in an extension some plugin opens as a folder (issue #148).</summary>
+    public bool OpensAsFolder(string fileName) =>
+        Loaded.Any(p => Guard(p, () => PluginFiles.Claims(p.Instance!.FileExtensions, fileName), false));
+
+    /// <summary>
+    /// Who to ask about a file: those claiming its name; with <paramref name="anyFormat"/> then every other plugin that
+    /// opens files, as the content decides there.
+    /// </summary>
+    public IReadOnlyList<LoadedPlugin> ForFile(string fileName, bool anyFormat)
+    {
+        var withFiles = Loaded.Select(p => (Plugin: p, Extensions: Guard(p, () => p.Instance!.FileExtensions.ToList(), []))).Where(p => p.Extensions.Count > 0).ToList();
+        var claiming = withFiles.Where(p => PluginFiles.Claims(p.Extensions, fileName)).Select(p => p.Plugin).ToList();
+        return anyFormat ? [.. claiming, .. withFiles.Select(p => p.Plugin).Except(claiming)] : claiming;
+    }
 
     /// <summary>What each plugin catches in the console, as "command prefix": "cd s3" (issue #140).</summary>
     public IReadOnlyList<string> AddressCommands() =>

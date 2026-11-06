@@ -1,9 +1,8 @@
 using System.Formats.Tar;
 using System.IO.Compression;
-using HabilisTerminal.Core.Archives;
 using HabilisTerminal.Plugins;
 
-namespace HabilisTerminal.Core.Tests;
+namespace Habilis.Archives.Tests;
 
 public class ArchiveTests
 {
@@ -16,6 +15,8 @@ public class ArchiveTests
         var names = library.Formats.Select(f => f.Name).ToHashSet(StringComparer.OrdinalIgnoreCase);
         Assert.Superset(new HashSet<string>(["zip", "7z", "Rar", "tar", "gzip", "Iso"], StringComparer.OrdinalIgnoreCase), names);
         Assert.Contains("zip", library.Extensions);
+        Assert.Contains("zip", ArchiveProvider.ExtensionsOpenedOnEnter());
+        Assert.DoesNotContain("doc", ArchiveProvider.ExtensionsOpenedOnEnter());
         Assert.True(ArchiveProvider.HasArchiveExtension("data.ZIP"));
         Assert.True(ArchiveProvider.HasArchiveExtension("logs.tar.gz"));
         Assert.False(ArchiveProvider.HasArchiveExtension("report.docx")); // Ctrl+PgDn only
@@ -125,10 +126,16 @@ public class ArchiveTests
     {
         using var sandbox = new TestSandbox();
         var zip = MakeZip(sandbox, "a.zip", ("docs/notes.txt", "n"));
-        await using (var provider = ArchiveProvider.TryOpenLocation(zip + "\\docs", _ => null))
+        await using (var provider = ArchiveProvider.TryOpen(zip, "docs", anyFormat: true, _ => null))
         {
             Assert.NotNull(provider);
             Assert.Equal(zip + "\\docs", provider.Location);
+        }
+
+        // A place that is gone: the top of the archive.
+        await using (var provider = ArchiveProvider.TryOpen(zip, @"gone\x", anyFormat: true, _ => null))
+        {
+            Assert.Equal(zip, provider?.Location);
         }
 
         var renamed = Path.Combine(sandbox.Path, "a.dat");
@@ -136,7 +143,6 @@ public class ArchiveTests
         Assert.Null(ArchiveProvider.TryOpen(renamed, anyFormat: false, _ => null));
         await using var bySignature = ArchiveProvider.TryOpen(renamed, anyFormat: true, _ => null);
         Assert.Equal("zip", bySignature?.Title.Split(':')[0]);
-        Assert.Null(ArchiveProvider.TryOpenLocation(Path.Combine(sandbox.Path, "missing.zip", "x"), _ => null));
     }
 
     [Fact]

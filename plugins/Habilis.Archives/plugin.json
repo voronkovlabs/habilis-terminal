@@ -1,0 +1,7 @@
+{
+  "id": "habi.archives",
+  "name": "Archives",
+  "version": "1.0.0",
+  "assembly": "Habilis.Archives.dll",
+  "sdk": "1.5"
+}

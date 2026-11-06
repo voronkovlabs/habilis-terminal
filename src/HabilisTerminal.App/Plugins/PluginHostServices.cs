@@ -17,15 +17,17 @@ internal interface IPluginWindow
 }
 
 /// <summary>One plugin's <see cref="IPluginHost"/> (docs/plugins.md §4).</summary>
-internal sealed class PluginHostServices(PluginManifest manifest, IPluginDialogs dialogs, IPluginWindow window, string settingsDirectory, string tempRoot) : IPluginHost
+internal sealed class PluginHostServices(LoadedPlugin plugin, IPluginDialogs dialogs, IPluginWindow window, string settingsDirectory, string tempRoot) : IPluginHost
 {
     public Version HostVersion { get; } = typeof(PluginHostServices).Assembly.GetName().Version ?? new Version(0, 0);
 
     public IPluginDialogs Dialogs { get; } = dialogs;
 
-    public IPluginSettings Settings { get; } = new PluginSettingsStore(settingsDirectory, manifest.Id);
+    public IPluginSettings Settings { get; } = new PluginSettingsStore(settingsDirectory, plugin.Id);
 
-    public string TempDirectory { get; } = PrepareTemp(Path.Combine(tempRoot, manifest.Id));
+    public string TempDirectory { get; } = PrepareTemp(Path.Combine(tempRoot, plugin.Id));
+
+    public string PluginDirectory { get; } = plugin.Folder;
 
     public Task ViewFileAsync(string path, string? title = null) => window.ViewFileAsync(path, title);
 

@@ -42,9 +42,6 @@
     <Resource Include="Assets\codicon.ttf" />
     <Resource Include="Assets\habi.ico" />
     <None Include="..\..\ThirdPartyNotices.txt" Link="ThirdPartyNotices.txt" CopyToOutputDirectory="PreserveNewest" />
-    <!-- 7-Zip for archives (issue #51): the DLL that matches the build's architecture, next to habi.exe. -->
-    <None Include="..\..\third_party\7-Zip\win-arm64\7z.dll" Link="7z.dll" CopyToOutputDirectory="PreserveNewest" Condition="'$(RuntimeIdentifier)' == 'win-arm64'" />
-    <None Include="..\..\third_party\7-Zip\win-x64\7z.dll" Link="7z.dll" CopyToOutputDirectory="PreserveNewest" Condition="'$(RuntimeIdentifier)' != 'win-arm64'" />
     <None Include="..\..\LICENSE" Link="LICENSE.txt" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
   <ItemGroup Condition="'$(CrashReportToken)' != ''">

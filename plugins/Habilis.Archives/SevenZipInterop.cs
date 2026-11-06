@@ -1,6 +1,6 @@
 using System.Runtime.InteropServices;
 
-namespace HabilisTerminal.Core.Archives;
+namespace Habilis.Archives;
 
 // The 7z.dll interfaces used for reading archives (7-Zip's IArchive.h, IStream.h, IPassword.h). All are IUnknown
 // based, return HRESULTs and take raw pointers where 7-Zip passes optional values.

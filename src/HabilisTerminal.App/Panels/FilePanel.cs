@@ -145,10 +145,13 @@ public sealed partial class FilePanel : Border
     public event Action<FilePanel, PanelItem>? ExecuteRequested;
 
     /// <summary>
-    /// Enter on a file with an archive extension (anyFormat false; the window runs it when it is no archive after
-    /// all) or Ctrl+PgDn on any file (anyFormat true): open it as a folder (issue #51).
+    /// Enter on a file a plugin claims (anyFormat false; the window runs it when it turns out not to be that plugin's)
+    /// or Ctrl+PgDn on any file (anyFormat true): go inside it, in a plugin panel (issues #51, #148).
     /// </summary>
-    public event Action<FilePanel, PanelItem, bool>? ArchiveRequested;
+    public event Action<FilePanel, PanelItem, bool>? FileAsFolderRequested;
+
+    /// <summary>A plugin opens this file name as a folder; set by the window.</summary>
+    internal Func<string, bool>? OpensAsFolder { get; set; }
 
     /// <summary>The cursor, selection or listing changed (the info panel follows).</summary>
     public event Action<FilePanel>? Changed;
@@ -607,7 +610,7 @@ public sealed partial class FilePanel : Border
                 }
                 else if (State.Count > 0)
                 {
-                    ArchiveRequested?.Invoke(this, State.Current, true);
+                    FileAsFolderRequested?.Invoke(this, State.Current, true);
                 }
 
                 return true;
@@ -960,9 +963,9 @@ public sealed partial class FilePanel : Border
         {
             _ = NavigateAsync(System.IO.Path.Combine(State.Path, item.Entry.Name));
         }
-        else if (Core.Archives.ArchiveProvider.HasArchiveExtension(item.Name))
+        else if (OpensAsFolder?.Invoke(item.Name) == true)
         {
-            ArchiveRequested?.Invoke(this, item, false);
+            FileAsFolderRequested?.Invoke(this, item, false);
         }
         else
         {

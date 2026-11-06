@@ -1,4 +1,4 @@
-namespace HabilisTerminal.Core.Archives;
+namespace Habilis.Archives;
 
 /// <summary>A file or folder of an archive folder; <see cref="Item"/> is null for a folder only implied by paths.</summary>
 public sealed record ArchiveNode(string Name, string Path, bool IsFolder, long Size, DateTime? ModifiedUtc, ArchiveItem? Item);

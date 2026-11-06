@@ -5,6 +5,7 @@ using HabilisTerminal.App.Panels;
 using HabilisTerminal.App.Plugins;
 using HabilisTerminal.App.Widgets;
 using HabilisTerminal.Core.Operations;
+using HabilisTerminal.Core.Panels;
 using HabilisTerminal.Core.Plugins;
 using HabilisTerminal.Plugins;
 
@@ -23,7 +24,7 @@ public partial class MainWindow : IPluginWindow
         var settingsDirectory = App.Paths.PluginSettingsDirectory;
         var tempRoot = Path.Combine(Path.GetTempPath(), Core.Settings.AppPaths.ProductFolder, "plugins");
         var dialogs = new PluginDialogs(this, () => _active);
-        _plugins.LoadAll(App.Paths, manifest => new PluginHostServices(manifest, dialogs, this, settingsDirectory, tempRoot));
+        _plugins.LoadAll(App.Paths, plugin => new PluginHostServices(plugin, dialogs, this, settingsDirectory, tempRoot));
         foreach (var failed in _plugins.Plugins.Where(p => p.Error is not null))
         {
             Trace($"plugin {failed.Id} not loaded: {failed.Error}");
@@ -39,7 +40,7 @@ public partial class MainWindow : IPluginWindow
             return await OpenPluginAsync(panel, plugin, token => plugin.Instance!.OpenAddressAsync(target, token));
         }
 
-        if (Path.IsPathFullyQualified(target) && !Directory.Exists(target) && await OpenArchiveLocationAsync(panel, target))
+        if (Path.IsPathFullyQualified(target) && !Directory.Exists(target) && await OpenLocationInFileAsync(panel, target))
         {
             return true;
         }
@@ -48,32 +49,87 @@ public partial class MainWindow : IPluginWindow
     }
 
     /// <summary>Runs a plugin entry point and shows the panel it returns; errors are shown, never thrown.</summary>
-    private async Task<bool> OpenPluginAsync(FilePanel panel, LoadedPlugin plugin, Func<CancellationToken, Task<IPanelProvider?>> open)
+    private async Task<bool> OpenPluginAsync(FilePanel panel, LoadedPlugin plugin, Func<CancellationToken, Task<IPanelProvider?>> open, string? returnPath = null, string? returnFocus = null)
     {
-        IPanelProvider? provider;
+        var (provider, _) = await AskPluginAsync(panel, plugin, open);
+        return provider is not null && await ShowPluginAsync(panel, plugin, provider, returnPath, returnFocus);
+    }
+
+    /// <summary>The panel a plugin returns; Failed when it could not say, which is shown and is not the same as "not mine".</summary>
+    private async Task<(IPanelProvider? Provider, bool Failed)> AskPluginAsync(FilePanel panel, LoadedPlugin plugin, Func<CancellationToken, Task<IPanelProvider?>> open)
+    {
         try
         {
             using var wait = new WaitCard(Toasts, $"Opening {plugin.Name}");
-            provider = await open(wait.Token);
+            return (await open(wait.Token), false);
         }
         catch (OperationCanceledException)
         {
-            return false;
+            return (null, true);
         }
         catch (Exception ex) when (ex is not OutOfMemoryException)
         {
             panel.Message = PluginManager.Describe(plugin, ex);
-            return false;
+            return (null, true);
         }
+    }
 
-        if (provider is null)
-        {
-            return false;
-        }
-
+    private async Task<bool> ShowPluginAsync(FilePanel panel, LoadedPlugin plugin, IPanelProvider provider, string? returnPath, string? returnFocus)
+    {
         Activate(panel);
         FocusActivePanel();
-        return await panel.OpenPluginAsync(plugin, provider);
+        return await panel.OpenPluginAsync(plugin, provider, returnPath, returnFocus);
+    }
+
+    /// <summary>
+    /// Enter on a file a plugin claims, or Ctrl+PgDn on any file: going inside it (issues #51, #148). A file no plugin
+    /// takes after Enter does what Enter does with any file.
+    /// </summary>
+    private async Task OpenFileAsFolderAsync(FilePanel panel, PanelItem item, bool anyFormat)
+    {
+        var (opened, failed) = await OpenFileInPluginAsync(panel, Path.Combine(panel.CurrentPath, item.Name), string.Empty, anyFormat);
+        if (opened || failed)
+        {
+            return;
+        }
+
+        if (anyFormat)
+        {
+            panel.Message = $"No plugin can open '{item.Name}'.";
+        }
+        else
+        {
+            OnPanelExecuteRequested(panel, item);
+        }
+    }
+
+    /// <summary>Folder history or a pasted path: a place inside a file (<c>C:\data\a.zip\docs</c>).</summary>
+    private async Task<bool> OpenLocationInFileAsync(FilePanel panel, string location)
+    {
+        var split = await Task.Run(() => PluginFiles.SplitLocation(location, File.Exists));
+        return split is { } place && (await OpenFileInPluginAsync(panel, place.File, place.InnerPath, anyFormat: true)).Opened;
+    }
+
+    /// <summary>Asks the plugins in turn, off the UI thread; the first panel opens and ".." at its top returns to the file.</summary>
+    private async Task<(bool Opened, bool Failed)> OpenFileInPluginAsync(FilePanel panel, string file, string innerPath, bool anyFormat)
+    {
+        var name = Path.GetFileName(file);
+        var request = new FileOpenRequest(file, innerPath, anyFormat);
+        foreach (var plugin in _plugins.ForFile(name, anyFormat))
+        {
+            var (provider, failed) = await AskPluginAsync(panel, plugin, token => Task.Run(() => plugin.Instance!.OpenFileAsync(request, token), token));
+            if (failed)
+            {
+                return (false, true);
+            }
+
+            if (provider is not null)
+            {
+                return (await ShowPluginAsync(panel, plugin, provider, Path.GetDirectoryName(file), name), false);
+            }
+        }
+
+        return (false, false);
     }
 
     /// <summary>The command line's Enter on "prefix:..." or "cd prefix:..." (integration script): open the plugin in the active panel.</summary>

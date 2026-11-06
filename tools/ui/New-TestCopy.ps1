@@ -4,7 +4,10 @@ param(
     [switch]$NoBuild,
     [switch]$NoLaunch,
     # Copy the plugins published by tools/plugins/Build-Plugins.ps1 (artifacts/plugins) into the copy's plugins folder.
-    [switch]$WithPlugins
+    # Everything, with AWS: only for tests that really need them, as they use the owner's profiles.
+    [switch]$WithPlugins,
+    # The plugin ids a usual copy gets: nothing here reaches a network or the owner's AWS profiles on its own.
+    [string[]]$Plugins = @('habi.archives', 'samples.demo', 'gpu.monitor')
 )
 # Builds Release, copies the output to %TEMP%\habi-tests\<Name> with the `portable` marker (settings and state then live
 # next to habi.exe, never in the owner's %APPDATA% / %LOCALAPPDATA%) and starts it. Prints the process id for
@@ -25,6 +28,14 @@ if ($WithPlugins) {
     $plugins = Join-Path $repo 'artifacts\plugins'
     if (-not (Test-Path $plugins)) { throw "No published plugins in $plugins; run tools/plugins/Build-Plugins.ps1 first." }
     Copy-Item $plugins (Join-Path $target 'plugins') -Recurse
+}
+else {
+    New-Item (Join-Path $target 'plugins') -ItemType Directory -Force | Out-Null
+    foreach ($id in $Plugins) {
+        $plugin = Join-Path $repo "artifacts\plugins\$id"
+        if (-not (Test-Path $plugin)) { throw "No plugin $id in artifacts\plugins; run tools/plugins/Build-Plugins.ps1 first." }
+        Copy-Item $plugin (Join-Path $target "plugins\$id") -Recurse
+    }
 }
 
 if ($NoLaunch) { return $target }

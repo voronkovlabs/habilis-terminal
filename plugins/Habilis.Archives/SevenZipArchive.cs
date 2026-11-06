@@ -1,6 +1,6 @@
 using System.Runtime.InteropServices;
 
-namespace HabilisTerminal.Core.Archives;
+namespace Habilis.Archives;
 
 /// <summary>One item of an archive as 7-Zip lists it; <see cref="Path"/> uses '\' and has no leading separator.</summary>
 public sealed record ArchiveItem(uint Index, string Path, bool IsFolder, long Size, DateTime? ModifiedUtc, bool Encrypted);

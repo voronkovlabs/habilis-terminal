@@ -11,6 +11,7 @@ package from a local feed. Nothing here references the app's code. Design: `docs
 | S3 browser | `Habilis.Aws.S3` | `aws.s3` | `s3:` | #46 |
 | Demo (in-memory sample, no network) | `Habilis.Samples.Demo` | `samples.demo` | `demo:` | #49 |
 | GPU monitor (local NVIDIA GPUs, SageMaker jobs) | `Habilis.Gpu` | `gpu.monitor` | `gpu:`, `gpu:sm` | #70 |
+| Archives as folders, on 7-Zip | `Habilis.Archives` | `habi.archives` | none: opens files | #51, #149 |
 
 `Habilis.Aws.Common` holds what the AWS plugins share: profiles and credentials, regions, plain-language errors.
 

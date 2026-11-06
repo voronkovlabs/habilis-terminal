@@ -54,6 +54,18 @@ internal sealed class PluginDialogs(Window owner, Func<FrameworkElement> pickTar
             return accepted ? box.Text : null;
         });
 
+    public Task<string?> InputSecretAsync(string title, string prompt) =>
+        OnUi(() =>
+        {
+            var box = new PasswordBox { MinWidth = 280 };
+            var body = new StackPanel();
+            body.Children.Add(Label(prompt, bottom: 6));
+            body.Children.Add(box);
+            var accepted = ThemedDialog.Show(owner, title, body,
+                [new DialogButton<bool>("OK", true, IsDefault: true), new DialogButton<bool>("Cancel", false, IsCancel: true)], false, box);
+            return accepted ? box.Password : null;
+        });
+
     public async Task<string?> ChooseAsync(string title, IReadOnlyList<string> choices, string? current = null)
     {
         var dispatcher = owner.Dispatcher;

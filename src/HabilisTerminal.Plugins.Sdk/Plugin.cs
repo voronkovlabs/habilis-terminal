@@ -39,12 +39,38 @@ public abstract class Plugin
     public virtual Task<IPanelProvider?> OpenAddressAsync(string address, CancellationToken cancellationToken) =>
         Task.FromResult<IPanelProvider?>(null);
 
+    /// <summary>
+    /// File name endings this plugin opens as a folder, without the dot: "zip", "tar.gz" (SDK 1.5). Enter on such a file
+    /// calls <see cref="OpenFileAsync"/>. Claim only files that are containers to the user: a document or a program
+    /// should go on opening in its own program. A plugin with none here is not asked about files at all.
+    /// </summary>
+    public virtual IEnumerable<string> FileExtensions => [];
+
+    /// <summary>
+    /// Opens a local file as a folder, like going inside an archive (SDK 1.5). Null: the file is not this plugin's; Enter
+    /// then does what it does with any file. Called off the UI thread. ".." at the top of the panel returns to the file.
+    /// </summary>
+    public virtual Task<IPanelProvider?> OpenFileAsync(FileOpenRequest request, CancellationToken cancellationToken) =>
+        Task.FromResult<IPanelProvider?>(null);
+
+    /// <summary>
+    /// The plugin is being unloaded (SDK 1.5): its panels are already closed. Stop timers and threads, and free native
+    /// libraries. What is left running keeps the old code in memory, and an exception here is only reported.
+    /// </summary>
+    public virtual Task ShutdownAsync() => Task.CompletedTask;
+
     /// <summary>The plugin has a configuration dialog (F9 > Options > Plugins).</summary>
     public virtual bool HasConfiguration => false;
 
     /// <summary>Shows the configuration dialog through <see cref="IPluginHost.Dialogs"/>.</summary>
     public virtual Task ConfigureAsync(CancellationToken cancellationToken) => Task.CompletedTask;
 }
+
+/// <summary>What <see cref="Plugin.OpenFileAsync"/> is asked to open.</summary>
+/// <param name="Path">The full path of the local file.</param>
+/// <param name="InnerPath">A place inside it to show, as <c>docs\sub</c> for <c>C:\a.zip\docs\sub</c>, or empty. It comes from folder history: when it no longer exists, show the top.</param>
+/// <param name="AnyFormat">Ctrl+PgDn, or a location from history: look at the content whatever the file is called. Otherwise the file's name matched <see cref="Plugin.FileExtensions"/>.</param>
+public sealed record FileOpenRequest(string Path, string InnerPath, bool AnyFormat);
 
 /// <summary>A menu entry: its title and what it opens (a panel, or null after doing something else).</summary>
 public sealed record PluginMenuItem(string Title, Func<CancellationToken, Task<IPanelProvider?>> Open);

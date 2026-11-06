@@ -17,6 +17,12 @@ public interface IPluginHost
     /// <summary>A temporary folder for this plugin (e.g. copies for the viewer); emptied when the host starts.</summary>
     string TempDirectory { get; }
 
+    /// <summary>
+    /// The folder the plugin runs from, with its plugin.json and other files (SDK 1.5). Use this to find them:
+    /// during development it is a temporary copy, not where the plugin was built.
+    /// </summary>
+    string PluginDirectory => Path.GetDirectoryName(GetType().Assembly.Location) ?? AppContext.BaseDirectory;
+
     /// <summary>Opens a local file in the host's viewer.</summary>
     Task ViewFileAsync(string path, string? title = null);
 

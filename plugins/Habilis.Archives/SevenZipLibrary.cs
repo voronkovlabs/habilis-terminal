@@ -1,6 +1,6 @@
 using System.Runtime.InteropServices;
 
-namespace HabilisTerminal.Core.Archives;
+namespace Habilis.Archives;
 
 /// <summary>One archive format 7z.dll can read: its name, handler class id, usual extensions and whether it writes.</summary>
 public sealed record ArchiveFormat(string Name, Guid ClassId, IReadOnlyList<string> Extensions, bool CanWrite = false);
@@ -13,12 +13,14 @@ public sealed class SevenZipLibrary
 {
     public const string FileName = "7z.dll";
 
-    private static readonly Lazy<SevenZipLibrary?> Shared = new(() => TryLoad(Path.Combine(AppContext.BaseDirectory, FileName)));
+    private static readonly Lazy<SevenZipLibrary?> Shared = new(() => TryLoad(PathIn(Path.GetDirectoryName(typeof(SevenZipLibrary).Assembly.Location) ?? AppContext.BaseDirectory)));
 
     private readonly CreateObjectFunction _createObject;
+    private IntPtr _handle;
 
     private SevenZipLibrary(IntPtr handle)
     {
+        _handle = handle;
         _createObject = Marshal.GetDelegateForFunctionPointer<CreateObjectFunction>(NativeLibrary.GetExport(handle, "CreateObject"));
         var getCount = Marshal.GetDelegateForFunctionPointer<GetNumberOfFormatsFunction>(NativeLibrary.GetExport(handle, "GetNumberOfFormats"));
         var getProperty = Marshal.GetDelegateForFunctionPointer<GetHandlerPropertyFunction>(NativeLibrary.GetExport(handle, "GetHandlerProperty2"));
@@ -35,7 +37,21 @@ public sealed class SevenZipLibrary
     [UnmanagedFunctionPointer(CallingConvention.StdCall)]
     private delegate int GetHandlerPropertyFunction(uint formatIndex, uint propId, IntPtr value);
 
-    /// <summary>The library next to the application, or null when it cannot be loaded.</summary>
+    /// <summary>The DLL of this process's architecture under a plugin folder: <c>native\win-x64\7z.dll</c>.</summary>
+    public static string PathIn(string pluginDirectory) =>
+        Path.Combine(pluginDirectory, "native", RuntimeInformation.ProcessArchitecture == Architecture.Arm64 ? "win-arm64" : "win-x64", FileName);
+
+    /// <summary>Frees the DLL when the plugin unloads; nothing may use this library afterwards.</summary>
+    public void Free()
+    {
+        var handle = Interlocked.Exchange(ref _handle, IntPtr.Zero);
+        if (handle != IntPtr.Zero)
+        {
+            NativeLibrary.Free(handle);
+        }
+    }
+
+    /// <summary>The library next to this plugin, or null when it cannot be loaded.</summary>
     public static SevenZipLibrary? Default => Shared.Value;
 
     public IReadOnlyList<ArchiveFormat> Formats { get; }
