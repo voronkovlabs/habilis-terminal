@@ -88,6 +88,9 @@ public sealed record LinkInfo(
         };
     }
 
+    /// <summary>How many names a file has. One call per file, as it does not come with a listing: for what is on screen only.</summary>
+    public static int HardLinkCount(string path) => NativeFile.HardLinkCount(path);
+
     /// <summary>Null when the path is neither a link nor a file with several names.</summary>
     public static LinkInfo? Read(string path)
     {

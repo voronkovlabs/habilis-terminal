@@ -46,6 +46,11 @@ public sealed partial class FilePanel : Border
     private bool _autoSizing;
     private int _sizesRepaintQueued;
     private int _shownFolderSizes;
+    private readonly Dictionary<string, int> _hardLinks = new(StringComparer.OrdinalIgnoreCase);
+    private readonly HashSet<string> _hardLinksRead = new(StringComparer.OrdinalIgnoreCase);
+    private string? _hardLinksFolder;
+    private bool _readsHardLinks;
+    private CancellationTokenSource? _hardLinkScan;
     private static FolderSizeWorker? s_sizeWorker;
 
     public FilePanel(string side)
@@ -56,7 +61,12 @@ public sealed partial class FilePanel : Border
 
         // Another panel's Ctrl+R or a file operation may have dropped sizes this panel shows (an ancestor, say).
         FolderSizes.Invalidated += _ => Dispatcher.BeginInvoke(RequestFolderSizes, DispatcherPriority.Background);
-        _list.VisibleRangeChanged += (_, _) => UpdateVisibleFolders();
+        _list.VisibleRangeChanged += (_, _) =>
+        {
+            UpdateVisibleFolders();
+            ReadHardLinks();
+        };
+        _list.HardLinks = _hardLinks;
         Focusable = true;
         FocusVisualStyle = null;
         Background = PanelPalette.Background;
@@ -458,6 +468,7 @@ public sealed partial class FilePanel : Border
     /// </summary>
     public void RequestFolderSizes()
     {
+        RestartHardLinks();
         var auto = !IsPlugin && AutoFolderSizes && FolderSizeWorker.IsAutoCountable(State.Path);
         if (auto != _autoSizing)
         {
@@ -477,6 +488,109 @@ public sealed partial class FilePanel : Border
     }
 
     private static bool IsSizable(FileEntry entry) => entry.IsDirectory && !entry.IsLink;
+
+    /// <summary>The listing changed: what is on screen is read again. Asking about the drive here keeps it out of drawing.</summary>
+    private void RestartHardLinks()
+    {
+        if (!string.Equals(_hardLinksFolder, State.Path, StringComparison.OrdinalIgnoreCase))
+        {
+            _hardLinksFolder = State.Path;
+            _hardLinks.Clear();
+        }
+
+        _hardLinksRead.Clear();
+        _readsHardLinks = !IsPlugin && FolderSizeWorker.IsAutoCountable(State.Path);
+        ReadHardLinks();
+    }
+
+    /// <summary>
+    /// Finds files on screen with several names (issue #180). That takes one call per file, so only for visible rows, off
+    /// the UI thread, and only on local fixed drives, where it is cheap.
+    /// </summary>
+    private async void ReadHardLinks()
+    {
+        _hardLinkScan?.Cancel();
+        if (!_readsHardLinks)
+        {
+            return;
+        }
+
+        var (top, count) = _list.VisibleRange;
+        var wanted = new List<string>();
+        for (var i = top; i < Math.Min(State.Count, top + count); i++)
+        {
+            var item = State.ItemAt(i);
+            if (!item.IsParent && !item.Entry.IsDirectory && !item.Entry.IsLink && _hardLinksRead.Add(item.Name))
+            {
+                wanted.Add(item.Name);
+            }
+        }
+
+        if (wanted.Count == 0)
+        {
+            return;
+        }
+
+        var folder = State.Path;
+        using var scan = new CancellationTokenSource();
+        _hardLinkScan = scan;
+        var token = scan.Token;
+        var counts = await Task.Run(() =>
+        {
+            var found = new List<(string Name, int Count)>();
+            foreach (var name in wanted)
+            {
+                if (token.IsCancellationRequested)
+                {
+                    break;
+                }
+
+                found.Add((name, LinkInfo.HardLinkCount(System.IO.Path.Combine(folder, name))));
+            }
+
+            return found;
+        }, CancellationToken.None);
+        if (_hardLinkScan == scan)
+        {
+            _hardLinkScan = null;
+        }
+
+        if (!string.Equals(folder, State.Path, StringComparison.OrdinalIgnoreCase))
+        {
+            return;
+        }
+
+        var changed = false;
+        foreach (var name in wanted.Skip(counts.Count))
+        {
+            _hardLinksRead.Remove(name); // not reached: asked again when next on screen
+        }
+
+        foreach (var (name, number) in counts)
+        {
+            if (number > 1)
+            {
+                changed |= _hardLinks.GetValueOrDefault(name) != number;
+                _hardLinks[name] = number;
+            }
+            else
+            {
+                changed |= _hardLinks.Remove(name);
+            }
+        }
+
+        if (changed)
+        {
+            _list.InvalidateVisual();
+            UpdateStatus();
+        }
+
+        // Stopped part way by a scroll: what it did not reach may still be on screen.
+        if (counts.Count < wanted.Count)
+        {
+            ReadHardLinks();
+        }
+    }
 
     private void UpdateVisibleFolders()
     {
@@ -1193,7 +1307,9 @@ public sealed partial class FilePanel : Border
             : item.Entry.IsDirectory && State.FolderSizeOf(item.Name) is { } size
                 ? (size.IsPartial ? SizeFormat.AtLeast : string.Empty) + FormatTotals(size.Totals.Files, size.Bytes, culture)
             : item.Entry.IsDirectory ? Time(item.Entry)
-            : $"{PanelColumns.FormatCompactSize(item.Entry.Length, culture)}   {Time(item.Entry)}".TrimEnd();
+            : $"{HardLinkText(item.Name)}{PanelColumns.FormatCompactSize(item.Entry.Length, culture)}   {Time(item.Entry)}".TrimEnd();
+
+        string HardLinkText(string name) => _hardLinks.TryGetValue(name, out var names) ? $"{names} hard links   " : string.Empty;
 
         // A plugin row without a time (GPU monitor, archive folders) shows none.
         string Time(FileEntry entry) => entry.LastWriteTimeUtc == DateTime.MinValue ? string.Empty : entry.LastWriteTimeUtc.ToLocalTime().ToString("g", culture);

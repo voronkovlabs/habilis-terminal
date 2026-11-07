@@ -179,7 +179,8 @@ New panels start in Medium, as in Far.
 - A folder not counted yet shows an empty cell; the running total is dimmed; the final value is in the normal colour.
   A folder with unreadable parts shows a lower bound, e.g. "≥ 1.2 GB". Links show their type in the size column
   (Junction, Mount point, Symlink, WSL link, App alias), and neither count nor are entered; a cloud folder is no link and counts (#178).
-  Ctrl+A on a link shows where it leads, where it ends, whether the target exists, and a file's other names;
+  Ctrl+A on a link shows where it leads, where it ends, whether the target exists, and a file's other names. On local
+  fixed drives a file on screen with several names gets a badge, and the status line says how many (#180);
   hard links may be counted twice. ".." has no size. Repaints happen at most a few times a second.
 - Sizes are cached for the app's lifetime and shared by both panels, F3, the status line and the selection totals,
   so a folder never shows two numbers. Ctrl+R and the app's own copy, move, delete and editor saves drop the sizes

@@ -28,6 +28,7 @@ public sealed class FileListView : FrameworkElement
     private int _renderedFontVersion;
     private bool _firstTextOfRender;
     private static readonly Geometry LinkGeometry = Geometry.Parse("M9,15 L15,9 M11,9 L15,9 L15,13");
+    private static readonly Geometry HardLinkGeometry = Geometry.Parse("M8.5,10 L15.5,10 M8.5,14 L15.5,14");
 
     private readonly Dictionary<(string Text, Brush Brush, bool Bold), FormattedText> _textCache = [];
 
@@ -70,6 +71,9 @@ public sealed class FileListView : FrameworkElement
 
     /// <summary>The visible rows changed (scroll, resize, view mode): first index and count. Raised while rendering.</summary>
     public event Action<int, int>? VisibleRangeChanged;
+
+    /// <summary>Files on screen with several names, found in the background (issue #180): they get a badge.</summary>
+    public IReadOnlyDictionary<string, int>? HardLinks { get; set; }
 
     /// <summary>The panel sizes folders in the background: folders not sized yet show an empty size cell.</summary>
     public bool AutoSizedFolders { get; set; }
@@ -569,6 +573,14 @@ public sealed class FileListView : FrameworkElement
         {
             dc.PushTransform(new TranslateTransform(x, y));
             dc.DrawGeometry(PanelPalette.Background, new Pen(PanelPalette.FocusOutline, 1.4), LinkGeometry);
+            dc.Pop();
+        }
+        else if (!item.IsParent && HardLinks?.ContainsKey(item.Name) == true)
+        {
+            // On a plate of its own: file icons are mostly the colour a line alone would have.
+            dc.PushTransform(new TranslateTransform(x, y));
+            dc.DrawRectangle(PanelPalette.Background, null, new Rect(7, 7, 10, 10));
+            dc.DrawGeometry(null, new Pen(PanelPalette.Foreground, 1.5), HardLinkGeometry);
             dc.Pop();
         }
     }

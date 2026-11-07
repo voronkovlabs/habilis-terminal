@@ -202,6 +202,8 @@ public sealed class LinkInfoTests : IDisposable
 
         Assert.Equal(LinkKind.None, info.Kind);
         Assert.Equal(2, info.HardLinks);
+        Assert.Equal(2, LinkInfo.HardLinkCount(file));
+        Assert.Equal(1, LinkInfo.HardLinkCount(Folder("plain")));
         Assert.Equal([other], info.OtherNames);
     }
 
