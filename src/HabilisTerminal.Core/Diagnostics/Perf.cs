@@ -12,7 +12,28 @@ public sealed record PerfOperation(string Name, string? Detail, long Count, doub
 /// <param name="ThreadState">What Windows said the UI thread was doing, most often seen during the stall: "running", "ready" or "wait: reason".</param>
 /// <param name="WatchdogLateMs">How late the measuring thread woke at worst: a large value means the whole machine stood, not only the UI thread.</param>
 /// <param name="MemoryLoad">Percent of the machine's physical memory in use when the stall ended.</param>
-public sealed record PerfStall(DateTime At, double WallMs, double CpuMs, int GarbageCollections, string? Operation, string? Dispatched, string? ThreadState = null, double? WatchdogLateMs = null, int? MemoryLoad = null);
+public sealed record PerfStall(DateTime At, double WallMs, double CpuMs, int GarbageCollections, string? Operation, string? Dispatched, string? ThreadState = null, double? WatchdogLateMs = null, int? MemoryLoad = null)
+{
+    /// <summary>All states seen, with shares: "wait: Executive 70%, ready 30%".</summary>
+    public string? ThreadStates { get; init; }
+
+    /// <summary>The kind of object waited for and who holds it, as far as Windows' wait chains can tell.</summary>
+    public string? WaitChain { get; init; }
+
+    /// <summary>The native stack, innermost first: module and function names only.</summary>
+    public string? Stack { get; init; }
+
+    /// <summary>Percent of the machine's processors busy during the stall.</summary>
+    public int? MachineCpu { get; init; }
+
+    public double? DiskQueue { get; init; }
+
+    /// <summary>The mean time of one disk transfer during the stall.</summary>
+    public double? DiskTransferMs { get; init; }
+}
+
+/// <summary>The stack of the busiest thread when sampled, with the CPU it used up to then: where unexplained CPU goes.</summary>
+public sealed record PerfBusyThread(string Thread, string Stack, double CpuMs);
 
 /// <summary>CPU of the threads with one name over a period: a thread's description, or the module it started in.</summary>
 public sealed record PerfThread(string Name, double CpuMs);
@@ -25,6 +46,11 @@ public sealed record PerfPeriod(DateTime Start, DateTime End, IReadOnlyList<Perf
     public double WorkingSetMb { get; init; }
 
     public double ManagedHeapMb { get; init; }
+
+    /// <summary>Percent of the machine's processors busy over the period: on a loaded machine wall-clock times mean less.</summary>
+    public int? MachineCpu { get; init; }
+
+    public IReadOnlyList<PerfBusyThread>? BusyStacks { get; init; }
 }
 
 /// <summary>
@@ -45,6 +71,18 @@ public static class Perf
     private static volatile string? _uiOperation;
 
     public static bool Enabled { get; private set; }
+
+    /// <summary>Something was measured since the last period, so a period will be kept.</summary>
+    public static bool HasActivity
+    {
+        get
+        {
+            lock (Stalls)
+            {
+                return !Counters.IsEmpty || Stalls.Count > 0;
+            }
+        }
+    }
 
     /// <summary>The named operation under way on the UI thread, read by the watchdog.</summary>
     public static string? UiOperation => _uiOperation;
@@ -95,11 +133,11 @@ public static class Perf
         _ => "over 100k",
     };
 
-    public static void RecordStall(double wallMs, double cpuMs, int collections, string? operation, string? dispatched, string? threadState = null, double? watchdogLateMs = null, int? memoryLoad = null)
+    public static void RecordStall(PerfStall stall)
     {
         lock (Stalls)
         {
-            Stalls.Add(new PerfStall(DateTime.UtcNow, wallMs, cpuMs, collections, operation, dispatched, threadState, watchdogLateMs, memoryLoad));
+            Stalls.Add(stall);
         }
     }
 

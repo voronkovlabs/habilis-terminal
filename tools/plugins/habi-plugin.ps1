@@ -33,7 +33,8 @@ function Fail($code, $message) {
 function Find-App {
     if ($ProcessId) { return $ProcessId }
     if ($env:HABI_PID) { return [int]$env:HABI_PID }
-    $running = @(Get-Process habi -ErrorAction SilentlyContinue)
+    # Only windows have the pipe: the helper of performance diagnostics runs as habi too.
+    $running = @(Get-Process habi -ErrorAction SilentlyContinue | Where-Object { Test-Path "\\.\pipe\habi-plugins-$($_.Id)" })
     if ($running.Count -eq 1) { return $running[0].Id }
     if ($running.Count -eq 0) { Fail 'no_app' 'Habilis Terminal is not running.' }
     $list = ($running | ForEach-Object { "$($_.Id) $($_.Path)" }) -join "; "

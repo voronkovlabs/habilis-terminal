@@ -73,6 +73,7 @@ public static class PerfReport
     private const int MaxStalls = 40;
     private const int MaxLongestStalls = 15;
     private const int MaxThreads = 25;
+    private const int MaxStacks = 12;
     private const double MinWallForKind = 50;
 
     public static IssueDraft Build(IReadOnlyList<PerfPeriod> periods, string version, string windows, int processors)
@@ -87,6 +88,10 @@ public static class PerfReport
         if (periods.Count > 0)
         {
             text.AppendLine(culture, $"Memory: working set up to {periods.Max(p => p.WorkingSetMb):0} MB, managed heap up to {periods.Max(p => p.ManagedHeapMb):0} MB.");
+            if (MachineBusy(periods) is { } busy)
+            {
+                text.AppendLine(culture, $"Machine: processors {busy.Average:0}% busy on average, {busy.Highest}% in the busiest period. On a busy machine wall-clock times include waiting for a processor or the disk: read them with the CPU share and the UI thread's state.");
+            }
         }
 
         text.AppendLine();
@@ -107,21 +112,26 @@ public static class PerfReport
 
             text.AppendLine();
             AppendThreadStates(text, stalls);
-            text.AppendLine("Longest ones. Watchdog late: how late the measuring thread woke at worst, so a large value means the whole machine stood, not only the UI thread.");
+            AppendStacks(text, stalls);
+            text.AppendLine("Longest ones. Watchdog late: how late the measuring thread woke at worst, so a large value means the processors were not free for it.");
             text.AppendLine();
-            text.AppendLine("| At, s | ms | CPU share | Collections | Named operation | Dispatched | UI thread | Watchdog late, ms | Memory in use |");
-            text.AppendLine("|---:|---:|---:|---:|---|---|---|---:|---:|");
+            text.AppendLine("| At, s | ms | CPU share | Collections | Named operation | Dispatched | UI thread | Watchdog late, ms | Memory in use | Machine CPU | Disk queue | Disk ms per transfer | States seen | Waits for |");
+            text.AppendLine("|---:|---:|---:|---:|---|---|---|---:|---:|---:|---:|---:|---|---|");
             var start = periods.Min(p => p.Start);
             foreach (var stall in stalls.Take(MaxLongestStalls))
             {
                 var late = stall.WatchdogLateMs is { } value ? string.Create(culture, $"{value:0}") : "-";
                 var memory = stall.MemoryLoad is { } load ? string.Create(culture, $"{load}%") : "-";
-                text.AppendLine(culture, $"| {(stall.At - start).TotalSeconds:0} | {stall.WallMs:0} | {Share(stall.CpuMs, stall.WallMs)} | {stall.GarbageCollections} | {Cell(stall.Operation ?? "-")} | {Cell(stall.Dispatched ?? "-")} | {Cell(stall.ThreadState ?? "-")} | {late} | {memory} |");
+                var machine = stall.MachineCpu is { } busyNow ? string.Create(culture, $"{busyNow}%") : "-";
+                var queue = stall.DiskQueue is { } waiting ? string.Create(culture, $"{waiting:0}") : "-";
+                var transfer = stall.DiskTransferMs is { } ms ? string.Create(culture, $"{ms:0.0}") : "-";
+                text.AppendLine(culture, $"| {(stall.At - start).TotalSeconds:0} | {stall.WallMs:0} | {Share(stall.CpuMs, stall.WallMs)} | {stall.GarbageCollections} | {Cell(stall.Operation ?? "-")} | {Cell(stall.Dispatched ?? "-")} | {Cell(stall.ThreadState ?? "-")} | {late} | {memory} | {machine} | {queue} | {transfer} | {Cell(stall.ThreadStates ?? "-")} | {Cell(stall.WaitChain ?? "-")} |");
             }
 
             text.AppendLine();
         }
 
+        AppendBusyStacks(text, periods);
         text.AppendLine("## Operations");
         text.AppendLine("By total time. CPU is the measuring thread's, counted by Windows in steps of about 16 ms, so it means little for small totals. None means the operation has awaits in it, so waiting and work cannot be told apart.");
         text.AppendLine();
@@ -135,6 +145,61 @@ public static class PerfReport
         }
 
         return new IssueDraft($"Performance report {version}", text.ToString(), ["performance"]);
+    }
+
+    /// <summary>Average weighted by the periods' length, and the highest.</summary>
+    private static (double Average, int Highest)? MachineBusy(IReadOnlyList<PerfPeriod> periods)
+    {
+        var known = periods.Where(p => p.MachineCpu is not null).ToList();
+        var seconds = known.Sum(p => (p.End - p.Start).TotalSeconds);
+        return seconds <= 0 ? null : (known.Sum(p => p.MachineCpu!.Value * (p.End - p.Start).TotalSeconds) / seconds, known.Max(p => p.MachineCpu!.Value));
+    }
+
+    /// <summary>Stalls by the stack of the UI thread, sampled during each one that lasted long enough.</summary>
+    private static void AppendStacks(StringBuilder text, List<PerfStall> stalls)
+    {
+        var groups = stalls.Where(s => s.Stack is not null).GroupBy(s => s.Stack!).OrderByDescending(g => g.Sum(s => s.WallMs)).ToList();
+        if (groups.Count == 0)
+        {
+            return;
+        }
+
+        var culture = CultureInfo.InvariantCulture;
+        text.AppendLine("Stacks of the stalled UI thread, innermost first, by total time:");
+        text.AppendLine();
+        foreach (var group in groups.Take(MaxStacks))
+        {
+            text.AppendLine(culture, $"- {group.Count()} stalls, {group.Sum(s => s.WallMs):0} ms, longest {group.Max(s => s.WallMs):0} ms: `{group.Key.Replace('`', '\'')}`");
+        }
+
+        if (groups.Count > MaxStacks)
+        {
+            text.AppendLine(culture, $"- {groups.Skip(MaxStacks).Sum(g => g.Count())} stalls with other stacks, {groups.Skip(MaxStacks).Sum(g => g.Sum(s => s.WallMs)):0} ms");
+        }
+
+        text.AppendLine();
+    }
+
+    /// <summary>Where the busiest threads ran when sampled: what "CPU by thread" cannot name.</summary>
+    private static void AppendBusyStacks(StringBuilder text, IReadOnlyList<PerfPeriod> periods)
+    {
+        var groups = periods.Where(p => p.BusyStacks is not null).SelectMany(p => p.BusyStacks!)
+            .GroupBy(b => (b.Thread, b.Stack)).OrderByDescending(g => g.Sum(b => b.CpuMs)).ToList();
+        if (groups.Count == 0)
+        {
+            return;
+        }
+
+        var culture = CultureInfo.InvariantCulture;
+        text.AppendLine("## Where busy threads ran");
+        text.AppendLine("The busiest thread's stack every few seconds, with the CPU it used since the last look. A sample, not a whole account.");
+        text.AppendLine();
+        foreach (var group in groups.Take(MaxStacks))
+        {
+            text.AppendLine(culture, $"- {group.Key.Thread}, {group.Sum(b => b.CpuMs) / 1000:0.0} s: `{group.Key.Stack.Replace('`', '\'')}`");
+        }
+
+        text.AppendLine();
     }
 
     /// <summary>What the stalls wait for, by what Windows said about the UI thread: PageIn is the disk, UserRequest usually a lock.</summary>

@@ -20,6 +20,13 @@ internal static class PerfDiagnostics
     private const long MaxKeptBytes = 20 * 1024 * 1024;
     private const double StallMs = 100;
     private const long ThreadStateEveryMs = 250;
+
+    /// <summary>A stall this long gets the costly looks: its wait chain, its stack and the file probe.</summary>
+    private const double LookCloserAfterMs = 300;
+    private const int LookWaitMs = 1000;
+    private const int MaxBusyStacks = 200;
+    private const double BusyThreadMs = 250;
+    private const string WatchdogName = "Performance watchdog";
     private const uint ThreadQueryLimitedInformation = 0x0800;
     private static readonly TimeSpan FlushEvery = TimeSpan.FromSeconds(30);
     private static readonly TimeSpan SampleThreadsEvery = TimeSpan.FromSeconds(5);
@@ -37,6 +44,9 @@ internal static class PerfDiagnostics
     private static DateTime _nextAutomaticSend;
     private static int _sending;
     private static int _uiThreadId;
+    private static StackSamplerClient? _stacks;
+    private static (long Total, long Idle)? _processorsAtPeriodStart;
+    private static readonly List<PerfBusyThread> BusyStacksPending = [];
 
     /// <summary>For tests, as no token may be used there: "sent" acts as if an issue was created, anything else as a failed send.</summary>
     private static string? DryRun => Environment.GetEnvironmentVariable("HABI_PERF_DRY_RUN") is { Length: > 0 } value ? value : null;
@@ -83,6 +93,8 @@ internal static class PerfDiagnostics
         _threadSampling?.Dispose();
         _threadSampling = null;
         Flush();
+        _stacks?.Dispose();
+        _stacks = null;
     }
 
     /// <summary>The menu's button. Null: nothing was measured yet.</summary>
@@ -116,11 +128,29 @@ internal static class PerfDiagnostics
         dispatcher.Hooks.OperationCompleted += OnOperationEnded;
         dispatcher.Hooks.OperationAborted += OnOperationEnded;
         ComponentDispatcher.ThreadFilterMessage += OnThreadMessage;
+        _processorsAtPeriodStart = MachineLoad.ProcessorTimes();
+        _stacks = new StackSamplerClient();
         var uiThread = OpenThread(ThreadQueryLimitedInformation, false, GetCurrentThreadId());
-        _watchdog = new Thread(() => Watch(dispatcher, uiThread)) { IsBackground = true, Name = "Performance watchdog" };
+        _watchdog = new Thread(() => Watch(dispatcher, uiThread)) { IsBackground = true, Name = WatchdogName };
         _watchdog.Start();
         _flush = new Timer(_ => FlushAndMaybeSend(), null, FlushEvery, FlushEvery);
         _threadSampling = new Timer(_ => SampleThreads(), null, SampleThreadsEvery, SampleThreadsEvery);
+        StartTestStall(dispatcher);
+    }
+
+    /// <summary>Development trigger: <c>HABI_TEST_STALL=ms</c> blocks the UI thread that long, twenty seconds after the start.</summary>
+    private static void StartTestStall(Dispatcher dispatcher)
+    {
+        if (int.TryParse(Environment.GetEnvironmentVariable("HABI_TEST_STALL"), out var ms))
+        {
+            var timer = new DispatcherTimer(DispatcherPriority.Normal, dispatcher) { Interval = TimeSpan.FromSeconds(20) };
+            timer.Tick += (_, _) =>
+            {
+                timer.Stop();
+                Thread.Sleep(ms);
+            };
+            timer.Start();
+        }
     }
 
     /// <summary>The window message under way names a stall that no dispatcher operation explains. Only its number is kept.</summary>
@@ -161,6 +191,7 @@ internal static class PerfDiagnostics
     /// <summary>A ping on the UI thread's queue that takes long to be answered is a stall. CPU tells working from blocking.</summary>
     private static void Watch(Dispatcher dispatcher, IntPtr uiThread)
     {
+        using var load = new MachineLoad();
         while (_running)
         {
             var answered = 0;
@@ -182,6 +213,8 @@ internal static class PerfDiagnostics
             var late = 0d;
             var nextState = 0L;
             Dictionary<string, int>? states = null;
+            (long Total, long Idle)? processors = null;
+            Task<(string? Chain, string? Stack)>? closer = null;
             while (Volatile.Read(ref answered) == 0 && _running && !dispatcher.HasShutdownStarted)
             {
                 var beforeSleep = Stopwatch.GetTimestamp();
@@ -195,13 +228,20 @@ internal static class PerfDiagnostics
                     operation = Perf.UiOperation;
                     dispatched = _dispatched ?? (MessageName(_lastMessage) is { } message ? PerfReport.WindowMessagePrefix + message : null);
                     states = [];
+                    processors = MachineLoad.ProcessorTimes();
+                    load.Mark();
+                }
+
+                if (sampled && closer is null && Stopwatch.GetElapsedTime(start).TotalMilliseconds >= LookCloserAfterMs)
+                {
+                    closer = Task.Run(LookCloser);
                 }
 
                 // Listing the threads costs a few milliseconds, so only during a stall and not often.
                 if (sampled && Environment.TickCount64 >= nextState)
                 {
                     nextState = Environment.TickCount64 + ThreadStateEveryMs;
-                    if (UiThreadState() is { } state)
+                    if (NativeThreads.StateOf(Environment.ProcessId, _uiThreadId) is { } state)
                     {
                         states![state] = states.GetValueOrDefault(state) + 1;
                     }
@@ -212,39 +252,75 @@ internal static class PerfDiagnostics
             if (sampled && wall >= StallMs)
             {
                 var mostSeen = states is { Count: > 0 } ? states.MaxBy(pair => pair.Value).Key : null;
-                Perf.RecordStall(wall, Perf.ThreadCpuMs(uiThread) - cpuBefore, GC.CollectionCount(0) - collectionsBefore, operation, dispatched, mostSeen, late, MemoryLoad());
+                var cpuUsed = Perf.ThreadCpuMs(uiThread) - cpuBefore;
+                var collections = GC.CollectionCount(0) - collectionsBefore;
+                var (queue, transfer) = load.ReadDisk();
+                var looked = closer is not null && closer.Wait(LookWaitMs) ? closer.Result : default;
+                Perf.RecordStall(new PerfStall(DateTime.UtcNow, wall, cpuUsed, collections, operation, dispatched, mostSeen, late, MemoryLoad())
+                {
+                    ThreadStates = states is null ? null : NativeThreads.Summarize(states),
+                    WaitChain = looked.Chain,
+                    Stack = looked.Stack,
+                    MachineCpu = MachineLoad.BusyPercent(processors, MachineLoad.ProcessorTimes()),
+                    DiskQueue = queue,
+                    DiskTransferMs = transfer,
+                });
             }
 
             Thread.Sleep(50);
         }
     }
 
-    /// <summary>What Windows says the UI thread is doing: a page-in, a lock, a kernel wait, or waiting for a processor.</summary>
-    private static string? UiThreadState()
+    /// <summary>Off the watchdog, so that a slow look cannot hide the end of the stall.</summary>
+    private static (string? Chain, string? Stack) LookCloser()
+    {
+        ProbeFile("stall");
+        return (WaitChain.Describe(_uiThreadId, ThreadNameById), _stacks?.Stack(_uiThreadId));
+    }
+
+    /// <summary>
+    /// How long a system font takes to open and read, in a stall and otherwise: a security product's file filter or a busy
+    /// disk shows here, and the first text of a render waits in the kernel on the machines that stall.
+    /// </summary>
+    private static void ProbeFile(string when)
     {
         try
         {
-            using var process = Process.GetCurrentProcess();
-            foreach (ProcessThread thread in process.Threads)
+            var font = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Fonts), "segoeui.ttf");
+            using var measure = Perf.Measure("probe.font-file", when);
+            using var stream = new FileStream(font, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete, 1, FileOptions.None);
+            Span<byte> buffer = stackalloc byte[4096];
+            stream.ReadExactly(buffer);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException)
+        {
+            // No such font: nothing to measure.
+        }
+    }
+
+    private static string? ThreadNameById(int threadId) =>
+        threadId == _uiThreadId ? "UI thread" : DescriptionOf((uint)threadId);
+
+    private static string? DescriptionOf(uint threadId)
+    {
+        var handle = OpenThread(ThreadQueryLimitedInformation, false, threadId);
+        if (handle == IntPtr.Zero)
+        {
+            return null;
+        }
+
+        try
+        {
+            if (GetThreadDescription(handle, out var text) >= 0 && text != IntPtr.Zero)
             {
-                using (thread)
-                {
-                    if (thread.Id == _uiThreadId)
-                    {
-                        return thread.ThreadState switch
-                        {
-                            System.Diagnostics.ThreadState.Running => "running",
-                            System.Diagnostics.ThreadState.Ready or System.Diagnostics.ThreadState.Standby => "ready",
-                            System.Diagnostics.ThreadState.Wait => $"wait: {thread.WaitReason}",
-                            var other => other.ToString().ToLowerInvariant(),
-                        };
-                    }
-                }
+                var description = Marshal.PtrToStringUni(text);
+                _ = LocalFree(text);
+                return string.IsNullOrWhiteSpace(description) ? null : description;
             }
         }
-        catch (Exception ex) when (ex is InvalidOperationException or System.ComponentModel.Win32Exception or NotSupportedException)
+        finally
         {
-            // The thread ended or the list could not be read: this sample says nothing.
+            _ = CloseHandle(handle);
         }
 
         return null;
@@ -261,6 +337,11 @@ internal static class PerfDiagnostics
         try
         {
             SampleThreads();
+            if (Perf.HasActivity)
+            {
+                ProbeFile("calm");
+            }
+
             PerfPeriod? period;
             lock (ThreadGate)
             {
@@ -268,6 +349,10 @@ internal static class PerfDiagnostics
                 period = Perf.TakePeriod([.. ThreadCpuPending.Select(pair => new PerfThread(pair.Key, pair.Value))]);
                 if (period is not null)
                 {
+                    var processors = MachineLoad.ProcessorTimes();
+                    period = period with { MachineCpu = MachineLoad.BusyPercent(_processorsAtPeriodStart, processors), BusyStacks = [.. BusyStacksPending] };
+                    _processorsAtPeriodStart = processors;
+                    BusyStacksPending.Clear();
                     ThreadCpuPending.Clear();
                 }
             }
@@ -293,6 +378,7 @@ internal static class PerfDiagnostics
     /// </summary>
     private static void SampleThreads()
     {
+        (int Id, string Name, double Used)? busiest = null;
         lock (ThreadGate)
         {
             try
@@ -323,6 +409,10 @@ internal static class PerfDiagnostics
                         {
                             var name = ThreadName(thread, modules);
                             ThreadCpuPending[name] = ThreadCpuPending.GetValueOrDefault(name) + used;
+                            if (used >= BusyThreadMs && used > (busiest?.Used ?? 0) && thread.Id != _uiThreadId && name is not (WatchdogName or Core.FileSystem.FolderSizeWorker.ThreadName))
+                            {
+                                busiest = (thread.Id, name, used);
+                            }
                         }
                     }
                 }
@@ -334,6 +424,19 @@ internal static class PerfDiagnostics
                 MainWindow.Trace($"threads not sampled: {ex.Message}");
             }
         }
+
+        // Outside the lock: the helper may take a moment.
+        // A thread that has gone to sleep since says nothing about where its CPU went.
+        if (busiest is { } top && NativeThreads.StateOf(Environment.ProcessId, top.Id) is "running" or "ready" && _stacks?.Stack(top.Id) is { } stack)
+        {
+            lock (ThreadGate)
+            {
+                if (BusyStacksPending.Count < MaxBusyStacks)
+                {
+                    BusyStacksPending.Add(new PerfBusyThread(top.Name, stack, top.Used));
+                }
+            }
+        }
     }
 
     private static string ThreadName(ProcessThread thread, Lazy<List<(long Start, long End, string Name)>> modules)
@@ -343,25 +446,9 @@ internal static class PerfDiagnostics
             return "UI thread";
         }
 
-        var handle = OpenThread(ThreadQueryLimitedInformation, false, (uint)thread.Id);
-        if (handle != IntPtr.Zero)
+        if (DescriptionOf((uint)thread.Id) is { } description)
         {
-            try
-            {
-                if (GetThreadDescription(handle, out var text) >= 0 && text != IntPtr.Zero)
-                {
-                    var description = Marshal.PtrToStringUni(text);
-                    _ = LocalFree(text);
-                    if (!string.IsNullOrWhiteSpace(description))
-                    {
-                        return description;
-                    }
-                }
-            }
-            finally
-            {
-                _ = CloseHandle(handle);
-            }
+            return description;
         }
 
         try

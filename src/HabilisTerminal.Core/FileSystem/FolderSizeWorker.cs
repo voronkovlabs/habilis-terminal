@@ -15,6 +15,8 @@ namespace HabilisTerminal.Core.FileSystem;
 /// </summary>
 public sealed class FolderSizeWorker : IDisposable
 {
+    public const string ThreadName = "Folder sizes";
+
     public static readonly TimeSpan NotifyInterval = TimeSpan.FromMilliseconds(150);
 
     private const int ThreadModeBackgroundBegin = 0x00010000;
@@ -38,7 +40,7 @@ public sealed class FolderSizeWorker : IDisposable
     {
         Cache = cache;
         _background = backgroundMode;
-        _thread = new Thread(Run) { IsBackground = true, Priority = ThreadPriority.Lowest, Name = "Folder sizes" };
+        _thread = new Thread(Run) { IsBackground = true, Priority = ThreadPriority.Lowest, Name = ThreadName };
         _thread.Start();
     }
 
