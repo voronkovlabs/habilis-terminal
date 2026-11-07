@@ -19,6 +19,9 @@ public sealed class FileListView : FrameworkElement
     private const double IconWidth = 20;
     private const double CellPadding = 6;
     private const double SeparatorGrip = 4;
+    private const double ScrollbarWidth = 4;
+    private const double ScrollbarRightInset = 4;
+    private const double MinimumScrollbarThumbHeight = 16;
     private const int TextCacheLimit = 4096;
 
     private static Typeface UiTypeface = new(new FontFamily("Segoe UI"), FontStyles.Normal, FontWeights.Normal, FontStretches.Normal);
@@ -48,6 +51,7 @@ public sealed class FileListView : FrameworkElement
     private PanelState? _state;
     private int _topIndex;
     private (ColumnSpec Column, double StartX, double StartWidth)? _resizing;
+    private double? _scrollbarDragOffset;
     private (int Top, int Count) _reportedRange = (-1, -1);
 
     public FileListView()
@@ -123,6 +127,9 @@ public sealed class FileListView : FrameworkElement
     /// <summary>The panel has keyboard focus (cursor drawn with the focus outline).</summary>
     public bool HasPanelFocus { get; set; }
 
+    /// <summary>The panel supplies the same brush it currently uses for its frame.</summary>
+    public Brush ScrollbarBrush { get; set; } = PanelPalette.Border;
+
     public int RowsPerColumn => Math.Max(1, (int)Math.Floor((ActualHeight - ListTop) / RowHeight));
 
     public int ColumnCount => _state is null ? 1 : PanelColumns.NameColumnCount(_state);
@@ -183,7 +190,7 @@ public sealed class FileListView : FrameworkElement
             }
         }
 
-        _topIndex = Math.Clamp(_topIndex, 0, Math.Max(0, _state.Count - 1));
+        _topIndex = Math.Clamp(_topIndex, 0, MaxTopIndex);
     }
 
     public void ScrollToTop()
@@ -277,6 +284,11 @@ public sealed class FileListView : FrameworkElement
             }
         }
 
+        if (ScrollbarThumb() is { } thumb)
+        {
+            dc.DrawRoundedRectangle(ScrollbarBrush, null, thumb, ScrollbarWidth / 2, ScrollbarWidth / 2);
+        }
+
         if (VisibleRange != _reportedRange)
         {
             using var range = Core.Diagnostics.Perf.Measure("panel.render.visible-range");
@@ -289,6 +301,12 @@ public sealed class FileListView : FrameworkElement
     {
         base.OnMouseMove(e);
         var point = e.GetPosition(this);
+        if (_scrollbarDragOffset is { } dragOffset)
+        {
+            ScrollThumbTo(point.Y - dragOffset);
+            return;
+        }
+
         if (_resizing is { } resizing && _state is not null)
         {
             // Dragging the left edge of a detail column: moving left widens it.
@@ -306,6 +324,22 @@ public sealed class FileListView : FrameworkElement
     {
         base.OnMouseDown(e);
         var point = e.GetPosition(this);
+        if (e.ChangedButton == MouseButton.Left && ScrollbarThumb() is { } thumb && point.X >= thumb.X && point.X <= thumb.Right)
+        {
+            if (point.Y >= thumb.Y && point.Y <= thumb.Bottom)
+            {
+                _scrollbarDragOffset = point.Y - thumb.Y;
+                CaptureMouse();
+            }
+            else
+            {
+                ScrollBy(point.Y < thumb.Y ? -PageSize : PageSize);
+            }
+
+            e.Handled = true;
+            return;
+        }
+
         if (HasHeader && point.Y < HeaderHeight && _state is not null)
         {
             if (e.ChangedButton == MouseButton.Left && HeaderSeparatorAt(point.X) is { } column)
@@ -342,6 +376,14 @@ public sealed class FileListView : FrameworkElement
     protected override void OnMouseUp(MouseButtonEventArgs e)
     {
         base.OnMouseUp(e);
+        if (_scrollbarDragOffset is not null)
+        {
+            _scrollbarDragOffset = null;
+            ReleaseMouseCapture();
+            e.Handled = true;
+            return;
+        }
+
         if (_resizing is not null)
         {
             _resizing = null;
@@ -354,6 +396,13 @@ public sealed class FileListView : FrameworkElement
             ContextMenuRequested?.Invoke(HitTest(point), PointToScreen(point));
             e.Handled = true;
         }
+    }
+
+    protected override void OnLostMouseCapture(MouseEventArgs e)
+    {
+        base.OnLostMouseCapture(e);
+        _scrollbarDragOffset = null;
+        _resizing = null;
     }
 
     /// <summary>Where a keyboard-opened context menu goes: below the start of the cursor row, in physical screen pixels.</summary>
@@ -383,10 +432,75 @@ public sealed class FileListView : FrameworkElement
         }
 
         var step = ColumnCount == 1 ? 3 : RowsPerColumn;
-        var maxTop = Math.Max(0, _state.Count - PageSize);
-        _topIndex = Math.Clamp(_topIndex + (e.Delta > 0 ? -step : step), 0, maxTop);
-        InvalidateVisual();
+        ScrollBy(e.Delta > 0 ? -step : step);
         e.Handled = true;
+    }
+
+    /// <summary>Multi-column views scroll by full rows of columns, so their last page may begin past Count - PageSize.</summary>
+    private int MaxTopIndex
+    {
+        get
+        {
+            if (_state is null || _state.Count <= PageSize)
+            {
+                return 0;
+            }
+
+            var overflow = _state.Count - PageSize;
+            return ColumnCount == 1 ? overflow : (int)Math.Ceiling(overflow / (double)RowsPerColumn) * RowsPerColumn;
+        }
+    }
+
+    private void ScrollBy(int items)
+    {
+        var top = _topIndex + items;
+        if (ColumnCount > 1)
+        {
+            top = (int)Math.Round(top / (double)RowsPerColumn) * RowsPerColumn;
+        }
+
+        _topIndex = Math.Clamp(top, 0, MaxTopIndex);
+        InvalidateVisual();
+    }
+
+    /// <summary>No track is drawn: only the four-DIP thumb appears when some items are outside the visible page.</summary>
+    private Rect? ScrollbarThumb()
+    {
+        var maxTop = MaxTopIndex;
+        var trackHeight = ActualHeight - ListTop;
+        if (_state is null || maxTop == 0 || trackHeight <= 0 || ActualWidth < ScrollbarWidth + ScrollbarRightInset)
+        {
+            return null;
+        }
+
+        var height = Math.Min(trackHeight, Math.Max(MinimumScrollbarThumbHeight, trackHeight * PageSize / _state.Count));
+        var travel = Math.Max(0, trackHeight - height);
+        var top = ListTop + (travel * _topIndex / maxTop);
+        return new Rect(ActualWidth - ScrollbarWidth - ScrollbarRightInset, top, ScrollbarWidth, height);
+    }
+
+    private void ScrollThumbTo(double top)
+    {
+        if (ScrollbarThumb() is not { } thumb)
+        {
+            return;
+        }
+
+        var travel = ActualHeight - ListTop - thumb.Height;
+        if (travel <= 0)
+        {
+            return;
+        }
+
+        var fraction = Math.Clamp((top - ListTop) / travel, 0, 1);
+        var target = (int)Math.Round(fraction * MaxTopIndex);
+        if (ColumnCount > 1)
+        {
+            target = (int)Math.Round(target / (double)RowsPerColumn) * RowsPerColumn;
+        }
+
+        _topIndex = Math.Clamp(target, 0, MaxTopIndex);
+        InvalidateVisual();
     }
 
     /// <summary>Widths are kept per view mode, and per column key in plugin panels (issue #49).</summary>

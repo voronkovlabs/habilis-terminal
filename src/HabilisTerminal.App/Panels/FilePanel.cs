@@ -1351,6 +1351,7 @@ public sealed partial class FilePanel : Border
         _title.Opacity = _isActive ? 1.0 : 0.6;
         _list.IsActivePanel = _isActive;
         _list.HasPanelFocus = focused;
+        _list.ScrollbarBrush = BorderBrush;
         _list.InvalidateVisual();
     }
 }
