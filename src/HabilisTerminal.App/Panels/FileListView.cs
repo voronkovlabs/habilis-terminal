@@ -19,7 +19,7 @@ public sealed class FileListView : FrameworkElement
     private const double IconWidth = 20;
     private const double CellPadding = 6;
     private const double SeparatorGrip = 4;
-    private const double ScrollbarWidth = 4;
+    private const double ScrollbarWidth = 2;
     private const double ScrollbarRightInset = 4;
     private const double MinimumScrollbarThumbHeight = 16;
     private const int TextCacheLimit = 4096;
@@ -471,7 +471,7 @@ public sealed class FileListView : FrameworkElement
         InvalidateVisual();
     }
 
-    /// <summary>No track is drawn: only the four-DIP thumb appears when some items are outside the visible page.</summary>
+    /// <summary>No track is drawn: only the two-DIP thumb appears when some items are outside the visible page.</summary>
     private Rect? ScrollbarThumb()
     {
         var maxTop = MaxTopIndex;
