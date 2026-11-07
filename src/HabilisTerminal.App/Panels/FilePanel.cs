@@ -783,6 +783,11 @@ public sealed partial class FilePanel : Border
             return true;
         }
 
+        if (IsPlugin && modifiers == KeyModifiers.Control && key == Key.D0 && SetPluginAlternativeLayout())
+        {
+            return true;
+        }
+
         if (modifiers == KeyModifiers.Control && ViewModeFor(key) is { } mode)
         {
             State.ViewMode = mode;

@@ -6,7 +6,7 @@ using HabilisTerminal.Plugins;
 namespace Habilis.TaskManager;
 
 /// <summary>A read-only, live Details table. The host draws and sorts it and preserves its cursor on refresh.</summary>
-internal sealed class ProcessPanel : IPanelProvider, IQuickViewEntry, IViewEntry, IPanelCommands
+internal sealed class ProcessPanel : IPanelProvider, IAlternativePanelLayout, IQuickViewEntry, IViewEntry, IPanelCommands
 {
     internal const string PidKey = "pid";
     internal const string StatusKey = "status";
@@ -21,6 +21,7 @@ internal sealed class ProcessPanel : IPanelProvider, IQuickViewEntry, IViewEntry
     internal const string CpuTimeKey = "cpu-time";
     internal const string StartedKey = "started";
     internal const string CommandKey = "command";
+    internal const string ServicesKey = "services";
 
     private static readonly PanelColumn Pid = new(PidKey, "PID", 52, AlignRight: true);
     private static readonly PanelColumn Status = new(StatusKey, "Status", 68);
@@ -35,6 +36,7 @@ internal sealed class ProcessPanel : IPanelProvider, IQuickViewEntry, IViewEntry
     private static readonly PanelColumn CpuTime = new(CpuTimeKey, "CPU time", 70, AlignRight: true);
     private static readonly PanelColumn Started = new(StartedKey, "Started", 105);
     private static readonly PanelColumn Command = new(CommandKey, "Command line", 120);
+    private static readonly PanelColumn Services = new(ServicesKey, "Services", 150);
 
     private readonly IPluginHost _host;
     private readonly IProcessSource _source;
@@ -70,6 +72,9 @@ internal sealed class ProcessPanel : IPanelProvider, IQuickViewEntry, IViewEntry
         new("Identity", [Pid, User, Session, Architecture, Started, Command]),
     ];
 
+    public PanelLayout AlternativeLayout { get; } =
+        new("Alternative Full", [Pid, Status, User, Cpu, Memory, Services, Architecture]);
+
     public IReadOnlyList<PanelSortKey> SortKeys { get; } =
     [
         new(PidKey, "PID"),
@@ -85,6 +90,7 @@ internal sealed class ProcessPanel : IPanelProvider, IQuickViewEntry, IViewEntry
         new(CpuTimeKey, "CPU time"),
         new(StartedKey, "Started"),
         new(CommandKey, "Command line"),
+        new(ServicesKey, "Services"),
     ];
 
     string? IPanelProvider.DefaultSortKey => CpuKey;
@@ -182,6 +188,7 @@ internal sealed class ProcessPanel : IPanelProvider, IQuickViewEntry, IViewEntry
             [CpuTimeKey] = new(FormatDuration(process.CpuTime), process.CpuTime),
             [StartedKey] = new(process.Started?.ToLocalTime().ToString("g", CultureInfo.CurrentCulture) ?? "", process.Started),
             [CommandKey] = Cell(process.CommandLine),
+            [ServicesKey] = Cell(process.Services),
         },
     };
 
@@ -220,6 +227,7 @@ internal sealed class ProcessPanel : IPanelProvider, IQuickViewEntry, IViewEntry
         text.AppendLine(CultureInfo.CurrentCulture, $"Threads          {p.Threads?.ToString(CultureInfo.CurrentCulture) ?? "not available"}");
         text.AppendLine(CultureInfo.CurrentCulture, $"Handles          {p.Handles?.ToString(CultureInfo.CurrentCulture) ?? "not available"}");
         text.AppendLine(CultureInfo.CurrentCulture, $"Started          {p.Started?.ToLocalTime().ToString("F", CultureInfo.CurrentCulture) ?? "not available"}");
+        text.AppendLine(CultureInfo.CurrentCulture, $"Services         {p.Services ?? "none"}");
         text.AppendLine().AppendLine("Command line").AppendLine(p.CommandLine ?? "not available");
         return text.ToString();
     }

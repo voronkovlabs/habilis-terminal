@@ -63,6 +63,15 @@ public interface IPanelProvider : IAsyncDisposable
     int NameColumns => 1;
 }
 
+/// <summary>
+/// Optional Alternative Full view for a panel. The host selects it with Ctrl+0, independently of the numbered
+/// <see cref="IPanelProvider.Layouts"/>.
+/// </summary>
+public interface IAlternativePanelLayout
+{
+    PanelLayout AlternativeLayout { get; }
+}
+
 /// <summary>An entry of a plugin panel.</summary>
 public sealed record PanelEntry(string Name, bool IsFolder = false, long? Size = null, DateTime? Modified = null)
 {

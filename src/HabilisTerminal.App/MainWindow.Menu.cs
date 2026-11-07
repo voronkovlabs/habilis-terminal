@@ -88,7 +88,7 @@ public partial class MainWindow
 
     private MenuGroup PanelMenu(string title, FilePanel panel)
     {
-        var mode = panel.State.ViewMode;
+        var mode = panel.MenuViewMode;
         MenuCommand View(string id, PanelViewMode viewMode) => PanelRow(panel, id, mode == viewMode);
 
         return new MenuGroup(title,

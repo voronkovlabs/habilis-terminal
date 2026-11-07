@@ -27,12 +27,16 @@ public sealed class TaskManagerTests
         Assert.True(((IPanelProvider)panel).StartsWithoutCursor);
         Assert.True(((IPanelProvider)panel).FreezeOrderWhileCursorVisible);
         Assert.Equal(3, panel.Layouts.Count);
+        Assert.DoesNotContain(panel.Layouts.SelectMany(layout => layout.Columns), column => column.Key == ProcessPanel.ServicesKey);
+        var alternative = Assert.IsAssignableFrom<IAlternativePanelLayout>(panel);
+        Assert.Contains(alternative.AlternativeLayout.Columns, column => column.Key == ProcessPanel.ServicesKey);
         Assert.Equal(["idle.exe (7)", "worker.exe (42)"], entries.Select(e => e.Name));
         Assert.All(entries, entry => Assert.Equal(PanelIcons.Process, entry.Icon));
         Assert.Null(entries[0].IconPath);
         Assert.Equal(@"C:\Apps\worker.exe", entries[1].IconPath);
         Assert.Equal("42", entries[1].Cells![ProcessPanel.PidKey].Text);
         Assert.Equal("18.5%", entries[1].Cells![ProcessPanel.CpuKey].Text);
+        Assert.Equal("WorkerAgent, WorkerTelemetry", entries[1].Cells![ProcessPanel.ServicesKey].Text);
         Assert.Equal("2.0 GB", entries[1].Cells![ProcessPanel.MemoryKey].Text);
         Assert.Equal(RowTone.Accent, entries[1].Tone);
         Assert.Equal(RowTone.Dim, entries[0].Tone);
@@ -104,8 +108,8 @@ public sealed class TaskManagerTests
             Samples++;
             return new ProcessSnapshot(Now.AddSeconds(Samples),
             [
-                new ProcessData(7, "idle.exe", "Suspended", null, 0, TimeSpan.FromSeconds(1), 8L << 20, null, 1, null, 0, "x64", Now.AddHours(-2), null, null),
-                new ProcessData(42, "worker.exe", "Running", "DOMAIN\\sergey", 18.5, TimeSpan.FromMinutes(3), 2L << 30, 1500L << 20, 12, 130, 1, "x64", Now.AddMinutes(-5), @"C:\Apps\worker.exe", "worker.exe --train"),
+                new ProcessData(7, "idle.exe", "Suspended", null, 0, TimeSpan.FromSeconds(1), 8L << 20, null, 1, null, 0, "x64", Now.AddHours(-2), null, null, null),
+                new ProcessData(42, "worker.exe", "Running", "DOMAIN\\sergey", 18.5, TimeSpan.FromMinutes(3), 2L << 30, 1500L << 20, 12, 130, 1, "x64", Now.AddMinutes(-5), @"C:\Apps\worker.exe", "worker.exe --train", "WorkerAgent, WorkerTelemetry"),
             ]);
         }
 

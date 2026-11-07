@@ -22,7 +22,8 @@ internal sealed record ProcessData(
     string? Architecture,
     DateTime? Started,
     string? ExecutablePath,
-    string? CommandLine);
+    string? CommandLine,
+    string? Services);
 
 internal sealed record ProcessSnapshot(DateTime TakenUtc, IReadOnlyList<ProcessData> Processes);
 
@@ -38,13 +39,22 @@ internal sealed partial class WindowsProcessSource : IProcessSource
 {
     private const uint QueryLimitedInformation = 0x1000;
     private const uint TokenQuery = 0x0008;
+    private const uint ScManagerEnumerateService = 0x0004;
+    private const int ScEnumProcessInfo = 0;
+    private const uint ServiceWin32 = 0x00000030;
+    private const uint ServiceActive = 0x00000001;
+    private const int ErrorMoreData = 234;
     private const int ProcessCommandLineInformation = 60;
+    private static readonly TimeSpan ServiceRefreshInterval = TimeSpan.FromSeconds(5);
     private readonly Dictionary<int, (TimeSpan Cpu, DateTime At, DateTime? Started)> _cpu = [];
     private readonly Dictionary<int, (DateTime? Started, string? User, string? Architecture, string? ExecutablePath, string? CommandLine)> _identity = [];
+    private IReadOnlyDictionary<int, string> _services = new Dictionary<int, string>();
+    private DateTime _servicesAt;
 
     public ProcessSnapshot Sample()
     {
         var now = DateTime.UtcNow;
+        var services = ServicesByProcess(now);
         var result = new List<ProcessData>();
         foreach (var process in Process.GetProcesses())
         {
@@ -52,7 +62,7 @@ internal sealed partial class WindowsProcessSource : IProcessSource
             {
                 try
                 {
-                    result.Add(Describe(process, now));
+                    result.Add(Describe(process, now, services.GetValueOrDefault(process.Id)));
                 }
                 catch (Exception ex) when (ex is ArgumentException or InvalidOperationException or NotSupportedException or Win32Exception)
                 {
@@ -106,7 +116,7 @@ internal sealed partial class WindowsProcessSource : IProcessSource
         }
     }
 
-    private ProcessData Describe(Process process, DateTime now)
+    private ProcessData Describe(Process process, DateTime now, string? services)
     {
         var pid = process.Id;
         var name = Read(() => process.ProcessName) ?? $"PID {pid}";
@@ -155,7 +165,93 @@ internal sealed partial class WindowsProcessSource : IProcessSource
             identity.Architecture,
             started,
             identity.ExecutablePath,
-            identity.CommandLine);
+            identity.CommandLine,
+            services);
+    }
+
+    private IReadOnlyDictionary<int, string> ServicesByProcess(DateTime now)
+    {
+        if (now - _servicesAt < ServiceRefreshInterval)
+        {
+            return _services;
+        }
+
+        _services = EnumerateActiveServices();
+        _servicesAt = now;
+        return _services;
+    }
+
+    private static unsafe Dictionary<int, string> EnumerateActiveServices()
+    {
+        var manager = OpenSCManager(IntPtr.Zero, IntPtr.Zero, ScManagerEnumerateService);
+        if (manager == IntPtr.Zero)
+        {
+            return new Dictionary<int, string>();
+        }
+
+        try
+        {
+            uint needed;
+            uint returned;
+            uint resume = 0;
+            _ = EnumServicesStatusEx(manager, ScEnumProcessInfo, ServiceWin32, ServiceActive, null, 0,
+                out needed, out returned, ref resume, IntPtr.Zero);
+            if (needed == 0 || needed > 16 * 1024 * 1024)
+            {
+                return new Dictionary<int, string>();
+            }
+
+            resume = 0;
+            var names = new Dictionary<int, List<string>>();
+            while (needed > 0 && needed <= 16 * 1024 * 1024)
+            {
+                var buffer = Marshal.AllocHGlobal((int)needed);
+                try
+                {
+                    var size = needed;
+                    var complete = EnumServicesStatusEx(manager, ScEnumProcessInfo, ServiceWin32, ServiceActive,
+                        (byte*)buffer, size, out needed, out returned, ref resume, IntPtr.Zero);
+                    var error = complete ? 0 : Marshal.GetLastPInvokeError();
+                    var nativeSize = Marshal.SizeOf<EnumServiceStatusProcess>();
+                    for (var index = 0; index < returned; index++)
+                    {
+                        var service = Marshal.PtrToStructure<EnumServiceStatusProcess>(buffer + (index * nativeSize));
+                        var pid = unchecked((int)service.Status.ProcessId);
+                        var name = Marshal.PtrToStringUni(service.ServiceName);
+                        if (pid <= 0 || string.IsNullOrWhiteSpace(name))
+                        {
+                            continue;
+                        }
+
+                        if (!names.TryGetValue(pid, out var processServices))
+                        {
+                            processServices = [];
+                            names[pid] = processServices;
+                        }
+
+                        processServices.Add(name);
+                    }
+
+                    if (complete || error != ErrorMoreData)
+                    {
+                        break;
+                    }
+                }
+                finally
+                {
+                    Marshal.FreeHGlobal(buffer);
+                }
+            }
+
+            return names.ToDictionary(
+                pair => pair.Key,
+                pair => string.Join(", ", pair.Value.Distinct(StringComparer.OrdinalIgnoreCase)
+                    .OrderBy(name => name, StringComparer.CurrentCultureIgnoreCase)));
+        }
+        finally
+        {
+            _ = CloseServiceHandle(manager);
+        }
     }
 
     private static unsafe string? ImagePathOf(IntPtr process)
@@ -277,8 +373,43 @@ internal sealed partial class WindowsProcessSource : IProcessSource
         }
     }
 
+    [StructLayout(LayoutKind.Sequential)]
+    private struct EnumServiceStatusProcess
+    {
+        public IntPtr ServiceName;
+        public IntPtr DisplayName;
+        public ServiceStatusProcess Status;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct ServiceStatusProcess
+    {
+        public uint ServiceType;
+        public uint CurrentState;
+        public uint ControlsAccepted;
+        public uint Win32ExitCode;
+        public uint ServiceSpecificExitCode;
+        public uint CheckPoint;
+        public uint WaitHint;
+        public uint ProcessId;
+        public uint ServiceFlags;
+    }
+
     [LibraryImport("kernel32.dll", SetLastError = true)]
     private static partial IntPtr OpenProcess(uint access, [MarshalAs(UnmanagedType.Bool)] bool inherit, int processId);
+
+    [LibraryImport("advapi32.dll", EntryPoint = "OpenSCManagerW", SetLastError = true)]
+    private static partial IntPtr OpenSCManager(IntPtr machineName, IntPtr databaseName, uint desiredAccess);
+
+    [LibraryImport("advapi32.dll", EntryPoint = "EnumServicesStatusExW", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static unsafe partial bool EnumServicesStatusEx(IntPtr manager, int infoLevel, uint serviceType,
+        uint serviceState, byte* services, uint bufferSize, out uint bytesNeeded, out uint servicesReturned,
+        ref uint resumeHandle, IntPtr groupName);
+
+    [LibraryImport("advapi32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static partial bool CloseServiceHandle(IntPtr service);
 
     [LibraryImport("kernel32.dll")]
     [return: MarshalAs(UnmanagedType.Bool)]

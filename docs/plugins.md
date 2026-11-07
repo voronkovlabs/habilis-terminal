@@ -226,6 +226,8 @@ public sealed record PanelEntry(string Name, bool IsFolder = false, long? Size =
 ```
 - **Columns:** `PanelLayout(Name, Columns)` where a column is the name, size, modified date or a custom column
   (`key`, title, width, alignment). `CellValue` carries the display text and a sort value (number, time or text).
+  Implement `IAlternativePanelLayout` to give Ctrl+0 its own plugin layout; otherwise the host keeps its harmless
+  default behaviour.
 - **Sorting** is done by the host: by `Group` first, then by the chosen key (name, size, date, or a custom column's
   sort value), in either direction (Ctrl+F3... and clicking a header, as for files). `DefaultSortKey` and
   `DefaultSortDescending` choose the initial custom-column sort; both have harmless defaults.

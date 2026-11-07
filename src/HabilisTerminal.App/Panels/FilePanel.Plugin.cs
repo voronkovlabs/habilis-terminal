@@ -16,6 +16,10 @@ namespace HabilisTerminal.App.Panels;
 public sealed partial class FilePanel
 {
     private PluginSession? _session;
+    private PanelViewMode? _pluginViewMode;
+
+    /// <summary>The view the Left/Right menu marks; plugin layouts do not overwrite the folder's saved view.</summary>
+    internal PanelViewMode? MenuViewMode => IsPlugin ? _pluginViewMode : State.ViewMode;
 
     /// <summary>Where waiting cards of plugin work appear; set by the window.</summary>
     internal Func<OperationToasts>? WaitToasts { get; set; }
@@ -76,6 +80,7 @@ public sealed partial class FilePanel
         State.SetExtension(_session.Extension);
         ShowPluginView(plugin, provider);
         _session.ApplyLayout(0, provider);
+        _pluginViewMode = PanelViewMode.Brief;
 
         // The plugin's columns must not show the folder's rows while the first listing loads (issue #62).
         State.SetListing(provider.Location, [], hasParent: false);
@@ -202,6 +207,31 @@ public sealed partial class FilePanel
         }
 
         session.ApplyLayout(index, session.Provider);
+        _pluginViewMode = index switch
+        {
+            0 => PanelViewMode.Brief,
+            1 => PanelViewMode.Medium,
+            2 => PanelViewMode.Full,
+            3 => PanelViewMode.Wide,
+            4 => PanelViewMode.Detailed,
+            _ => null,
+        };
+        State.SetExtension(session.Extension);
+        InvalidatePanel();
+        return true;
+    }
+
+    /// <summary>Ctrl+0: a provider may define its own Alternative Full layout.</summary>
+    private bool SetPluginAlternativeLayout()
+    {
+        if (_session is not { Provider: IAlternativePanelLayout alternative } session ||
+            PluginManager.Guard(session.Plugin, () => alternative.AlternativeLayout, null) is not { } layout)
+        {
+            return false;
+        }
+
+        session.ApplyLayout(layout);
+        _pluginViewMode = PanelViewMode.AlternativeFull;
         State.SetExtension(session.Extension);
         InvalidatePanel();
         return true;
@@ -322,6 +352,7 @@ public sealed partial class FilePanel
         }
 
         _session = null;
+        _pluginViewMode = null;
         _loading?.Cancel();
         State.SetExtension(null);
         _pluginViewHost.Content = null;
@@ -480,6 +511,11 @@ public sealed partial class FilePanel
         {
             var layouts = PluginManager.Guard(Plugin, () => provider.Layouts, []);
             var layout = layouts.Count == 0 ? null : layouts[Math.Clamp(index, 0, layouts.Count - 1)];
+            ApplyLayout(layout);
+        }
+
+        public void ApplyLayout(PanelLayout? layout)
+        {
             Extension.Columns = layout?.Columns.Select(c => new ExtensionColumn(c.Key, c.Title, c.Width, c.AlignRight)).ToArray() ?? [];
         }
     }
