@@ -21,6 +21,9 @@ public sealed class TaskManagerTests
 
         Assert.False(panel.ShowsParent);
         Assert.Equal("tasks:", panel.Location);
+        Assert.Equal('0', Assert.Single(plugin.MenuItems).DefaultHotkey);
+        Assert.Equal(ProcessPanel.CpuKey, ((IPanelProvider)panel).DefaultSortKey);
+        Assert.True(((IPanelProvider)panel).DefaultSortDescending);
         Assert.Equal(3, panel.Layouts.Count);
         Assert.Equal(["idle.exe (7)", "worker.exe (42)"], entries.Select(e => e.Name));
         Assert.All(entries, entry => Assert.Equal(PanelIcons.Process, entry.Icon));

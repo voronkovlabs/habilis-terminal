@@ -64,13 +64,23 @@ public sealed class PluginHotkeys
     /// The key of each item in menu order: its assigned key, else the next automatic key no drive, assigned key or
     /// earlier item uses; null when the keys run out.
     /// </summary>
-    public IReadOnlyList<char?> Resolve(IReadOnlyList<(string Id, string Title)> items, IEnumerable<char> driveLetters)
+    public IReadOnlyList<char?> Resolve(IReadOnlyList<(string Id, string Title, char? DefaultKey)> items, IEnumerable<char> driveLetters)
     {
         var drives = driveLetters.Select(char.ToUpperInvariant).ToHashSet();
         var assigned = items.Select(i => Get(i.Id, i.Title) is { } key && !drives.Contains(key) ? key : (char?)null).ToList();
         var used = new HashSet<char>(drives.Concat(assigned.OfType<char>()));
+        var defaults = items.Select((item, index) =>
+        {
+            if (assigned[index] is not null || item.DefaultKey is not { } preferred)
+            {
+                return (char?)null;
+            }
+
+            preferred = char.ToUpperInvariant(preferred);
+            return char.IsAsciiLetterOrDigit(preferred) && used.Add(preferred) ? preferred : (char?)null;
+        }).ToList();
         var free = AutomaticKeys.Where(k => !used.Contains(k)).GetEnumerator();
-        return [.. assigned.Select(key => key ?? (free.MoveNext() ? free.Current : (char?)null))];
+        return [.. assigned.Select((key, index) => key ?? defaults[index] ?? (free.MoveNext() ? free.Current : (char?)null))];
     }
 
     public IReadOnlyDictionary<string, string> Snapshot() =>

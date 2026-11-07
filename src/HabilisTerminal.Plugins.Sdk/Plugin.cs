@@ -86,7 +86,11 @@ public sealed record PluginCommand(string Title, string? Key, Func<CancellationT
 public sealed record FileOpenRequest(string Path, string InnerPath, bool AnyFormat);
 
 /// <summary>A menu entry: its title and what it opens (a panel, or null after doing something else).</summary>
-public sealed record PluginMenuItem(string Title, Func<CancellationToken, Task<IPanelProvider?>> Open);
+public sealed record PluginMenuItem(string Title, Func<CancellationToken, Task<IPanelProvider?>> Open)
+{
+    /// <summary>A preferred letter or digit when the user has not assigned another hotkey.</summary>
+    public char? DefaultHotkey { get; init; }
+}
 
 /// <summary>An error for the user to read. Any other exception from a plugin is shown as an internal error.</summary>
 public class PluginException : Exception

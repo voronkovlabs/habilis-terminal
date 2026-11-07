@@ -169,7 +169,14 @@ public partial class MainWindow : IPluginWindow
             return;
         }
 
-        var items = entries.Select(e => new QuickPickItem { Label = e.Item.Title, Description = e.Plugin.Name, Tag = e, Icon = Theming.Codicon.Folder }).ToList();
+        var items = entries.Select(e => new QuickPickItem
+        {
+            Label = e.Item.DefaultHotkey is { } key ? $"{char.ToUpperInvariant(key)}: {e.Item.Title}" : e.Item.Title,
+            Description = e.Plugin.Name,
+            Tag = e,
+            Icon = Theming.Codicon.Folder,
+            Hotkey = e.Item.DefaultHotkey,
+        }).ToList();
         var result = await QuickPick.ShowAsync(panel, items, new QuickPickOptions { Title = "Plugins", Placeholder = "Filter" });
         panel.Focus(); // Esc keeps the panel focused, as the drive menu does
         if (result?.Item?.Tag is ValueTuple<LoadedPlugin, PluginMenuItem> chosen)

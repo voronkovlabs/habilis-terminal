@@ -393,6 +393,13 @@ public sealed partial class FilePanel
             Provider = provider;
             ReturnPath = returnPath;
             ReturnFocus = returnFocus;
+            var sortKeys = PluginManager.Guard(plugin, () => provider.SortKeys, []);
+            var defaultSortKey = PluginManager.Guard(plugin, () => provider.DefaultSortKey, null);
+            if (defaultSortKey is not null && !sortKeys.Any(key => string.Equals(key.Key, defaultSortKey, StringComparison.Ordinal)))
+            {
+                defaultSortKey = null;
+            }
+
             Extension = new PanelExtension
             {
                 Cell = (row, key) => Entries.TryGetValue(RowKey(row), out var entry) && entry.Cells is { } cells && cells.TryGetValue(key, out var cell)
@@ -401,6 +408,8 @@ public sealed partial class FilePanel
                 Group = row => Entries.TryGetValue(RowKey(row), out var entry) ? entry.Group : 0,
                 Tone = row => Entries.TryGetValue(RowKey(row), out var entry) ? (int)entry.Tone : 0,
                 Icon = row => Entries.TryGetValue(RowKey(row), out var entry) ? entry.Icon : null,
+                SortKey = defaultSortKey,
+                SortDescending = defaultSortKey is not null && PluginManager.Guard(plugin, () => provider.DefaultSortDescending, false),
             };
         }
 

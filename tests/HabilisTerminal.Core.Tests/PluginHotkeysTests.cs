@@ -38,12 +38,24 @@ public class PluginHotkeysTests
     {
         var hotkeys = new PluginHotkeys();
         hotkeys.Assign("places", "Downloads", '2', ['C']);
-        IReadOnlyList<(string, string)> items = [("aws.s3", "S3 buckets"), ("aws.sqs", "SQS queues"), ("places", "Home"), ("places", "Downloads")];
+        IReadOnlyList<(string, string, char?)> items = [("aws.s3", "S3 buckets", null), ("aws.sqs", "SQS queues", null), ("places", "Home", null), ("places", "Downloads", null)];
 
         Assert.Equal(['1', '3', '4', '2'], hotkeys.Resolve(items, ['C']).Select(k => k!.Value));
 
         // Past the digits come the letters no drive uses.
-        var many = Enumerable.Range(0, 12).Select(i => ("p", $"item {i}")).ToList();
+        var many = Enumerable.Range(0, 12).Select(i => ("p", $"item {i}", (char?)null)).ToList();
         Assert.Equal("1234567890BD", string.Concat(new PluginHotkeys().Resolve(many, ['A', 'C']).Select(k => k!.Value)));
+    }
+
+    [Fact]
+    public void A_default_key_is_used_unless_the_user_or_a_drive_has_taken_it()
+    {
+        IReadOnlyList<(string, string, char?)> items = [("gpu", "GPU", null), ("task.manager", "Task Manager", '0'), ("places", "Home", null)];
+        Assert.Equal(['1', '0', '2'], new PluginHotkeys().Resolve(items, ['C']).Select(k => k!.Value));
+
+        var assigned = new PluginHotkeys();
+        assigned.Assign("task.manager", "Task Manager", '7', ['C']);
+        Assert.Equal(['1', '7', '2'], assigned.Resolve(items, ['C']).Select(k => k!.Value));
+        Assert.Equal(['1', '2', '3'], new PluginHotkeys().Resolve(items, ['C', '0']).Select(k => k!.Value));
     }
 }

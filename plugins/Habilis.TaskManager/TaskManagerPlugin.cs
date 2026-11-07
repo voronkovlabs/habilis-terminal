@@ -11,7 +11,7 @@ public sealed class TaskManagerPlugin : Plugin
 
     public override IEnumerable<PluginMenuItem> MenuItems =>
     [
-        new("Task Manager · Details", _ => Open()),
+        new("Task Manager · Details", _ => Open()) { DefaultHotkey = '0' },
     ];
 
     public override IEnumerable<PluginMenuItem> DriveMenuItems => MenuItems;

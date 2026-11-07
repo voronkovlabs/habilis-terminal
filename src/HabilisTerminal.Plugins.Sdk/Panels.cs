@@ -23,6 +23,12 @@ public interface IPanelProvider : IAsyncDisposable
     /// <summary>Extra sort keys (Ctrl+F12 lists them with name, size and date). Usually custom columns.</summary>
     IReadOnlyList<PanelSortKey> SortKeys { get; }
 
+    /// <summary>The custom column used when this panel first opens; null keeps the host's name sort.</summary>
+    string? DefaultSortKey => null;
+
+    /// <summary>Whether <see cref="DefaultSortKey"/> starts in descending order.</summary>
+    bool DefaultSortDescending => false;
+
     /// <summary>
     /// Lists the current location in batches: the host shows the first batch at once. Throw
     /// <see cref="PluginException"/> for errors; the host keeps the previous listing and shows the message.

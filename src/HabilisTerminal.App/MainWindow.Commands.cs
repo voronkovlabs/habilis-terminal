@@ -790,23 +790,23 @@ public partial class MainWindow
         places.Add(("Other panel", Other(panel).CurrentPath));
 
         // Everything but the drives gets a hotkey: 1, 2, 3... unless F4 assigned another (issues #66, #72).
-        var extras = new List<(DriveMenuEntry Entry, string Label, string Description, string Icon, string Group)>();
+        var extras = new List<(DriveMenuEntry Entry, string Label, string Description, string Icon, string Group, char? DefaultHotkey)>();
         foreach (var (plugin, entry) in _plugins.DriveMenuItems())
         {
-            extras.Add((new DriveMenuEntry((plugin.Id, entry.Title), (plugin, entry)), entry.Title, plugin.Name, Codicon.Folder, "Plugins"));
+            extras.Add((new DriveMenuEntry((plugin.Id, entry.Title), (plugin, entry)), entry.Title, plugin.Name, Codicon.Folder, "Plugins", entry.DefaultHotkey));
         }
 
         foreach (var (name, path) in places)
         {
             var icon = name switch { "Home" => Codicon.Home, "Downloads" => Codicon.Download, "Documents" => Codicon.Document, "Desktop" => Codicon.Desktop, _ => Codicon.Folder };
-            extras.Add((new DriveMenuEntry(("places", name), path), name, path, icon, "Places"));
+            extras.Add((new DriveMenuEntry(("places", name), path), name, path, icon, "Places", null));
         }
 
-        var hotkeys = _pluginHotkeys.Resolve([.. extras.Select(e => e.Entry.Key)], drives.Select(d => d.Root[0]));
+        var hotkeys = _pluginHotkeys.Resolve([.. extras.Select(e => (e.Entry.Key.Id, e.Entry.Key.Title, e.DefaultHotkey))], drives.Select(d => d.Root[0]));
         string? lastGroup = null;
         for (var i = 0; i < extras.Count; i++)
         {
-            var (entry, label, description, icon, group) = extras[i];
+            var (entry, label, description, icon, group, _) = extras[i];
             items.Add(new QuickPickItem
             {
                 Label = hotkeys[i] is { } key ? $"{key}: {label}" : label,

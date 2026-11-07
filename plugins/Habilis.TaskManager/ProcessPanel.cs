@@ -80,6 +80,10 @@ internal sealed class ProcessPanel : IPanelProvider, IQuickViewEntry, IViewEntry
         new(CommandKey, "Command line"),
     ];
 
+    string? IPanelProvider.DefaultSortKey => CpuKey;
+
+    bool IPanelProvider.DefaultSortDescending => true;
+
     public IReadOnlyList<PanelCommand> Commands { get; }
 
     public bool ShowsParent => false;

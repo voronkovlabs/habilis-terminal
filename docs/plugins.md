@@ -159,7 +159,10 @@ public abstract class Plugin
     public virtual Task ConfigureAsync(CancellationToken token);       // Enter in the plugin manager, Alt+Shift+F9
 }
 
-public sealed record PluginMenuItem(string Title, Func<CancellationToken, Task<IPanelProvider?>> Open);
+public sealed record PluginMenuItem(string Title, Func<CancellationToken, Task<IPanelProvider?>> Open)
+{
+    public char? DefaultHotkey { get; init; }
+}
 public sealed record PluginCommand(string Title, string? Key, Func<CancellationToken, Task> Run);   // SDK 1.6
 
 // SDK 1.5. InnerPath: a place inside the file such as docs\\sub, or empty; from folder history, so it may be gone. Compare it
@@ -198,6 +201,8 @@ public interface IPanelProvider : IAsyncDisposable
     string Location { get; }                              // shown as the path; goes into folder history
     IReadOnlyList<PanelLayout> Layouts { get; }           // Ctrl+1... switch between them
     IReadOnlyList<PanelSortKey> SortKeys { get; }         // in addition to name; Ctrl+F12 lists them
+    string? DefaultSortKey { get; }                       // optional initial custom-column sort
+    bool DefaultSortDescending { get; }                   // direction of DefaultSortKey
     IAsyncEnumerable<IReadOnlyList<PanelEntry>> ListAsync(CancellationToken token);  // batches
     Task<bool> EnterAsync(PanelEntry entry, CancellationToken token);  // a folder: change location
     Task<bool> GoUpAsync(CancellationToken token);        // false at the top: the host leaves the plugin
@@ -219,7 +224,8 @@ public sealed record PanelEntry(string Name, bool IsFolder = false, long? Size =
 - **Columns:** `PanelLayout(Name, Columns)` where a column is the name, size, modified date or a custom column
   (`key`, title, width, alignment). `CellValue` carries the display text and a sort value (number, time or text).
 - **Sorting** is done by the host: by `Group` first, then by the chosen key (name, size, date, or a custom column's
-  sort value), in either direction (Ctrl+F3... and clicking a header, as for files).
+  sort value), in either direction (Ctrl+F3... and clicking a header, as for files). `DefaultSortKey` and
+  `DefaultSortDescending` choose the initial custom-column sort; both have harmless defaults.
 - **Row tones** map to theme colours.
 - **Listing** streams batches: the first batch shows at once, as for large local folders; cancelling (leaving the
   panel, Esc on the progress) never shows a partial list as complete.
