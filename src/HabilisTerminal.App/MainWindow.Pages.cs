@@ -73,6 +73,12 @@ public partial class MainWindow
         }
 
         var path = Path.Combine(panel.CurrentPath, item.Name);
+        if (item.Entry.IsLink && item.Entry.IsDirectory)
+        {
+            panel.Message = $"{Core.FileSystem.LinkInfo.Name(item.Entry.Link)}: not counted. Ctrl+A shows where it leads.";
+            return;
+        }
+
         if (item.Entry.IsDirectory)
         {
             Fire(panel.CountFoldersAsync([item.Name]));

@@ -193,6 +193,62 @@ public static class OperationDialogs
         ], ConfirmationAnswer.Cancel);
     }
 
+    /// <summary>What a link is and where it leads (issue #178). The values can be selected and copied.</summary>
+    private static Grid LinkSection(LinkInfo link)
+    {
+        var rows = new List<(string Caption, string Value)>();
+        if (link.Kind != LinkKind.None)
+        {
+            rows.Add(("Type", LinkInfo.Name(link.Kind) + (link.TargetIsFolder is { } folder ? (folder ? ", to a folder" : ", to a file") : string.Empty)));
+            rows.Add(("Leads to", link.FullTarget ?? link.StoredTarget ?? "Unknown"));
+            if (link.IsRelative && link.StoredTarget is { } stored)
+            {
+                rows.Add(("Stored as", stored + " (relative)"));
+            }
+
+            if (link.FinalTarget is { } final)
+            {
+                rows.Add(("Ends at", final));
+            }
+
+            rows.Add(("Target", link.TargetExists switch { true => "Exists", false => "Not found: the link is broken", null => "Cannot be checked from here" }));
+            rows.Add(("Reparse tag", $"0x{link.Tag:X8}"));
+        }
+
+        if (link.HardLinks > 1)
+        {
+            rows.Add(("Hard links", $"{link.HardLinks} names of this file"));
+            rows.AddRange(link.OtherNames.Select(name => ("Also named", name)));
+        }
+
+        var grid = new Grid { Margin = new Thickness(0, 8, 0, 4), MaxWidth = 560, HorizontalAlignment = HorizontalAlignment.Left };
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        for (var i = 0; i < rows.Count; i++)
+        {
+            grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+            var caption = Description(rows[i].Caption, top: 0);
+            caption.Margin = new Thickness(0, 2, 12, 2);
+            Grid.SetRow(caption, i);
+            grid.Children.Add(caption);
+            var value = new TextBox
+            {
+                Text = rows[i].Value,
+                IsReadOnly = true,
+                BorderThickness = new Thickness(0),
+                Background = System.Windows.Media.Brushes.Transparent,
+                Padding = new Thickness(0),
+                Margin = new Thickness(0, 2, 0, 2),
+                TextWrapping = TextWrapping.Wrap,
+            };
+            Grid.SetRow(value, i);
+            Grid.SetColumn(value, 1);
+            grid.Children.Add(value);
+        }
+
+        return grid;
+    }
+
     /// <summary>Ctrl+A: tri-state attribute boxes, dates, recursion; null when cancelled.</summary>
     public static AttributeChange? Attributes(Window owner, IReadOnlyList<string> paths)
     {
@@ -260,6 +316,11 @@ public static class OperationDialogs
 
         var body = new StackPanel();
         body.Children.Add(Description(paths.Count == 1 ? paths[0] : $"{paths.Count} items", top: 0));
+        if (paths.Count == 1 && LinkInfo.Read(paths[0]) is { } link)
+        {
+            body.Children.Add(LinkSection(link));
+        }
+
         body.Children.Add(columns.Panel);
         body.Children.Add(dates);
         body.Children.Add(Description(paths.Count > 1 ? "Empty dates are left unchanged." : string.Empty, top: 4));

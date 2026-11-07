@@ -476,7 +476,7 @@ public sealed partial class FilePanel : Border
         UpdateVisibleFolders();
     }
 
-    private static bool IsSizable(FileEntry entry) => entry.IsDirectory && !entry.IsReparsePoint;
+    private static bool IsSizable(FileEntry entry) => entry.IsDirectory && !entry.IsLink;
 
     private void UpdateVisibleFolders()
     {

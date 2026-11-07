@@ -143,6 +143,85 @@ internal static class NativeFile
         return (data.dwFileAttributes & (uint)FileAttributes.ReparsePoint) != 0 ? data.dwReserved0 : 0;
     }
 
+    /// <summary>The raw reparse data of a path, or null. Opening the link itself needs no right to list it.</summary>
+    public static byte[]? ReadReparseData(string path)
+    {
+        using var handle = CreateFile(LongPath.ToExtended(path.TrimEnd('\\')), 0, FileShareRead | FileShareWrite | FileShareDelete, IntPtr.Zero, OpenExisting,
+            FileFlagBackupSemantics | FileFlagOpenReparsePoint, IntPtr.Zero);
+        if (handle.IsInvalid)
+        {
+            return null;
+        }
+
+        var buffer = new byte[MaxReparseData];
+        return DeviceIoControl(handle, FsctlGetReparsePoint, null, 0, buffer, buffer.Length, out var returned, IntPtr.Zero) ? buffer[..returned] : null;
+    }
+
+    /// <summary>How many names the file has; 1 when it cannot be told.</summary>
+    public static int HardLinkCount(string path)
+    {
+        using var handle = CreateFile(LongPath.ToExtended(path.TrimEnd('\\')), 0, FileShareRead | FileShareWrite | FileShareDelete, IntPtr.Zero, OpenExisting,
+            FileFlagBackupSemantics | FileFlagOpenReparsePoint, IntPtr.Zero);
+        return !handle.IsInvalid && GetFileInformationByHandle(handle, out var information) ? (int)information.NumberOfLinks : 1;
+    }
+
+    /// <summary>All the file's names, as full paths, up to a limit.</summary>
+    public static IReadOnlyList<string> HardLinkNames(string path)
+    {
+        const int MaxNames = 32;
+        var names = new List<string>();
+        var root = Path.GetPathRoot(Path.GetFullPath(path))?.TrimEnd('\\') ?? string.Empty;
+        var buffer = new char[32768];
+        var length = buffer.Length;
+        var find = FindFirstFileNameW(LongPath.ToExtended(path), 0, ref length, buffer);
+        if (find == new IntPtr(-1))
+        {
+            return names;
+        }
+
+        try
+        {
+            do
+            {
+                names.Add(root + new string(buffer, 0, Math.Max(0, length - 1)));
+                length = buffer.Length;
+            }
+            while (names.Count < MaxNames && FindNextFileNameW(find, ref length, buffer));
+        }
+        finally
+        {
+            FindClose(find);
+        }
+
+        return names;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct ByHandleFileInformation
+    {
+        public uint FileAttributes;
+        public System.Runtime.InteropServices.ComTypes.FILETIME CreationTime;
+        public System.Runtime.InteropServices.ComTypes.FILETIME LastAccessTime;
+        public System.Runtime.InteropServices.ComTypes.FILETIME LastWriteTime;
+        public uint VolumeSerialNumber;
+        public uint FileSizeHigh;
+        public uint FileSizeLow;
+        public uint NumberOfLinks;
+        public uint FileIndexHigh;
+        public uint FileIndexLow;
+    }
+
+    [DllImport("kernel32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool GetFileInformationByHandle(SafeFileHandle file, out ByHandleFileInformation information);
+
+    [DllImport("kernel32.dll", SetLastError = true, CharSet = CharSet.Unicode)]
+    private static extern IntPtr FindFirstFileNameW(string fileName, uint flags, ref int length, [Out] char[] linkName);
+
+    [DllImport("kernel32.dll", SetLastError = true, CharSet = CharSet.Unicode)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool FindNextFileNameW(IntPtr find, ref int length, [Out] char[] linkName);
+
     [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
     private struct WIN32_FIND_DATA
     {
@@ -201,6 +280,9 @@ internal static class NativeFile
     private const uint FileFlagBackupSemantics = 0x02000000;
     private const uint FileFlagOpenReparsePoint = 0x00200000;
     private const uint FsctlSetReparsePoint = 0x000900A4;
+    private const uint FsctlGetReparsePoint = 0x000900A8;
+    private const uint FileShareDelete = 0x4;
+    private const int MaxReparseData = 16 * 1024;
     private const uint FsctlSetCompression = 0x0009C040;
 
     [DllImport("kernel32.dll", SetLastError = true, CharSet = CharSet.Unicode)]

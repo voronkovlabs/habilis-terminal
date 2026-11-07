@@ -127,7 +127,10 @@ public static class DirectoryReader
                 item is FileInfo file ? file.Length : 0,
                 item.CreationTimeUtc,
                 item.LastWriteTimeUtc,
-                item.LastAccessTimeUtc);
+                item.LastAccessTimeUtc)
+            {
+                Link = (item.Attributes & FileAttributes.ReparsePoint) != 0 ? LinkInfo.KindOfPath(item.FullName) : LinkKind.None,
+            };
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
@@ -185,7 +188,11 @@ public static class DirectoryReader
             entry.IsDirectory ? 0 : entry.Length,
             entry.CreationTimeUtc.UtcDateTime,
             entry.LastWriteTimeUtc.UtcDateTime,
-            entry.LastAccessTimeUtc.UtcDateTime), Options);
+            entry.LastAccessTimeUtc.UtcDateTime)
+        {
+            // One more call, for links only: their kind does not come with the listing.
+            Link = (entry.Attributes & FileAttributes.ReparsePoint) != 0 ? LinkInfo.KindOfPath(entry.ToFullPath()) : LinkKind.None,
+        }, Options);
 
     private static DirectoryReadError? Classify(Exception ex) => ex switch
     {

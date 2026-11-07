@@ -23,6 +23,11 @@ public readonly record struct FileEntry(
     /// <summary>Symbolic link, junction or another reparse point; never traversed implicitly.</summary>
     public bool IsReparsePoint => (Attributes & FileAttributes.ReparsePoint) != 0;
 
+    /// <summary>The kind of link, read only for reparse points. A cloud folder is a reparse point but no link.</summary>
+    public LinkKind Link { get; init; }
+
+    public bool IsLink => Link != LinkKind.None;
+
     /// <summary>Extension without the dot, as Far shows it; empty for directories and names without one.</summary>
     public ReadOnlySpan<char> Extension => IsDirectory ? default : ExtensionOf(Name);
 

@@ -82,9 +82,10 @@ public static class PanelColumns
         return kind switch
         {
             ColumnKind.Size or ColumnKind.CompactSize when item.IsParent => "Up",
+            ColumnKind.Size or ColumnKind.CompactSize when entry.IsLink => LinkInfo.Name(entry.Link),
             ColumnKind.Size when folderSize is { } size => SizeFormat.Folder(size, compact: false, culture),
             ColumnKind.CompactSize when folderSize is { } size => SizeFormat.Folder(size, compact: true, culture),
-            ColumnKind.Size or ColumnKind.CompactSize when entry.IsDirectory => entry.IsReparsePoint ? "Link" : autoSized ? string.Empty : "Folder",
+            ColumnKind.Size or ColumnKind.CompactSize when entry.IsDirectory => autoSized ? string.Empty : "Folder",
             ColumnKind.Size => entry.Length.ToString("N0", culture),
             ColumnKind.CompactSize => FormatCompactSize(entry.Length, culture),
             _ when item.IsParent => string.Empty,

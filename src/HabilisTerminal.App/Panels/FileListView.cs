@@ -565,7 +565,7 @@ public sealed class FileListView : FrameworkElement
         }
 
         IconProvider.Draw(dc, item, _state!.Path, x, y);
-        if (!item.IsParent && item.Entry.IsReparsePoint)
+        if (!item.IsParent && item.Entry.IsLink)
         {
             dc.PushTransform(new TranslateTransform(x, y));
             dc.DrawGeometry(PanelPalette.Background, new Pen(PanelPalette.FocusOutline, 1.4), LinkGeometry);

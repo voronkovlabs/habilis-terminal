@@ -1,6 +1,8 @@
+using HabilisTerminal.Core.FileSystem;
+
 namespace HabilisTerminal.Core.Viewing;
 
-/// <summary>F3 on a directory (SPEC §9): total size of the files below it, without entering links.</summary>
+/// <summary>F3 on a directory (SPEC §9): total size of the files below it. Links neither count nor are entered (issue #178).</summary>
 public static class DirectorySize
 {
     public sealed record Result(long Bytes, int Files, int Folders, int Inaccessible);
@@ -25,7 +27,14 @@ public static class DirectorySize
         private long _bytes;
         private int _files, _folders, _inaccessible;
 
-        public Walk(string path) => _pending.Push(path);
+        public Walk(string path)
+        {
+            // A link counted by itself holds nothing of its own.
+            if (!IsLink(path, File.GetAttributes(path)))
+            {
+                _pending.Push(path);
+            }
+        }
 
         public bool IsDone => _pending.Count == 0;
 
@@ -51,6 +60,10 @@ public static class DirectorySize
             return true;
         }
 
+        /// <summary>A cloud folder is a reparse point too, but its files are its own: it counts.</summary>
+        private static bool IsLink(string path, FileAttributes attributes) =>
+            (attributes & FileAttributes.ReparsePoint) != 0 && LinkInfo.KindOf(Interop.NativeFile.ReparseTag(path)) != LinkKind.None;
+
         private void ReadNext()
         {
             var directory = _pending.Pop();
@@ -58,6 +71,11 @@ public static class DirectorySize
             {
                 foreach (var info in new DirectoryInfo(directory).EnumerateFileSystemInfos("*", Options))
                 {
+                    if (IsLink(info.FullName, info.Attributes))
+                    {
+                        continue;
+                    }
+
                     if (info is FileInfo file)
                     {
                         _bytes += file.Length;
@@ -66,10 +84,7 @@ public static class DirectorySize
                     else
                     {
                         _folders++;
-                        if ((info.Attributes & FileAttributes.ReparsePoint) == 0)
-                        {
-                            _pending.Push(info.FullName);
-                        }
+                        _pending.Push(info.FullName);
                     }
                 }
             }

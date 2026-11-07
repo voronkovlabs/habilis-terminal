@@ -190,7 +190,7 @@ public class ViewerDocumentTests
 
         Assert.Equal(1500, result.Bytes);
         Assert.Equal(2, result.Files);
-        Assert.Equal(2, result.Folders);
+        Assert.Equal(1, result.Folders); // "deep": a link does not count as a folder either
     }
 
     [Fact]
