@@ -139,6 +139,9 @@ public sealed class FileListView : FrameworkElement
 
     private double ListTop => HasHeader ? HeaderHeight : 0;
 
+    /// <summary>The visible thumb owns the inset at the right; cells never draw text underneath it.</summary>
+    private double ListWidth => Math.Max(0, ActualWidth - (MaxTopIndex > 0 ? ScrollbarWidth + ScrollbarRightInset : 0));
+
     /// <summary>Table modes, and name-column modes with detail columns (Medium, issue #40); Brief has none.</summary>
     private bool HasHeader =>
         _state is not null && (ColumnCount == 1 || PanelColumns.DetailColumns(_state).Count > 0);
@@ -207,7 +210,12 @@ public sealed class FileListView : FrameworkElement
         }
 
         var row = (int)((point.Y - ListTop) / RowHeight);
-        var column = ColumnCount == 1 ? 0 : (int)(point.X / (ActualWidth / ColumnCount));
+        if (point.X >= ListWidth)
+        {
+            return -1;
+        }
+
+        var column = ColumnCount == 1 ? 0 : (int)(point.X / (ListWidth / ColumnCount));
         if (row >= RowsPerColumn || column >= ColumnCount)
         {
             return -1;
@@ -256,7 +264,7 @@ public sealed class FileListView : FrameworkElement
             details = PanelColumns.DetailColumns(_state);
         }
 
-        var columnWidth = ActualWidth / columns;
+        var columnWidth = ListWidth / columns;
 
         if (HasHeader)
         {
@@ -418,7 +426,7 @@ public sealed class FileListView : FrameworkElement
         var offset = Math.Max(0, _state.CursorIndex - _topIndex);
         var column = ColumnCount == 1 ? 0 : Math.Min(ColumnCount - 1, offset / rows);
         var row = ColumnCount == 1 ? Math.Min(rows - 1, offset) : offset % rows;
-        var x = (column * (ActualWidth / ColumnCount)) + (2 * CellPadding) + IconWidth;
+        var x = (column * (ListWidth / ColumnCount)) + (2 * CellPadding) + IconWidth;
         var y = ListTop + ((row + 1) * RowHeight);
         return PointToScreen(new Point(x, y));
     }
@@ -554,7 +562,7 @@ public sealed class FileListView : FrameworkElement
     private IEnumerable<(ColumnSpec Column, double X, double Width)> HeaderLayout(IReadOnlyList<ColumnSpec> details)
     {
         var columns = ColumnCount;
-        var columnWidth = ActualWidth / columns;
+        var columnWidth = ListWidth / columns;
         return Enumerable.Range(0, columns).SelectMany(column => LayoutColumns(details, column * columnWidth, columnWidth));
     }
 
