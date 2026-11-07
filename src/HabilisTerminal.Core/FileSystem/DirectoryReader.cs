@@ -51,7 +51,7 @@ public static class DirectoryReader
         IEnumerator<FileEntry> enumerator;
         try
         {
-            enumerator = CreateEnumerable(path).GetEnumerator();
+            enumerator = OpenOrFollowLink(path);
         }
         catch (Exception ex) when (Classify(ex) is { } error)
         {
@@ -128,6 +128,49 @@ public static class DirectoryReader
                 item.CreationTimeUtc,
                 item.LastWriteTimeUtc,
                 item.LastAccessTimeUtc);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// Windows' compatibility junctions (<c>Local Settings</c>, <c>NetHood</c>) deny listing on the link only, while their
+    /// targets and what is inside open normally. As Far does, the link's target is listed and the path stays as it is
+    /// (issue #176). When the target cannot be read either, the first refusal stands.
+    /// </summary>
+    private static IEnumerator<FileEntry> OpenOrFollowLink(string path)
+    {
+        try
+        {
+            return CreateEnumerable(path).GetEnumerator();
+        }
+        catch (UnauthorizedAccessException)
+        {
+            if (LinkTarget(path) is not { } target)
+            {
+                throw;
+            }
+
+            try
+            {
+                return CreateEnumerable(target).GetEnumerator();
+            }
+            catch (Exception ex) when (Classify(ex) is not null)
+            {
+                // The refusal of the path asked for is the one to report, not the target's.
+                throw new UnauthorizedAccessException($"Access to the path '{path}' is denied.", ex);
+            }
+        }
+    }
+
+    /// <summary>The folder a link ends at; null when the path is no link or that folder is gone.</summary>
+    internal static string? LinkTarget(string path)
+    {
+        try
+        {
+            return Directory.ResolveLinkTarget(path, returnFinalTarget: true) is { Exists: true } target ? target.FullName : null;
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {

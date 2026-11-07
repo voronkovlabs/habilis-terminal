@@ -49,7 +49,19 @@ public sealed class DirectoryWatcher : IDisposable
 
     public string Path { get; }
 
-    public void Start() => _watcher.EnableRaisingEvents = true;
+    public void Start()
+    {
+        try
+        {
+            _watcher.EnableRaisingEvents = true;
+        }
+        catch (Exception ex) when ((ex is UnauthorizedAccessException || ex is IOException) && DirectoryReader.LinkTarget(Path) is { } target)
+        {
+            // A link that denies listing is read through its target (issue #176), so it is watched there too.
+            _watcher.Path = target;
+            _watcher.EnableRaisingEvents = true;
+        }
+    }
 
     public void Dispose()
     {
