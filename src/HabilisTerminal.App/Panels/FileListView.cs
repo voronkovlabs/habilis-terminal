@@ -568,6 +568,12 @@ public sealed class FileListView : FrameworkElement
 
     private void DrawIcon(DrawingContext dc, PanelItem item, double x, double y)
     {
+        // A plugin row may point to a local executable whose real Windows icon represents it.
+        if (!item.IsParent && _state!.Extension?.IconPath(item.Entry) is { } path && IconProvider.DrawSystem(dc, path, x, y))
+        {
+            return;
+        }
+
         // A plugin row may name a host icon (issue #69).
         if (!item.IsParent && _state!.Extension?.Icon(item.Entry) is { } icon && IconProvider.DrawNamed(dc, icon, x, y))
         {

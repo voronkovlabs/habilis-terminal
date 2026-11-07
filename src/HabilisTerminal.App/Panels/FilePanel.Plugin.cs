@@ -53,6 +53,12 @@ public sealed partial class FilePanel
             return [];
         }
 
+        // A cursorless live panel has no implicit current item. Marked rows, if any, remain explicit targets.
+        if (!CursorVisible && State.Selection.Count == 0)
+        {
+            return [];
+        }
+
         return State.TargetEntries().Select(e => session.Entries.TryGetValue(RowKey(e), out var entry) ? entry : null).OfType<PanelEntry>().ToList();
     }
 
@@ -445,6 +451,7 @@ public sealed partial class FilePanel
                 Group = row => Entries.TryGetValue(RowKey(row), out var entry) ? entry.Group : 0,
                 Tone = row => Entries.TryGetValue(RowKey(row), out var entry) ? (int)entry.Tone : 0,
                 Icon = row => Entries.TryGetValue(RowKey(row), out var entry) ? entry.Icon : null,
+                IconPath = row => Entries.TryGetValue(RowKey(row), out var entry) ? entry.IconPath : null,
                 SortKey = defaultSortKey,
                 SortDescending = defaultSortKey is not null && PluginManager.Guard(plugin, () => provider.DefaultSortDescending, false),
                 CursorVisible = !PluginManager.Guard(plugin, () => provider.StartsWithoutCursor, false),

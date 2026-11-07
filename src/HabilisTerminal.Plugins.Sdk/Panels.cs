@@ -81,6 +81,12 @@ public sealed record PanelEntry(string Name, bool IsFolder = false, long? Size =
     /// </summary>
     public string? Icon { get; init; }
 
+    /// <summary>
+    /// An absolute local file path whose Windows shell icon the host draws. When the path or icon is unavailable,
+    /// <see cref="Icon"/> and then the usual file icon are used as fallbacks.
+    /// </summary>
+    public string? IconPath { get; init; }
+
     /// <summary>The plugin's own data for this entry; the host never looks at it.</summary>
     public object? Tag { get; init; }
 }

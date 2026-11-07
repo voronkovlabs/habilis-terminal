@@ -29,6 +29,8 @@ public sealed class TaskManagerTests
         Assert.Equal(3, panel.Layouts.Count);
         Assert.Equal(["idle.exe (7)", "worker.exe (42)"], entries.Select(e => e.Name));
         Assert.All(entries, entry => Assert.Equal(PanelIcons.Process, entry.Icon));
+        Assert.Null(entries[0].IconPath);
+        Assert.Equal(@"C:\Apps\worker.exe", entries[1].IconPath);
         Assert.Equal("42", entries[1].Cells![ProcessPanel.PidKey].Text);
         Assert.Equal("18.5%", entries[1].Cells![ProcessPanel.CpuKey].Text);
         Assert.Equal("2.0 GB", entries[1].Cells![ProcessPanel.MemoryKey].Text);
@@ -58,26 +60,59 @@ public sealed class TaskManagerTests
         await using var panel = (ProcessPanel)(await plugin.OpenAddressAsync("tasks:", CancellationToken.None))!;
         await Listing.AllAsync(panel);
 
-        await panel.Commands[0].Run(new PanelCommandContext(null, [], new FakeProgress(), CancellationToken.None));
+        var pause = panel.Commands.Single(command => command.Key == "Shift+F4");
+        await pause.Run(new PanelCommandContext(null, [], new FakeProgress(), CancellationToken.None));
         Assert.True(panel.Paused);
         Assert.Contains(host.Messages, message => message.Item2.Contains("paused", StringComparison.OrdinalIgnoreCase));
 
-        await panel.Commands[0].Run(new PanelCommandContext(null, [], new FakeProgress(), CancellationToken.None));
+        await pause.Run(new PanelCommandContext(null, [], new FakeProgress(), CancellationToken.None));
         Assert.False(panel.Paused);
+    }
+
+    [Fact]
+    public async Task F8_warns_before_ending_the_selected_process()
+    {
+        var host = new FakeHost();
+        var source = new FakeSource();
+        var plugin = new TaskManagerPlugin { Source = () => source };
+        plugin.Initialize(host);
+        await using var panel = (ProcessPanel)(await plugin.OpenAddressAsync("tasks:", CancellationToken.None))!;
+        var entries = await Listing.AllAsync(panel);
+        var end = panel.Commands.Single(command => command.Key == "F8");
+
+        await end.Run(new PanelCommandContext(entries[1], [entries[1]], new FakeProgress(), CancellationToken.None));
+        Assert.Empty(source.Ended);
+        Assert.Contains("Unsaved data", Assert.Single(host.Confirmations).Message, StringComparison.Ordinal);
+
+        host.ConfirmAnswers.Enqueue(true);
+        var progress = new FakeProgress();
+        await end.Run(new PanelCommandContext(entries[1], [entries[1]], progress, CancellationToken.None));
+
+        Assert.Equal([42], source.Ended);
+        Assert.Equal((1, null), progress.Totals);
+        Assert.Equal(1, progress.Items);
     }
 
     private sealed class FakeSource : IProcessSource
     {
         public int Samples { get; private set; }
 
+        public List<int> Ended { get; } = [];
+
         public ProcessSnapshot Sample()
         {
             Samples++;
             return new ProcessSnapshot(Now.AddSeconds(Samples),
             [
-                new ProcessData(7, "idle.exe", "Suspended", null, 0, TimeSpan.FromSeconds(1), 8L << 20, null, 1, null, 0, "x64", Now.AddHours(-2), null),
-                new ProcessData(42, "worker.exe", "Running", "DOMAIN\\sergey", 18.5, TimeSpan.FromMinutes(3), 2L << 30, 1500L << 20, 12, 130, 1, "x64", Now.AddMinutes(-5), "worker.exe --train"),
+                new ProcessData(7, "idle.exe", "Suspended", null, 0, TimeSpan.FromSeconds(1), 8L << 20, null, 1, null, 0, "x64", Now.AddHours(-2), null, null),
+                new ProcessData(42, "worker.exe", "Running", "DOMAIN\\sergey", 18.5, TimeSpan.FromMinutes(3), 2L << 30, 1500L << 20, 12, 130, 1, "x64", Now.AddMinutes(-5), @"C:\Apps\worker.exe", "worker.exe --train"),
             ]);
+        }
+
+        public bool End(ProcessData expected)
+        {
+            Ended.Add(expected.Pid);
+            return true;
         }
     }
 }

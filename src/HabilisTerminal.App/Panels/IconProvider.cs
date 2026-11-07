@@ -92,6 +92,18 @@ internal static class IconProvider
         return true;
     }
 
+    /// <summary>Draws the Windows shell icon of an absolute local path, loading it lazily for visible rows.</summary>
+    public static bool DrawSystem(DrawingContext dc, string path, double x, double y)
+    {
+        if (!Path.IsPathFullyQualified(path) || SystemIcon(path) is not { } image)
+        {
+            return false;
+        }
+
+        dc.DrawImage(image, new Rect(x, y, Size, Size));
+        return true;
+    }
+
     private static FileIconTheme LoadTheme() => FileIconTheme.LoadBuiltIn(FileIconTheme.Material);
 
     private static Drawing ThemeDrawing(IconDefinition definition)

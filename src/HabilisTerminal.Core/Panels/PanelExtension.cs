@@ -30,6 +30,9 @@ public sealed class PanelExtension
     /// <summary>A named host icon for the row (<c>PanelEntry.Icon</c>), or null for the usual file or folder icon.</summary>
     public Func<FileEntry, string?> Icon { get; init; } = _ => null;
 
+    /// <summary>An absolute local file path whose Windows shell icon represents the row.</summary>
+    public Func<FileEntry, string?> IconPath { get; init; } = _ => null;
+
     /// <summary>The custom column the panel is sorted by; null: the panel's <see cref="SortOptions"/>.</summary>
     public string? SortKey { get; set; }
 

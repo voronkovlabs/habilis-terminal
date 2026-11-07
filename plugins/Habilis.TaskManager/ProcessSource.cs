@@ -3,6 +3,7 @@ using System.Diagnostics;
 using System.Runtime.InteropServices;
 using System.Security;
 using System.Security.Principal;
+using HabilisTerminal.Plugins;
 
 namespace Habilis.TaskManager;
 
@@ -20,6 +21,7 @@ internal sealed record ProcessData(
     int? SessionId,
     string? Architecture,
     DateTime? Started,
+    string? ExecutablePath,
     string? CommandLine);
 
 internal sealed record ProcessSnapshot(DateTime TakenUtc, IReadOnlyList<ProcessData> Processes);
@@ -27,6 +29,8 @@ internal sealed record ProcessSnapshot(DateTime TakenUtc, IReadOnlyList<ProcessD
 internal interface IProcessSource
 {
     ProcessSnapshot Sample();
+
+    bool End(ProcessData expected);
 }
 
 /// <summary>Windows process data available without elevation; protected-process fields are left blank.</summary>
@@ -36,7 +40,7 @@ internal sealed partial class WindowsProcessSource : IProcessSource
     private const uint TokenQuery = 0x0008;
     private const int ProcessCommandLineInformation = 60;
     private readonly Dictionary<int, (TimeSpan Cpu, DateTime At, DateTime? Started)> _cpu = [];
-    private readonly Dictionary<int, (DateTime? Started, string? User, string? Architecture, string? CommandLine)> _identity = [];
+    private readonly Dictionary<int, (DateTime? Started, string? User, string? Architecture, string? ExecutablePath, string? CommandLine)> _identity = [];
 
     public ProcessSnapshot Sample()
     {
@@ -67,6 +71,41 @@ internal sealed partial class WindowsProcessSource : IProcessSource
         return new ProcessSnapshot(now, result.OrderBy(p => p.Name, StringComparer.CurrentCultureIgnoreCase).ThenBy(p => p.Pid).ToList());
     }
 
+    public bool End(ProcessData expected)
+    {
+        try
+        {
+            using var process = Process.GetProcessById(expected.Pid);
+            if (expected.Started is not { } sampled || sampled == default)
+            {
+                throw new PluginException($"Windows did not expose the start time of {expected.Name} (PID {expected.Pid}), so it cannot be ended safely.");
+            }
+
+            var current = Read(() => process.StartTime.ToUniversalTime());
+            if (current == default)
+            {
+                throw new PluginException($"Windows could not verify that {expected.Name} (PID {expected.Pid}) is still the same process.");
+            }
+
+            if (sampled != current)
+            {
+                throw new PluginException($"{expected.Name} (PID {expected.Pid}) has already ended and its PID now belongs to another process.");
+            }
+
+            process.Kill(entireProcessTree: false);
+            return true;
+        }
+        catch (ArgumentException)
+        {
+            // It ended between the last refresh and F8; the requested outcome is already true.
+            return false;
+        }
+        catch (Exception ex) when (ex is Win32Exception or InvalidOperationException or NotSupportedException)
+        {
+            throw new PluginException($"Windows could not end {expected.Name} (PID {expected.Pid}): {ex.Message}", ex);
+        }
+    }
+
     private ProcessData Describe(Process process, DateTime now)
     {
         var pid = process.Id;
@@ -89,7 +128,7 @@ internal sealed partial class WindowsProcessSource : IProcessSource
             var handle = OpenProcess(QueryLimitedInformation, false, pid);
             try
             {
-                identity = (started, UserOf(handle), ArchitectureOf(handle), CommandLineOf(handle));
+                identity = (started, UserOf(handle), ArchitectureOf(handle), ImagePathOf(handle), CommandLineOf(handle));
                 _identity[pid] = identity;
             }
             finally
@@ -115,7 +154,20 @@ internal sealed partial class WindowsProcessSource : IProcessSource
             Read(() => process.SessionId),
             identity.Architecture,
             started,
+            identity.ExecutablePath,
             identity.CommandLine);
+    }
+
+    private static unsafe string? ImagePathOf(IntPtr process)
+    {
+        if (process == IntPtr.Zero)
+        {
+            return null;
+        }
+
+        var length = 32768;
+        var path = stackalloc char[length];
+        return QueryFullProcessImageName(process, 0, path, ref length) ? new string(path, 0, length) : null;
     }
 
     private static string Status(Process process)
@@ -239,6 +291,10 @@ internal sealed partial class WindowsProcessSource : IProcessSource
     [LibraryImport("kernel32.dll", SetLastError = true)]
     [return: MarshalAs(UnmanagedType.Bool)]
     private static partial bool IsWow64Process2(IntPtr process, out ushort processMachine, out ushort nativeMachine);
+
+    [LibraryImport("kernel32.dll", EntryPoint = "QueryFullProcessImageNameW", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static unsafe partial bool QueryFullProcessImageName(IntPtr process, uint flags, char* path, ref int size);
 
     [LibraryImport("ntdll.dll")]
     private static partial int NtQueryInformationProcess(IntPtr process, int informationClass, IntPtr information, int length, out int returnLength);

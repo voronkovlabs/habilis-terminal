@@ -49,7 +49,14 @@ internal sealed class ProcessPanel : IPanelProvider, IQuickViewEntry, IViewEntry
         _host = host;
         _source = source;
         _interval = interval;
-        Commands = [new PanelCommand("Pause or resume refreshing", "Shift+F4", _ => TogglePause())];
+        Commands =
+        [
+            new PanelCommand("End process", "F8", EndProcessesAsync)
+            {
+                AppliesTo = (_, selected) => selected.Any(entry => entry.Tag is ProcessData),
+            },
+            new PanelCommand("Pause or resume refreshing", "Shift+F4", _ => TogglePause()),
+        ];
     }
 
     public string Title => "Task Manager · Details";
@@ -157,6 +164,7 @@ internal sealed class ProcessPanel : IPanelProvider, IQuickViewEntry, IViewEntry
     private static PanelEntry ToEntry(ProcessData process) => new($"{process.Name} ({process.Pid})")
     {
         Icon = PanelIcons.Process,
+        IconPath = process.ExecutablePath,
         Tag = process,
         Tone = process.Status == "Suspended" ? RowTone.Dim : process.CpuPercent >= 50 ? RowTone.Warning : process.CpuPercent >= 10 ? RowTone.Accent : RowTone.Normal,
         Cells = new Dictionary<string, CellValue>
@@ -234,6 +242,46 @@ internal sealed class ProcessPanel : IPanelProvider, IQuickViewEntry, IViewEntry
         Paused = !Paused;
         _host.ShowStatus(Paused ? "Task Manager paused (Shift+F4 resumes)." : "Task Manager refreshing again.");
         return Task.CompletedTask;
+    }
+
+    private async Task EndProcessesAsync(PanelCommandContext context)
+    {
+        var processes = context.Selected.Select(entry => entry.Tag).OfType<ProcessData>()
+            .DistinctBy(process => process.Pid).ToList();
+        if (processes.Count == 0)
+        {
+            return;
+        }
+
+        var plural = processes.Count != 1;
+        var confirmed = await _host.Dialogs.ConfirmAsync(
+            plural ? "End processes" : "End process",
+            plural
+                ? "End these processes? Unsaved data in their programs will be lost."
+                : "End this process? Unsaved data in its program will be lost.",
+            processes.Select(process => $"{process.Name} (PID {process.Pid})").ToList(),
+            plural ? "End processes" : "End process",
+            destructive: true).ConfigureAwait(false);
+        if (!confirmed)
+        {
+            return;
+        }
+
+        context.Progress.SetTotals(processes.Count, null);
+        var ended = 0;
+        foreach (var process in processes)
+        {
+            context.CancellationToken.ThrowIfCancellationRequested();
+            context.Progress.Begin($"{process.Name} (PID {process.Pid})");
+            if (_source.End(process))
+            {
+                ended++;
+            }
+
+            context.Progress.CompleteItem();
+        }
+
+        _host.ShowStatus(ended == 1 ? "1 process ended." : $"{ended} processes ended.");
     }
 
     private async Task RefreshLoopAsync()

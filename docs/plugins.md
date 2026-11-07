@@ -221,6 +221,7 @@ public sealed record PanelEntry(string Name, bool IsFolder = false, long? Size =
     public RowTone Tone { get; init; }                                   // Normal, Accent, Good, Warning, Bad, Dim
     public object? Tag { get; init; }                                    // plugin data
     public string? Icon { get; init; }                                   // SDK 1.1: PanelIcons.Bucket, Gpu, Process
+    public string? IconPath { get; init; }                               // absolute local path: its Windows shell icon
 }
 ```
 - **Columns:** `PanelLayout(Name, Columns)` where a column is the name, size, modified date or a custom column
@@ -231,6 +232,8 @@ public sealed record PanelEntry(string Name, bool IsFolder = false, long? Size =
 - **Live lists** may set `StartsWithoutCursor` and `FreezeOrderWhileCursorVisible`: the host then auto-sorts without a
   highlighted row, freezes the displayed row order after a cursor move or click, and resumes sorting from the top on Esc.
 - **Row tones** map to theme colours.
+- **Icons** may use a host-owned `PanelIcons` name, or `IconPath` for the Windows shell icon of a local executable or
+  file. `IconPath` is loaded lazily for visible rows; `Icon` remains the fallback when Windows cannot read it.
 - **Listing** streams batches: the first batch shows at once, as for large local folders; cancelling (leaving the
   panel, Esc on the progress) never shows a partial list as complete.
 

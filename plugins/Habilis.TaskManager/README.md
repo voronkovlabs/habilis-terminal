@@ -1,6 +1,6 @@
 # Task Manager plugin
 
-A live, read-only Windows process list modelled on Task Manager's **Details** page (issue #182).
+A live Windows process list modelled on Task Manager's **Details** page (issue #182).
 
 Open **Task Manager · Details** from F11 or a drive menu, or type `tasks:` on the command line.
 
@@ -9,10 +9,13 @@ Open **Task Manager · Details** from F11 or a drive menu, or type `tasks:` on t
 - **Identity (Ctrl+3):** user, session, start time and command line.
 - Click a header or use Ctrl+F12 to sort. Quick search and selection work like any Habilis panel.
 - F3 shows every available field; Ctrl+Q shows it in the other panel.
+- F8 ends the selected process or marked processes after a destructive confirmation. The sampled start time is checked
+  before termination so a reused PID cannot target a different process.
 - Shift+F4 pauses and resumes the one-second refresh.
 
 Some fields are blank for protected processes or processes owned by another user. The plugin does not request elevation
-and cannot end or change a process.
+and therefore cannot end protected or elevated processes. Rows use each executable's Windows icon when its path is
+available, with the generic process icon as a fallback.
 
 ## Test plan
 
@@ -21,3 +24,4 @@ and cannot end or change a process.
 3. Sort by CPU and memory; switch layouts with Ctrl+1, Ctrl+2 and Ctrl+3.
 4. Press Shift+F4, start a program and confirm the list stays still; resume and see it appear.
 5. Use F3 and Ctrl+Q on an ordinary process and on a protected system process.
+6. Press F8 on a disposable test program. Cancel once, then confirm and verify that only that program closes.
