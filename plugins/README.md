@@ -11,6 +11,7 @@ package from a local feed. Nothing here references the app's code. Design: `docs
 | S3 browser | `Habilis.Aws.S3` | `aws.s3` | `s3:` | #46 |
 | Demo (in-memory sample, no network) | `Habilis.Samples.Demo` | `samples.demo` | `demo:` | #49 |
 | GPU monitor (local NVIDIA GPUs, SageMaker jobs) | `Habilis.Gpu` | `gpu.monitor` | `gpu:`, `gpu:sm` | #70 |
+| Task Manager Details (local Windows processes) | `Habilis.TaskManager` | `task.manager` | `tasks:` | #182 |
 | Archives as folders, on 7-Zip | `Habilis.Archives` | `habi.archives` | none: opens files | #51, #149 |
 | File format sample | `Habilis.Samples.FileFormat` | `samples.fileformat` | none: opens `.habibundle` | #151 |
 
@@ -26,7 +27,7 @@ It packs the SDK into `artifacts/nuget`, restores the plugins into `artifacts/pa
 publishes each into `artifacts/plugins/<id>/` with its `plugin.json`. These plugins are standard: a release
 copies them into the `plugins` folder next to `habi.exe` (issue #58). Install another plugin by copying its folder into
 `%LOCALAPPDATA%\HabilisTerminal\plugins\` (or the `plugins` folder next to a portable `habi.exe`).
-`tools/ui/New-TestCopy.ps1` makes a test copy with archives, demo and GPU; `-WithPlugins` adds the AWS ones.
+`tools/ui/New-TestCopy.ps1` makes a test copy with archives, demo, GPU and Task Manager; `-WithPlugins` adds the AWS ones.
 
 ## Writing a plugin
 

@@ -7,7 +7,7 @@ param(
     # Everything, with AWS: only for tests that really need them, as they use the owner's profiles.
     [switch]$WithPlugins,
     # The plugin ids a usual copy gets: nothing here reaches a network or the owner's AWS profiles on its own.
-    [string[]]$Plugins = @('habi.archives', 'samples.demo', 'gpu.monitor')
+    [string[]]$Plugins = @('habi.archives', 'samples.demo', 'gpu.monitor', 'task.manager')
 )
 # Builds Release, copies the output to %TEMP%\habi-tests\<Name> with the `portable` marker (settings and state then live
 # next to habi.exe, never in the owner's %APPDATA% / %LOCALAPPDATA%) and starts it. Prints the process id for

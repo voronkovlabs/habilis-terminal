@@ -1,0 +1,7 @@
+{
+  "id": "task.manager",
+  "name": "Task Manager",
+  "version": "1.0.0",
+  "assembly": "Habilis.TaskManager.dll",
+  "sdk": "1.2"
+}
