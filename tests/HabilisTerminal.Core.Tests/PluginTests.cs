@@ -262,6 +262,35 @@ public class PluginTests
         Assert.True(PanelExtension.CompareValues(null, 3) > 0);
     }
 
+    [Fact]
+    public void A_plugin_can_freeze_the_displayed_order_while_values_keep_changing()
+    {
+        var day = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+        FileEntry Row(string name) => new(name, FileAttributes.Normal, 0, day, day, day);
+        var cpu = new Dictionary<string, double> { ["alpha"] = 40, ["beta"] = 20, ["gamma"] = 10 };
+        var extension = new PanelExtension
+        {
+            SortKey = "cpu",
+            SortDescending = true,
+            Cell = (entry, _) => (cpu[entry.Name].ToString(CultureInfo.InvariantCulture), cpu[entry.Name]),
+        };
+        var state = new PanelState { Culture = CultureInfo.InvariantCulture };
+        state.SetExtension(extension);
+        state.SetListing("tasks:", [Row("gamma"), Row("beta"), Row("alpha")], hasParent: false);
+        Assert.Equal(["alpha", "beta", "gamma"], Names(state));
+
+        extension.FrozenOrder = state.Entries.Select((entry, index) => (entry.Name, index))
+            .ToDictionary(item => item.Name, item => item.index, StringComparer.OrdinalIgnoreCase);
+        cpu["alpha"] = 1;
+        cpu["gamma"] = 80;
+        state.SetListing("tasks:", [Row("alpha"), Row("beta"), Row("gamma")], hasParent: false);
+        Assert.Equal(["alpha", "beta", "gamma"], Names(state));
+
+        extension.FrozenOrder = null;
+        state.SetExtension(extension);
+        Assert.Equal(["gamma", "beta", "alpha"], Names(state));
+    }
+
     private static string[] Names(PanelState state) => Enumerable.Range(0, state.Count).Select(i => state.ItemAt(i).Name).ToArray();
 
     private static void WriteManifest(string folder)

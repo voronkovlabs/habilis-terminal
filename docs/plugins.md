@@ -203,6 +203,8 @@ public interface IPanelProvider : IAsyncDisposable
     IReadOnlyList<PanelSortKey> SortKeys { get; }         // in addition to name; Ctrl+F12 lists them
     string? DefaultSortKey { get; }                       // optional initial custom-column sort
     bool DefaultSortDescending { get; }                   // direction of DefaultSortKey
+    bool StartsWithoutCursor { get; }                     // optional cursorless initial view
+    bool FreezeOrderWhileCursorVisible { get; }           // stable rows until Escape hides the cursor
     IAsyncEnumerable<IReadOnlyList<PanelEntry>> ListAsync(CancellationToken token);  // batches
     Task<bool> EnterAsync(PanelEntry entry, CancellationToken token);  // a folder: change location
     Task<bool> GoUpAsync(CancellationToken token);        // false at the top: the host leaves the plugin
@@ -226,6 +228,8 @@ public sealed record PanelEntry(string Name, bool IsFolder = false, long? Size =
 - **Sorting** is done by the host: by `Group` first, then by the chosen key (name, size, date, or a custom column's
   sort value), in either direction (Ctrl+F3... and clicking a header, as for files). `DefaultSortKey` and
   `DefaultSortDescending` choose the initial custom-column sort; both have harmless defaults.
+- **Live lists** may set `StartsWithoutCursor` and `FreezeOrderWhileCursorVisible`: the host then auto-sorts without a
+  highlighted row, freezes the displayed row order after a cursor move or click, and resumes sorting from the top on Esc.
 - **Row tones** map to theme colours.
 - **Listing** streams batches: the first batch shows at once, as for large local folders; cancelling (leaving the
   panel, Esc on the progress) never shows a partial list as complete.

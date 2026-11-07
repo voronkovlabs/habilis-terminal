@@ -662,6 +662,11 @@ public sealed partial class FilePanel : Border
             return true;
         }
 
+        if (key == Key.Escape && modifiers == KeyModifiers.None && HidePluginCursor())
+        {
+            return true;
+        }
+
         var page = Math.Max(1, _list.PageSize);
         var rows = Math.Max(1, _list.RowsPerColumn);
         var multiColumn = _list.ColumnCount > 1;
@@ -832,6 +837,7 @@ public sealed partial class FilePanel : Border
         QuickSearchText = candidate;
         if (found >= 0)
         {
+            RevealPluginCursor(found);
             State.SetCursor(found);
         }
 
@@ -998,6 +1004,7 @@ public sealed partial class FilePanel : Border
     private void OnItemClicked(int index, int clickCount)
     {
         Focus();
+        RevealPluginCursor(index);
         State.SetCursor(index);
         if (Keyboard.Modifiers == ModifierKeys.Control)
         {
@@ -1053,12 +1060,19 @@ public sealed partial class FilePanel : Border
 
     private void Move(int delta)
     {
+        if (RevealPluginCursor())
+        {
+            Refresh();
+            return;
+        }
+
         State.MoveCursor(delta);
         Refresh();
     }
 
     private void MoveTo(int index)
     {
+        RevealPluginCursor(index);
         State.SetCursor(index);
         Refresh();
     }
@@ -1294,6 +1308,13 @@ public sealed partial class FilePanel : Border
         }
 
         _status.Foreground = PanelPalette.DescriptionForeground;
+        if (!CursorVisible)
+        {
+            _status.Text = string.Empty;
+            _statusRight.Text = string.Empty;
+            return;
+        }
+
         if (State.Count == 0)
         {
             _status.Text = "Empty";

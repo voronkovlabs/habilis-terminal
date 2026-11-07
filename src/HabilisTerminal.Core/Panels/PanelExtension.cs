@@ -35,6 +35,12 @@ public sealed class PanelExtension
 
     public bool SortDescending { get; set; }
 
+    /// <summary>False suppresses the highlighted row while keeping a valid internal cursor index.</summary>
+    public bool CursorVisible { get; set; } = true;
+
+    /// <summary>An optional stable position per row name. Rows not in the snapshot follow the frozen rows.</summary>
+    public IReadOnlyDictionary<string, int>? FrozenOrder { get; set; }
+
     /// <summary>Orders an already sorted listing by group, then by <see cref="SortKey"/> (folders first); stable.</summary>
     public FileEntry[] Order(FileEntry[] sorted)
     {
@@ -49,7 +55,17 @@ public sealed class PanelExtension
                 : ordered.ThenBy(e => Cell(e, key)?.SortValue, comparer);
         }
 
-        return [.. ordered];
+        var result = ordered.ToArray();
+        if (FrozenOrder is not { } frozen)
+        {
+            return result;
+        }
+
+        return
+        [
+            .. result.OrderBy(entry => frozen.TryGetValue(entry.Name, out _) ? 0 : 1)
+                .ThenBy(entry => frozen.TryGetValue(entry.Name, out var position) ? position : int.MaxValue),
+        ];
     }
 
     /// <summary>Missing values sort last; values of different types compare by their text.</summary>

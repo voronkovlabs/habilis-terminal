@@ -152,7 +152,7 @@ public sealed class FileListView : FrameworkElement
 
     public void EnsureCursorVisible()
     {
-        if (_state is null || ActualHeight <= 0)
+        if (_state is null || ActualHeight <= 0 || _state.Extension is { CursorVisible: false })
         {
             return;
         }
@@ -184,6 +184,12 @@ public sealed class FileListView : FrameworkElement
         }
 
         _topIndex = Math.Clamp(_topIndex, 0, Math.Max(0, _state.Count - 1));
+    }
+
+    public void ScrollToTop()
+    {
+        _topIndex = 0;
+        InvalidateVisual();
     }
 
     public int HitTest(Point point)
@@ -468,7 +474,7 @@ public sealed class FileListView : FrameworkElement
     {
         var state = _state!;
         var item = state.ItemAt(index);
-        var isCursor = index == state.CursorIndex;
+        var isCursor = state.Extension is not { CursorVisible: false } && index == state.CursorIndex;
         var isMarked = !item.IsParent && state.Selection.Contains(item.Name);
 
         if (isCursor && IsActivePanel)

@@ -84,6 +84,10 @@ internal sealed class ProcessPanel : IPanelProvider, IQuickViewEntry, IViewEntry
 
     bool IPanelProvider.DefaultSortDescending => true;
 
+    bool IPanelProvider.StartsWithoutCursor => true;
+
+    bool IPanelProvider.FreezeOrderWhileCursorVisible => true;
+
     public IReadOnlyList<PanelCommand> Commands { get; }
 
     public bool ShowsParent => false;

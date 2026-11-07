@@ -24,6 +24,8 @@ public sealed class TaskManagerTests
         Assert.Equal('0', Assert.Single(plugin.MenuItems).DefaultHotkey);
         Assert.Equal(ProcessPanel.CpuKey, ((IPanelProvider)panel).DefaultSortKey);
         Assert.True(((IPanelProvider)panel).DefaultSortDescending);
+        Assert.True(((IPanelProvider)panel).StartsWithoutCursor);
+        Assert.True(((IPanelProvider)panel).FreezeOrderWhileCursorVisible);
         Assert.Equal(3, panel.Layouts.Count);
         Assert.Equal(["idle.exe (7)", "worker.exe (42)"], entries.Select(e => e.Name));
         Assert.All(entries, entry => Assert.Equal(PanelIcons.Process, entry.Icon));

@@ -29,6 +29,12 @@ public interface IPanelProvider : IAsyncDisposable
     /// <summary>Whether <see cref="DefaultSortKey"/> starts in descending order.</summary>
     bool DefaultSortDescending => false;
 
+    /// <summary>Whether the panel opens without a highlighted row. The first cursor move or row click reveals it.</summary>
+    bool StartsWithoutCursor => false;
+
+    /// <summary>Whether revealing the cursor keeps the current row order stable until Escape hides it again.</summary>
+    bool FreezeOrderWhileCursorVisible => false;
+
     /// <summary>
     /// Lists the current location in batches: the host shows the first batch at once. Throw
     /// <see cref="PluginException"/> for errors; the host keeps the previous listing and shows the message.

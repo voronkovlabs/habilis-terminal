@@ -36,6 +36,8 @@ public sealed partial class FilePanel
 
     internal IPanelProvider? Provider => _session?.Provider;
 
+    private bool CursorVisible => State.Extension is not { CursorVisible: false };
+
     /// <summary>The local folder the panel returns to when it leaves the plugin; the current folder otherwise.</summary>
     public string LocalPath => _session?.ReturnPath ?? State.Path;
 
@@ -376,6 +378,41 @@ public sealed partial class FilePanel
     private static int NameColumns(PluginSession session) =>
         PluginManager.Guard(session.Plugin, () => session.Provider.NameColumns, 1);
 
+    private bool RevealPluginCursor(int? index = null)
+    {
+        if (_session is not { StartsWithoutCursor: true } session || session.Extension.CursorVisible)
+        {
+            return false;
+        }
+
+        if (session.FreezeOrderWhileCursorVisible)
+        {
+            session.Extension.FrozenOrder = State.Entries
+                .Select((entry, position) => (entry.Name, position))
+                .ToDictionary(item => item.Name, item => item.position, StringComparer.OrdinalIgnoreCase);
+        }
+
+        session.Extension.CursorVisible = true;
+        State.SetCursor(index ?? 0);
+        return true;
+    }
+
+    private bool HidePluginCursor()
+    {
+        if (_session is not { StartsWithoutCursor: true } session || !session.Extension.CursorVisible)
+        {
+            return false;
+        }
+
+        session.Extension.CursorVisible = false;
+        session.Extension.FrozenOrder = null;
+        State.SetExtension(session.Extension);
+        State.SetCursor(0);
+        _list.ScrollToTop();
+        Refresh();
+        return true;
+    }
+
     private static (string, bool) RowKey(FileEntry entry) => (entry.Name, entry.IsDirectory);
 
     private static FileEntry ToRow(PanelEntry entry)
@@ -410,7 +447,10 @@ public sealed partial class FilePanel
                 Icon = row => Entries.TryGetValue(RowKey(row), out var entry) ? entry.Icon : null,
                 SortKey = defaultSortKey,
                 SortDescending = defaultSortKey is not null && PluginManager.Guard(plugin, () => provider.DefaultSortDescending, false),
+                CursorVisible = !PluginManager.Guard(plugin, () => provider.StartsWithoutCursor, false),
             };
+            StartsWithoutCursor = !Extension.CursorVisible;
+            FreezeOrderWhileCursorVisible = StartsWithoutCursor && PluginManager.Guard(plugin, () => provider.FreezeOrderWhileCursorVisible, false);
         }
 
         public LoadedPlugin Plugin { get; }
@@ -422,6 +462,10 @@ public sealed partial class FilePanel
         public string? ReturnFocus { get; }
 
         public PanelExtension Extension { get; }
+
+        public bool StartsWithoutCursor { get; }
+
+        public bool FreezeOrderWhileCursorVisible { get; }
 
         public Dictionary<(string, bool), PanelEntry> Entries { get; set; } = [];
 
