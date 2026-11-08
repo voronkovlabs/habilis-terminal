@@ -7,7 +7,7 @@ disk.
 ## Install
 
 1. Copy the plugin folder (the published `aws.s3` folder, which holds `plugin.json`, `Habilis.Aws.S3.dll` and the AWS
-   SDK assemblies) to `%LOCALAPPDATA%\HabilisTerminal\plugins\aws.s3`. No administrator rights are needed.
+   SDK assemblies) to `%LOCALAPPDATA%\VoronkovLabs\HabilisTerminal\plugins\aws.s3`. No administrator rights are needed.
 2. Restart Habilis Terminal. The plugin appears in F9 > Options > Plugins.
 
 The plugin reads AWS profiles from the standard `%USERPROFILE%\.aws\config` and `%USERPROFILE%\.aws\credentials`

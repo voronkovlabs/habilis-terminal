@@ -39,6 +39,7 @@ public partial class App : Application
         base.OnStartup(e);
         Reporting.CrashCapture.Install(this);
         Paths = AppPaths.Resolve(AppContext.BaseDirectory);
+        AppPaths.MigrateLegacyData(Paths);
         Settings = new SettingsStore(Paths.SettingsFile);
         Settings.Load();
         SettingsStore.WriteSchema(Paths.SchemaFile);

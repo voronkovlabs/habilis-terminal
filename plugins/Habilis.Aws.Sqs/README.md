@@ -7,7 +7,7 @@ Implements issue #48.
 ## Install
 
 Build with `tools/plugins/Build-Plugins.ps1`, then copy `artifacts/plugins/aws.sqs` into
-`%LOCALAPPDATA%\HabilisTerminal\plugins\aws.sqs` (or the `plugins` folder next to a portable `habi.exe`) and restart
+`%LOCALAPPDATA%\VoronkovLabs\HabilisTerminal\plugins\aws.sqs` (or the `plugins` folder next to a portable `habi.exe`) and restart
 Habilis Terminal. No administrator rights are needed.
 
 ## Open

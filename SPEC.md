@@ -468,7 +468,7 @@ Approach:
 - **Settings:** `%APPDATA%\HabilisTerminal\settings.json` — JSONC with a JSON Schema; contains only values changed by
   the user; defaults live in code. Reloaded live via a file watcher. On a syntax / validation error the last valid values
   stay in effect and a notification shows the line number.
-- **State:** `%LOCALAPPDATA%\HabilisTerminal\state.json` — panel paths, modes, sorting, column widths, splitter positions,
+- **State:** `%LOCALAPPDATA%\VoronkovLabs\HabilisTerminal\state.json` — panel paths, modes, sorting, column widths, splitter positions,
   panel visibility, window placement, folder history, view / edit history. Written atomically on exit and periodically.
   Command history is PSReadLine's own.
 - **Themes:** `%APPDATA%\HabilisTerminal\themes\*.json`.

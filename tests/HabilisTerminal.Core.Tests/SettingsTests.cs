@@ -160,13 +160,76 @@ public class SettingsTests
         var installed = AppPaths.Resolve(exe, roaming, local);
         Assert.False(installed.IsPortable);
         Assert.Equal(Path.Combine(roaming, "HabilisTerminal", "settings.json"), installed.SettingsFile);
-        Assert.Equal(Path.Combine(local, "HabilisTerminal", "state.json"), installed.StateFile);
+        Assert.Equal(Path.Combine(local, "VoronkovLabs", "HabilisTerminal", "state.json"), installed.StateFile);
 
         File.WriteAllText(Path.Combine(exe, "portable"), string.Empty);
         var portable = AppPaths.Resolve(exe, roaming, local);
         Assert.True(portable.IsPortable);
         Assert.Equal(Path.Combine(exe, "state.json"), portable.StateFile);
         Assert.Equal(Path.Combine(exe, "themes"), portable.ThemesDirectory);
+    }
+
+    [Fact]
+    public void Installed_data_moves_out_of_the_package_root_once()
+    {
+        using var sandbox = new TestSandbox();
+        var local = Path.Combine(sandbox.Path, "local");
+        var legacy = Directory.CreateDirectory(Path.Combine(local, "HabilisTerminal")).FullName;
+        File.WriteAllText(Path.Combine(legacy, "state.json"), "state");
+        File.WriteAllText(Path.Combine(legacy, "package.nupkg"), "package");
+        Directory.CreateDirectory(Path.Combine(legacy, "plugins", "mine"));
+        File.WriteAllText(Path.Combine(legacy, "plugins", "mine", "plugin.json"), "plugin");
+        Directory.CreateDirectory(Path.Combine(legacy, "crashes"));
+        File.WriteAllText(Path.Combine(legacy, "crashes", "crash.json"), "crash");
+        Directory.CreateDirectory(Path.Combine(legacy, "diagnostics"));
+        File.WriteAllText(Path.Combine(legacy, "diagnostics", "report.json"), "report");
+        Directory.CreateDirectory(Path.Combine(legacy, "WebView2"));
+
+        var paths = AppPaths.Resolve(Path.Combine(legacy, "current"), Path.Combine(sandbox.Path, "roaming"), local);
+        AppPaths.MigrateLegacyData(paths, local);
+
+        Assert.Equal("state", File.ReadAllText(paths.StateFile));
+        Assert.True(File.Exists(Path.Combine(paths.PluginsDirectory, "mine", "plugin.json")));
+        Assert.True(File.Exists(Path.Combine(paths.CrashDirectory, "crash.json")));
+        Assert.True(File.Exists(Path.Combine(paths.DiagnosticsDirectory, "report.json")));
+        Assert.False(File.Exists(Path.Combine(legacy, "state.json")));
+        Assert.False(Directory.Exists(Path.Combine(legacy, "plugins")));
+        Assert.True(File.Exists(Path.Combine(legacy, "package.nupkg")));
+        Assert.True(Directory.Exists(Path.Combine(legacy, "WebView2")));
+    }
+
+    [Fact]
+    public void Existing_new_data_wins_over_legacy_data()
+    {
+        using var sandbox = new TestSandbox();
+        var local = Path.Combine(sandbox.Path, "local");
+        var legacy = Directory.CreateDirectory(Path.Combine(local, "HabilisTerminal")).FullName;
+        File.WriteAllText(Path.Combine(legacy, "state.json"), "old");
+        var paths = AppPaths.Resolve(Path.Combine(legacy, "current"), Path.Combine(sandbox.Path, "roaming"), local);
+        Directory.CreateDirectory(paths.StateDirectory);
+        File.WriteAllText(paths.StateFile, "new");
+
+        AppPaths.MigrateLegacyData(paths, local);
+
+        Assert.Equal("new", File.ReadAllText(paths.StateFile));
+        Assert.Equal("old", File.ReadAllText(Path.Combine(legacy, "state.json")));
+    }
+
+    [Fact]
+    public void Portable_data_is_never_migrated()
+    {
+        using var sandbox = new TestSandbox();
+        var local = Path.Combine(sandbox.Path, "local");
+        var legacy = Directory.CreateDirectory(Path.Combine(local, "HabilisTerminal")).FullName;
+        File.WriteAllText(Path.Combine(legacy, "state.json"), "installed");
+        var portableDirectory = Directory.CreateDirectory(Path.Combine(sandbox.Path, "portable")).FullName;
+        File.WriteAllText(Path.Combine(portableDirectory, AppPaths.PortableMarker), string.Empty);
+        var paths = AppPaths.Resolve(portableDirectory, Path.Combine(sandbox.Path, "roaming"), local);
+
+        AppPaths.MigrateLegacyData(paths, local);
+
+        Assert.False(File.Exists(paths.StateFile));
+        Assert.True(File.Exists(Path.Combine(legacy, "state.json")));
     }
 
     [Fact]

@@ -40,7 +40,7 @@ If it does not work, `habi-plugin.ps1 list -Json` shows why, with the whole exce
 
 The generated project compiles against `HabilisTerminal.Plugins.Sdk.dll` in the folder of `habi.exe`, with its comments in the `.xml` beside it. If that folder moves, change `HabiDir` in the project. The samples are in the repository, at https://github.com/voronkovlabs/habilis-terminal/tree/main/plugins.
 
-To keep it after a restart, copy `bin\Release\net10.0` to `%LOCALAPPDATA%\HabilisTerminal\plugins\me.mypanel\`.
+To keep it after a restart, copy `bin\Release\net10.0` to `%LOCALAPPDATA%\VoronkovLabs\HabilisTerminal\plugins\me.mypanel\`.
 
 For a format, use `-Kind FileFormat -Extension myf`, then press Enter on a `.myf` file.
 
@@ -107,7 +107,7 @@ From the three plugin briefs (#46 S3, #47 SageMaker training jobs, #48 SQS):
 ## 3. Discovery and loading
 
 - **Folders:** `<app>\plugins\<id>\` (the standard plugins shipped with the app, issue #58; also test copies) and
-  `%LOCALAPPDATA%\HabilisTerminal\plugins\<id>\` (plugins the user installs). When both hold the same plugin id, the
+  `%LOCALAPPDATA%\VoronkovLabs\HabilisTerminal\plugins\<id>\` (plugins the user installs). When both hold the same plugin id, the
   higher manifest version loads; on a tie the shipped one.
 - **Manifest:** `plugin.json` in each plugin folder:
   ```json

@@ -2,13 +2,16 @@ namespace HabilisTerminal.Core.Settings;
 
 /// <summary>
 /// Where settings, state and user themes live (SPEC §14): <c>%APPDATA%\HabilisTerminal</c> for settings and themes,
-/// <c>%LOCALAPPDATA%\HabilisTerminal</c> for state — or everything next to the executable in portable mode
+/// <c>%LOCALAPPDATA%\VoronkovLabs\HabilisTerminal</c> for state — or everything next to the executable in portable mode
 /// (a <c>settings.json</c> or a <c>portable</c> marker beside it).
 /// </summary>
 public sealed record AppPaths(string SettingsDirectory, string StateDirectory, bool IsPortable)
 {
+    public const string CompanyFolder = "VoronkovLabs";
     public const string ProductFolder = "HabilisTerminal";
     public const string PortableMarker = "portable";
+
+    private static readonly string[] LegacyStateEntries = ["state.json", "crashes", "diagnostics", "plugins"];
 
     public string SettingsFile => Path.Combine(SettingsDirectory, "settings.json");
 
@@ -42,6 +45,62 @@ public sealed record AppPaths(string SettingsDirectory, string StateDirectory, b
             return new AppPaths(executableDirectory, executableDirectory, IsPortable: true);
         }
 
-        return new AppPaths(Path.Combine(roamingAppData, ProductFolder), Path.Combine(localAppData, ProductFolder), IsPortable: false);
+        return new AppPaths(
+            Path.Combine(roamingAppData, ProductFolder),
+            Path.Combine(localAppData, CompanyFolder, ProductFolder),
+            IsPortable: false);
+    }
+
+    /// <summary>
+    /// Moves persistent local data out of Velopack's legacy package root. Velopack removes that root on uninstall;
+    /// the separate company folder survives and is picked up after a later installation. Installed application files
+    /// and disposable WebView2 data are deliberately not moved.
+    /// </summary>
+    public static void MigrateLegacyData(AppPaths paths) => MigrateLegacyData(
+        paths,
+        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData));
+
+    public static void MigrateLegacyData(AppPaths paths, string localAppData)
+    {
+        if (paths.IsPortable)
+        {
+            return;
+        }
+
+        var legacyDirectory = Path.Combine(localAppData, ProductFolder);
+        foreach (var name in LegacyStateEntries)
+        {
+            TryMoveIfMissing(Path.Combine(legacyDirectory, name), Path.Combine(paths.StateDirectory, name));
+        }
+    }
+
+    private static void TryMoveIfMissing(string source, string destination)
+    {
+        try
+        {
+            if (File.Exists(source))
+            {
+                if (File.Exists(destination) || Directory.Exists(destination))
+                {
+                    return;
+                }
+
+                Directory.CreateDirectory(Path.GetDirectoryName(destination)!);
+                File.Move(source, destination);
+            }
+            else if (Directory.Exists(source) && !File.Exists(destination) && !Directory.Exists(destination))
+            {
+                Directory.CreateDirectory(Path.GetDirectoryName(destination)!);
+                Directory.Move(source, destination);
+            }
+        }
+        catch (IOException)
+        {
+            // A failed migration must not keep the application from starting; the legacy data remains untouched.
+        }
+        catch (UnauthorizedAccessException)
+        {
+            // The old package root may already be protected or in the middle of an update.
+        }
     }
 }

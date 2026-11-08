@@ -8,7 +8,7 @@ and save the full records of selected jobs as JSON files. Implements issue #47.
 ## Install
 
 Build with `tools/plugins/Build-Plugins.ps1`, then copy `artifacts/plugins/aws.sagemaker` into
-`%LOCALAPPDATA%\HabilisTerminal\plugins\aws.sagemaker` (or the `plugins` folder next to a portable `habi.exe`) and
+`%LOCALAPPDATA%\VoronkovLabs\HabilisTerminal\plugins\aws.sagemaker` (or the `plugins` folder next to a portable `habi.exe`) and
 restart Habilis Terminal. No administrator rights are needed.
 
 ## Open

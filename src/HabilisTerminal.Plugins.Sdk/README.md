@@ -7,7 +7,7 @@ Contracts for Habilis Terminal plugins. A plugin is a .NET 10 class library with
 { "id": "example.hello", "name": "Hello", "version": "1.0.0", "assembly": "Example.Hello.dll", "sdk": "1.0" }
 ```
 
-Install by copying the published folder into `%LOCALAPPDATA%\HabilisTerminal\plugins\<id>\` (or the `plugins`
+Install by copying the published folder into `%LOCALAPPDATA%\VoronkovLabs\HabilisTerminal\plugins\<id>\` (or the `plugins`
 folder next to a portable `habi.exe`).
 
 - Entry points: `Plugin.MenuItems` (F11), `Plugin.DriveMenuItems` (Alt+F1 / Alt+F2), `Plugin.Prefixes` with
