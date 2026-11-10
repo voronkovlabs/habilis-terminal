@@ -96,6 +96,20 @@ public sealed class PanelState
     /// <summary>Ctrl+H.</summary>
     public bool ShowHidden { get; private set; } = true;
 
+    /// <summary>The quick filter (issue #201): only names containing it are shown, in any case. Null shows all.</summary>
+    public string? NameFilter { get; private set; }
+
+    /// <summary>Marks on names the filter hides go, so that an operation never acts on rows that are not shown.</summary>
+    public void SetNameFilter(string? text)
+    {
+        NameFilter = string.IsNullOrEmpty(text) ? null : text;
+        RebuildKeepingCursor();
+        if (NameFilter is not null)
+        {
+            Selection.RetainExisting(_items);
+        }
+    }
+
     public PanelViewMode ViewMode { get; set; } = PanelViewMode.Medium;
 
     /// <summary>Columns, groups, tones and custom sorting of a plugin panel (issue #49); null for a folder.</summary>
@@ -146,6 +160,11 @@ public sealed class PanelState
         var samePath = string.Equals(path, Path, StringComparison.OrdinalIgnoreCase);
         var previousName = Count > 0 ? Current.Name : null;
         var previousIndex = CursorIndex;
+
+        if (!samePath)
+        {
+            NameFilter = null; // a filter belongs to one folder
+        }
 
         Path = path;
         HasParent = hasParent ?? (System.IO.Path.GetDirectoryName(path.TrimEnd('\\')) is not null && !IsUncRoot(path));
@@ -301,6 +320,10 @@ public sealed class PanelState
     private void Rebuild()
     {
         IReadOnlyList<FileEntry> visible = ShowHidden ? _raw : _raw.Where(e => !e.IsHidden && !e.IsSystem).ToArray();
+        if (NameFilter is { } filter)
+        {
+            visible = visible.Where(e => e.Name.Contains(filter, StringComparison.OrdinalIgnoreCase)).ToArray();
+        }
         var sorted = EntrySorter.Sort(visible, Sort, Culture, Sort.Mode == SortMode.Size ? e => FolderSizeOf(e.Name)?.Bytes : null);
         if (SelectedFirst && Selection.Count > 0)
         {

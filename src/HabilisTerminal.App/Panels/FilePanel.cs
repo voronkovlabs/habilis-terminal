@@ -32,6 +32,12 @@ public sealed partial class FilePanel : Border
     private FilePanel? _quickViewSource;
     private readonly TextBlock _title = new();
     private readonly TextBlock _path = new();
+    private readonly Border _filterBadge = new();
+    private readonly TextBlock _filterText = new();
+    private readonly TextBlock _filterClear = new();
+
+    /// <summary>The box below the list is the quick filter (Ctrl+Alt+letter), not the quick search (Alt+letter).</summary>
+    private bool _quickFilter;
     private readonly TextBlock _message = new();
     private readonly TextBlock _status = new();
     private readonly TextBlock _statusRight = new();
@@ -109,6 +115,35 @@ public sealed partial class FilePanel : Border
         var header = new DockPanel { Margin = new Thickness(10, 6, 10, 6), LastChildFill = true };
         DockPanel.SetDock(_title, Dock.Left);
         header.Children.Add(_title);
+
+        // The quick filter in force (issue #201): its text, and a cross that clears it.
+        _filterText.FontFamily = _filterClear.FontFamily = new FontFamily("Segoe UI");
+        _filterText.FontSize = 11;
+        _filterText.VerticalAlignment = VerticalAlignment.Center;
+        _filterClear.Text = "  ✕";
+        _filterClear.FontSize = 11;
+        _filterClear.VerticalAlignment = VerticalAlignment.Center;
+        _filterClear.Cursor = System.Windows.Input.Cursors.Hand;
+        _filterClear.ToolTip = "Clear the filter (Esc)";
+        // A larger target than the glyph, taken on the press: the panel takes the focus on the press too.
+        var clearTarget = new Border { Child = _filterClear, Background = Brushes.Transparent, Padding = new Thickness(2, 0, 2, 0), Cursor = System.Windows.Input.Cursors.Hand };
+        clearTarget.PreviewMouseLeftButtonDown += (_, e) =>
+        {
+            ClearQuickFilter();
+            e.Handled = true;
+        };
+        var filterRow = new StackPanel { Orientation = Orientation.Horizontal };
+        filterRow.Children.Add(_filterText);
+        filterRow.Children.Add(clearTarget);
+        _filterBadge.Child = filterRow;
+        _filterBadge.BorderThickness = new Thickness(1);
+        _filterBadge.CornerRadius = new CornerRadius(3);
+        _filterBadge.Padding = new Thickness(6, 0, 6, 0);
+        _filterBadge.Margin = new Thickness(8, 0, 0, 0);
+        _filterBadge.Visibility = Visibility.Collapsed;
+        ApplyFilterBadgeTheme();
+        DockPanel.SetDock(_filterBadge, Dock.Right);
+        header.Children.Add(_filterBadge);
         header.Children.Add(_path);
 
         var status = new DockPanel { Margin = new Thickness(10, 3, 10, 4), LastChildFill = true };
@@ -333,6 +368,7 @@ public sealed partial class FilePanel : Border
         Background = PanelPalette.Background;
         _title.Foreground = PanelPalette.Foreground;
         _path.Foreground = PanelPalette.DescriptionForeground;
+        ApplyFilterBadgeTheme();
         _message.Foreground = PanelPalette.ErrorForeground;
         _statusRight.Foreground = PanelPalette.DescriptionForeground;
         _quickSearchText.Foreground = PanelPalette.Foreground;
@@ -691,6 +727,7 @@ public sealed partial class FilePanel : Border
         }
 
         UpdateTitle();
+        UpdateFilterBadge();
         UpdateStatus();
         _list.Refresh();
         Changed?.Invoke(this);
@@ -701,6 +738,13 @@ public sealed partial class FilePanel : Border
     {
         if (IsQuickSearchActive && HandleQuickSearchKey(key, modifiers))
         {
+            return true;
+        }
+
+        // Esc on a filtered panel shows everything again (issue #201).
+        if (key == Key.Escape && modifiers == KeyModifiers.None && State.NameFilter is not null)
+        {
+            ClearQuickFilter();
             return true;
         }
 
@@ -844,6 +888,16 @@ public sealed partial class FilePanel : Border
             return true;
         }
 
+        // Ctrl+Alt+letter starts the quick filter (issue #201).
+        if (CtrlAltLetter(key, modifiers) is { } first)
+        {
+            CloseQuickSearch();
+            _quickFilter = true;
+            QuickSearchText = string.Empty;
+            AppendQuickSearch(first.ToString());
+            return true;
+        }
+
         // Alt+letter starts quick search (Far).
         if (AltLetter(key, modifiers) is { } letter)
         {
@@ -870,9 +924,69 @@ public sealed partial class FilePanel : Border
             ? letter
             : null;
 
+    /// <summary>The character of Ctrl+Alt+key (or with Shift) in the current keyboard layout, or null.</summary>
+    private static char? CtrlAltLetter(Key key, KeyModifiers modifiers) =>
+        modifiers is (KeyModifiers.Control | KeyModifiers.Alt) or (KeyModifiers.Control | KeyModifiers.Alt | KeyModifiers.Shift) &&
+        KeyText.CharOf(key, modifiers.HasFlag(KeyModifiers.Shift)) is { } letter && !char.IsWhiteSpace(letter) && !char.IsControl(letter)
+            ? letter
+            : null;
+
+    /// <summary>Clears the quick filter and closes its box; the cursor stays on the same name.</summary>
+    public void ClearQuickFilter()
+    {
+        if (_quickFilter)
+        {
+            CloseQuickSearch();
+        }
+
+        if (State.NameFilter is null)
+        {
+            return;
+        }
+
+        State.SetNameFilter(null);
+        Refresh();
+    }
+
+    private void SetQuickFilter(string text)
+    {
+        QuickSearchText = text;
+        State.SetNameFilter(text);
+        _quickSearchText.Text = "Filter: " + text;
+        _quickSearch.Visibility = Visibility.Visible;
+        Refresh();
+    }
+
+    private void UpdateFilterBadge()
+    {
+        if (State.NameFilter is { } filter)
+        {
+            _filterText.Text = "Filter: " + filter;
+            _filterBadge.Visibility = Visibility.Visible;
+        }
+        else
+        {
+            _filterBadge.Visibility = Visibility.Collapsed;
+        }
+    }
+
+    private void ApplyFilterBadgeTheme()
+    {
+        _filterBadge.Background = PanelPalette.InputBackground;
+        _filterBadge.BorderBrush = PanelPalette.FocusOutline;
+        _filterText.Foreground = PanelPalette.Foreground;
+        _filterClear.Foreground = PanelPalette.Foreground;
+    }
+
     /// <summary>Printable text typed while quick search is open.</summary>
     public void AppendQuickSearch(string text)
     {
+        if (_quickFilter)
+        {
+            SetQuickFilter((QuickSearchText ?? string.Empty) + text);
+            return;
+        }
+
         var candidate = (QuickSearchText ?? string.Empty) + text;
         var found = State.FindNext(candidate, State.CursorIndex);
         if (found < 0 && QuickSearchText is { Length: > 0 })
@@ -895,6 +1009,7 @@ public sealed partial class FilePanel : Border
 
     public void CloseQuickSearch()
     {
+        _quickFilter = false;
         QuickSearchText = null;
         _quickSearch.Visibility = Visibility.Collapsed;
     }
@@ -1002,6 +1117,11 @@ public sealed partial class FilePanel : Border
 
     private bool HandleQuickSearchKey(Key key, KeyModifiers modifiers)
     {
+        if (_quickFilter)
+        {
+            return HandleQuickFilterKey(key, modifiers);
+        }
+
         switch (key)
         {
             case Key.Back:
@@ -1043,6 +1163,47 @@ public sealed partial class FilePanel : Border
                 }
 
                 // Any other key closes the search and is processed normally (Far).
+                CloseQuickSearch();
+                return false;
+        }
+    }
+
+    /// <summary>
+    /// While the filter's box is open: Backspace edits, Esc clears the filter, Enter keeps it and closes the box, and any
+    /// other key closes the box, keeps the filter and is processed normally.
+    /// </summary>
+    private bool HandleQuickFilterKey(Key key, KeyModifiers modifiers)
+    {
+        switch (key)
+        {
+            case Key.Back:
+                var text = QuickSearchText!;
+                if (text.Length <= 1)
+                {
+                    ClearQuickFilter();
+                }
+                else
+                {
+                    SetQuickFilter(text[..^1]);
+                }
+
+                return true;
+            case Key.Escape:
+                ClearQuickFilter();
+                return true;
+            case Key.Enter when modifiers == KeyModifiers.None:
+                CloseQuickSearch();
+                Refresh();
+                return true;
+            case Key.LeftShift or Key.RightShift or Key.LeftCtrl or Key.RightCtrl or Key.LeftAlt or Key.RightAlt or Key.System:
+                return false;
+            default:
+                if (CtrlAltLetter(key, modifiers) is { } letter)
+                {
+                    AppendQuickSearch(letter.ToString());
+                    return true;
+                }
+
                 CloseQuickSearch();
                 return false;
         }
@@ -1371,6 +1532,14 @@ public sealed partial class FilePanel : Border
         if (!CursorVisible)
         {
             _status.Text = string.Empty;
+            _statusRight.Text = string.Empty;
+            return;
+        }
+
+        // A filter that leaves only "..": the status line says why the panel is empty (issue #201).
+        if (State.NameFilter is { } filter && State.Count == (State.HasParent ? 1 : 0))
+        {
+            _status.Text = $"No names contain \u201C{filter}\u201D";
             _statusRight.Text = string.Empty;
             return;
         }

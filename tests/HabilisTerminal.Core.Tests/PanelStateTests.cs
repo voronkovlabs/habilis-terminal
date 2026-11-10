@@ -22,6 +22,59 @@ public class PanelStateTests
 
     private static string[] Names(PanelState state) => Enumerable.Range(0, state.Count).Select(i => state.ItemAt(i).Name).ToArray();
 
+    private static string[] Rows(PanelState state) => Names(state).Where(n => n != "..").ToArray();
+
+    [Fact]
+    public void The_quick_filter_keeps_names_containing_the_text_in_any_case_folders_too()
+    {
+        var state = Create(@"C:\work", File("app.log"), File("readme.md"), Dir("logs"), Dir("src"), File("Changelog.txt"));
+
+        state.SetNameFilter("LOG");
+
+        Assert.Equal(["logs", "app.log", "Changelog.txt"], Rows(state));
+        Assert.Equal("..", state.ItemAt(0).Name);
+        state.SetNameFilter(null);
+        Assert.Equal(5, Rows(state).Length);
+    }
+
+    [Fact]
+    public void The_quick_filter_can_leave_nothing()
+    {
+        var state = Create(@"C:\work", File("a.txt"));
+
+        state.SetNameFilter("zzz");
+
+        Assert.Empty(Rows(state));
+    }
+
+    [Fact]
+    public void Marks_on_names_the_filter_hides_are_dropped()
+    {
+        var state = Create(@"C:\work", File("keep.log"), File("drop.txt"));
+        state.Selection.Toggle("keep.log");
+        state.Selection.Toggle("drop.txt");
+
+        state.SetNameFilter("log");
+
+        Assert.True(state.Selection.Contains("keep.log"));
+        Assert.False(state.Selection.Contains("drop.txt"));
+    }
+
+    [Fact]
+    public void The_quick_filter_stays_on_a_refresh_and_goes_with_another_folder()
+    {
+        var state = Create(@"C:\work", File("a.log"), File("b.txt"));
+        state.SetNameFilter("log");
+
+        state.SetListing(@"C:\work", [File("a.log"), File("b.txt"), File("c.log")]);
+        Assert.Equal(["a.log", "c.log"], Rows(state));
+        Assert.Equal("log", state.NameFilter);
+
+        state.SetListing(@"C:\other", [File("x.txt")]);
+        Assert.Null(state.NameFilter);
+        Assert.Equal(["x.txt"], Rows(state));
+    }
+
     [Fact]
     public void New_panels_start_in_medium_view_like_far()
     {
