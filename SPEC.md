@@ -352,6 +352,16 @@ As Far's arclite, on 7-Zip's `7z.dll` (26.04, `third_party/7-Zip`). This is the 
 - 7z.dll objects are created and called on thread-pool threads only (they have no COM proxies for the UI thread).
 - Not yet (issue #63): Shift+F1 pack into a new archive, Shift+F2 extract, Shift+F3 test, multi-volume archives.
 
+### 8.2 GitHub (issue #214)
+The plugin `plugins/Habilis.GitHub`, read-only, at `gh:` (F11, the drive menu, the command line).
+- Levels: owners (the signed-in user first), an owner's repositories (Created, Last commit of the default branch,
+  Kind), a repository's branches (Created = first commit not on the default branch, Last commit, Ahead, Behind, last
+  author), a branch's folders and files (Size, Last commit). Costly dates come in the background.
+- F3 views, F5 copies out; F9 > Panel: Open in browser, Clone address, Refresh from GitHub, Sign out of GitHub.
+- Sign-in: GitHub's device flow with the project's OAuth App (client ID in the plugin, replaceable in its settings).
+  The token is kept in Windows Credential Manager (`HabilisTerminal:github`). Straight HTTPS to `api.github.com`,
+  REST and GraphQL; no gh CLI.
+
 ## 9. Viewer (F3) and editor (F4)
 
 Both open as full-window pages over panels and terminal. Esc / F10 closes and returns the cursor where it was.

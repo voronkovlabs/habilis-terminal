@@ -353,6 +353,8 @@ as "<plugin> failed: <message>". Plugin calls run off the UI thread or are await
 
 **Archives** (`plugins/Habilis.Archives`, #51, #149): archives as folders on 7-Zip. Claims the usual archive extensions; Ctrl+PgDn tries any file.
 
+**GitHub** (`plugins/Habilis.GitHub`, #214): owners, repositories, branches and files with their dates, read-only, at `gh:`. Signs in with GitHub's device flow; the token stays in Windows Credential Manager. A model for a panel over a web API with a sign-in: data filled in the background after the listing, and `Host.Refresh` as it arrives.
+
 ### AWS plugins
 
 Shared by the three plugins, in `plugins/Habilis.Aws.Common`: AWS profiles from the standard shared config and

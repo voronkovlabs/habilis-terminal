@@ -8,6 +8,7 @@
   <Project Path="Habilis.TaskManager/Habilis.TaskManager.csproj" />
   <Project Path="Habilis.Archives/Habilis.Archives.csproj" />
   <Project Path="Habilis.Samples.FileFormat/Habilis.Samples.FileFormat.csproj" />
+  <Project Path="Habilis.GitHub/Habilis.GitHub.csproj" />
   <Project Path="Habilis.Aws.Tests/Habilis.Aws.Tests.csproj" />
   <Project Path="Habilis.Aws.SageMaker.Tests/Habilis.Aws.SageMaker.Tests.csproj" />
   <Project Path="Habilis.Aws.S3.Tests/Habilis.Aws.S3.Tests.csproj" />
@@ -15,4 +16,5 @@
   <Project Path="Habilis.TaskManager.Tests/Habilis.TaskManager.Tests.csproj" />
   <Project Path="Habilis.Archives.Tests/Habilis.Archives.Tests.csproj" />
   <Project Path="Habilis.Samples.FileFormat.Tests/Habilis.Samples.FileFormat.Tests.csproj" />
+  <Project Path="Habilis.GitHub.Tests/Habilis.GitHub.Tests.csproj" />
 </Solution>
