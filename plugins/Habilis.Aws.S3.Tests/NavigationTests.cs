@@ -42,7 +42,7 @@ public class NavigationTests
     [Fact]
     public async Task Bucket_list_shows_buckets_as_folders()
     {
-        var api = new FakeS3().AddBucket("logs", "EU").AddBucket("photos", "ap-southeast-2");
+        var api = new FakeS3().AddBucket("logs", "EU").AddBucket("photos", "ap-southeast-2").Add("logs", "one.txt", "12345");
         var panel = await S3Test.OpenAsync(api);
 
         var entries = await Listing.AllAsync(panel);
@@ -50,6 +50,11 @@ public class NavigationTests
         Assert.Equal(["logs", "photos"], entries.Select(e => e.Name));
         Assert.All(entries, e => Assert.True(e.IsFolder));
         Assert.All(entries, e => Assert.Equal(PanelIcons.Bucket, e.Icon)); // issue #69
+        Assert.Equal(5, entries[0].Size);
+        Assert.Equal("5 B", entries[0].Cells![PanelColumn.SizeKey].Text);
+        Assert.Equal(1L, entries[0].Cells![S3Panel.ObjectCountKey].SortValue);
+        Assert.Equal(0, entries[1].Size);
+        Assert.Equal(1, api.MetricsCalls);
         Assert.Equal(new DateTime(2024, 1, 2, 3, 4, 5, DateTimeKind.Utc), entries[0].Modified);
         Assert.Equal("s3:", panel.Location);
         Assert.Equal("S3 · default", panel.Title);
@@ -57,15 +62,35 @@ public class NavigationTests
     }
 
     [Fact]
-    public async Task The_bucket_list_has_no_parent_row_and_two_name_columns_while_a_bucket_is_a_normal_list()
+    public async Task Bucket_metrics_use_a_normal_single_name_column_and_the_bucket_list_has_no_parent_row()
     {
         var panel = await S3Test.OpenAsync(new FakeS3().AddBucket("logs", "EU").Add("logs", "a.txt", "x"));
         Assert.False(panel.ShowsParent);
-        Assert.Equal(2, panel.NameColumns);
+        Assert.Equal(1, panel.NameColumns);
 
         Assert.True(await panel.EnterAsync(await S3Test.EntryAsync(panel, "logs"), CancellationToken.None));
         Assert.True(panel.ShowsParent);
         Assert.Equal(1, panel.NameColumns);
+    }
+
+    [Fact]
+    public async Task Missing_cloudwatch_permission_does_not_hide_the_bucket_list()
+    {
+        var api = new FakeS3
+        {
+            MetricsError = new Amazon.CloudWatch.AmazonCloudWatchException("Access denied")
+            {
+                ErrorCode = "AccessDenied",
+                StatusCode = System.Net.HttpStatusCode.Forbidden,
+            },
+        }.AddBucket("logs", "EU");
+        var panel = await S3Test.OpenAsync(api);
+
+        var entries = await Listing.AllAsync(panel);
+
+        Assert.Equal("logs", Assert.Single(entries).Name);
+        Assert.Null(entries[0].Size);
+        Assert.Contains(panel.Info, line => line.Label == "Bucket metrics" && line.Value.Contains("cloudwatch:GetMetricData", StringComparison.Ordinal));
     }
 
     [Fact]

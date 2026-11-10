@@ -15,6 +15,20 @@ public class S3ApiTests
     private const string Xmlns = "xmlns=\"http://s3.amazonaws.com/doc/2006-03-01/\"";
 
     [Fact]
+    public void Bucket_metric_queries_sum_storage_types_and_count_all_objects()
+    {
+        var queries = S3Api.BucketMetricQueries([new S3BucketInfo("my-bucket", null, "eu-west-1")]);
+
+        Assert.Equal(2, queries.Count);
+        Assert.Contains("BucketSizeBytes", queries[0].Expression, StringComparison.Ordinal);
+        Assert.Contains("BucketName=\"my-bucket\"", queries[0].Expression, StringComparison.Ordinal);
+        Assert.StartsWith("SUM(SEARCH(", queries[0].Expression, StringComparison.Ordinal);
+        Assert.Equal("NumberOfObjects", queries[1].MetricStat.Metric.MetricName);
+        Assert.Contains(queries[1].MetricStat.Metric.Dimensions, d => d is { Name: "StorageType", Value: "AllStorageTypes" });
+        Assert.Equal(86400, queries[1].MetricStat.Period);
+    }
+
+    [Fact]
     public async Task Listings_ask_for_url_encoding_and_decode_keys_and_prefixes()
     {
         var http = new CannedHttp();

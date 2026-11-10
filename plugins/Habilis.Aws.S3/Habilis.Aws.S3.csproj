@@ -4,6 +4,7 @@
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="HabilisTerminal.Plugins.Sdk" PrivateAssets="all" ExcludeAssets="runtime" />
+    <PackageReference Include="AWSSDK.CloudWatch" />
     <PackageReference Include="AWSSDK.S3" />
   </ItemGroup>
   <ItemGroup>

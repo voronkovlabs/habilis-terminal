@@ -28,6 +28,7 @@ internal sealed record S3Ref(S3Kind Kind, string Bucket, string Key, long Size =
 internal sealed partial class S3Panel : IPanelProvider, IPanelCommands, IGetFiles, IPutFiles, IDeleteEntries, IMakeFolder
 {
     public const string StorageClassKey = "class";
+    public const string ObjectCountKey = "objects";
     private const int DeleteBatch = 1000;
 
     private readonly IPluginHost _host;
@@ -41,6 +42,7 @@ internal sealed partial class S3Panel : IPanelProvider, IPanelCommands, IGetFile
     private S3Location _location;
     private IS3Api? _api;
     private Summary? _summary;
+    private string? _bucketMetricsStatus;
 
     public S3Panel(IPluginHost host, S3Settings settings, AwsSession session, S3Location location, Func<AwsSession, IS3Api> connect)
     {
@@ -66,12 +68,12 @@ internal sealed partial class S3Panel : IPanelProvider, IPanelCommands, IGetFile
 
     public IReadOnlyList<PanelLayout> Layouts { get; } =
     [
-        new("Files", [PanelColumn.Size, PanelColumn.Modified]),
+        new("Files", [PanelColumn.Size, new PanelColumn(ObjectCountKey, "Objects", 84, AlignRight: true), PanelColumn.Modified]),
         new("Storage class", [PanelColumn.Size, PanelColumn.Modified, new PanelColumn(StorageClassKey, "Class", 110)]),
         new("Names", []),
     ];
 
-    public IReadOnlyList<PanelSortKey> SortKeys { get; } = [new(StorageClassKey, "Storage class")];
+    public IReadOnlyList<PanelSortKey> SortKeys { get; } = [new(StorageClassKey, "Storage class"), new(ObjectCountKey, "Objects")];
 
     public IReadOnlyList<PanelCommand> Commands { get; }
 
@@ -80,8 +82,8 @@ internal sealed partial class S3Panel : IPanelProvider, IPanelCommands, IGetFile
     /// <summary>The bucket list is the top: no ".." (issue #97), Ctrl+PgUp leaves the panel. Inside a bucket it goes up.</summary>
     public bool ShowsParent => _location.Bucket is not null;
 
-    /// <summary>Buckets show in two columns of names (issue #97); objects keep the layout's columns.</summary>
-    public int NameColumns => _location.Bucket is null ? 2 : 1;
+    /// <summary>Bucket metrics need their columns; folders and objects use the same single-name-column layout.</summary>
+    public int NameColumns => 1;
 
     public IReadOnlyList<InfoLine> Info
     {
@@ -103,6 +105,7 @@ internal sealed partial class S3Panel : IPanelProvider, IPanelCommands, IGetFile
                 if (_location.IsBucketList)
                 {
                     lines.Add(new("Buckets shown", Count(summary.Folders)));
+                    lines.Add(new("Bucket metrics", _bucketMetricsStatus ?? "daily CloudWatch values"));
                 }
                 else
                 {
@@ -139,6 +142,7 @@ internal sealed partial class S3Panel : IPanelProvider, IPanelCommands, IGetFile
     public async IAsyncEnumerable<IReadOnlyList<PanelEntry>> ListAsync([EnumeratorCancellation] CancellationToken cancellationToken)
     {
         _summary = null;
+        _bucketMetricsStatus = null;
         var location = _location;
         var folders = 0;
         var objects = 0;
@@ -152,8 +156,21 @@ internal sealed partial class S3Panel : IPanelProvider, IPanelCommands, IGetFile
                     _regions[info.Name] = BucketRegions.FromLocation(info.Region);
                 }
 
+                IReadOnlyDictionary<string, S3BucketMetrics> metrics = new Dictionary<string, S3BucketMetrics>();
+                if (_bucketMetricsStatus is null)
+                {
+                    try
+                    {
+                        metrics = await Api.BucketMetricsAsync(page, cancellationToken).ConfigureAwait(false);
+                    }
+                    catch (Exception ex) when (!IsCancel(ex, cancellationToken))
+                    {
+                        _bucketMetricsStatus = Describe(ex, "Reading bucket metrics", "cloudwatch:GetMetricData").Message;
+                    }
+                }
+
                 folders += page.Count;
-                yield return page.Select(BucketEntry).ToList();
+                yield return page.Select(bucketInfo => BucketEntry(bucketInfo, metrics.GetValueOrDefault(bucketInfo.Name))).ToList();
             }
         }
         else
@@ -316,11 +333,33 @@ internal sealed partial class S3Panel : IPanelProvider, IPanelCommands, IGetFile
         Reconnect(settings.Session(_session.Profile));
     }
 
-    internal static PanelEntry BucketEntry(S3BucketInfo bucket) => new(bucket.Name, IsFolder: true, Modified: bucket.Created)
+    internal static PanelEntry BucketEntry(S3BucketInfo bucket, S3BucketMetrics? metrics = null) => new(bucket.Name, IsFolder: true, Size: metrics?.Size, Modified: bucket.Created)
     {
         Tag = new S3Ref(S3Kind.Bucket, bucket.Name, string.Empty),
         Icon = PanelIcons.Bucket, // issue #69
+        Cells = BucketCells(metrics),
     };
+
+    private static Dictionary<string, CellValue>? BucketCells(S3BucketMetrics? metrics)
+    {
+        if (metrics is null)
+        {
+            return null;
+        }
+
+        var cells = new Dictionary<string, CellValue>();
+        if (metrics.Size is { } size)
+        {
+            cells[PanelColumn.SizeKey] = new(Size(size), size);
+        }
+
+        if (metrics.Objects is { } objects)
+        {
+            cells[ObjectCountKey] = new(Count(objects), objects);
+        }
+
+        return cells;
+    }
 
     internal static PanelEntry FolderEntry(string bucket, string prefix, string commonPrefix) =>
         new(KeyNames.DisplayName(KeyNames.ChildSegment(prefix, commonPrefix, isFolder: true)), IsFolder: true)

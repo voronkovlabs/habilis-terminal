@@ -216,7 +216,7 @@ public interface IPanelProvider : IAsyncDisposable
 
 public sealed record PanelEntry(string Name, bool IsFolder = false, long? Size = null, DateTime? Modified = null)
 {
-    public IReadOnlyDictionary<string, CellValue>? Cells { get; init; }   // custom columns
+    public IReadOnlyDictionary<string, CellValue>? Cells { get; init; }   // custom columns; "size" can override a folder's Size cell
     public int Group { get; init; }                                      // sorted first: e.g. running jobs
     public RowTone Tone { get; init; }                                   // Normal, Accent, Good, Warning, Bad, Dim
     public object? Tag { get; init; }                                    // plugin data

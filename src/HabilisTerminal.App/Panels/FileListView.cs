@@ -656,6 +656,13 @@ public sealed class FileListView : FrameworkElement
                     using var plugin = Core.Diagnostics.Perf.Measure("panel.render.plugin");
                     text = item.IsParent ? string.Empty : state.Extension?.Cell(item.Entry, column.Key!)?.Text ?? string.Empty;
                 }
+                else if (!item.IsParent && column.Kind is ColumnKind.Size or ColumnKind.CompactSize &&
+                    state.Extension?.Cell(item.Entry, HabilisTerminal.Plugins.PanelColumn.SizeKey)?.Text is { } pluginSize)
+                {
+                    // A plugin folder can have an aggregate size (an S3 bucket, for example). Ordinary folders have
+                    // no size cell and retain the usual "Folder" / background-count behaviour.
+                    text = pluginSize;
+                }
                 else
                 {
                     text = PanelColumns.FormatCell(column.Kind, item, state.Culture, folderSize, AutoSizedFolders);

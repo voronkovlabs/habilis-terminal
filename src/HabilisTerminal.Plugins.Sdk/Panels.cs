@@ -75,7 +75,10 @@ public interface IAlternativePanelLayout
 /// <summary>An entry of a plugin panel.</summary>
 public sealed record PanelEntry(string Name, bool IsFolder = false, long? Size = null, DateTime? Modified = null)
 {
-    /// <summary>Values of custom columns, by column key.</summary>
+    /// <summary>
+    /// Values of custom columns, by column key. A folder may also provide <see cref="PanelColumn.SizeKey"/> to show
+    /// an aggregate size in the built-in Size column instead of the usual "Folder" text.
+    /// </summary>
     public IReadOnlyDictionary<string, CellValue>? Cells { get; init; }
 
     /// <summary>Sorted before everything else, lowest first, whatever the sort key (e.g. running jobs = 0).</summary>

@@ -1,6 +1,8 @@
 using System.Net;
 using System.Runtime.CompilerServices;
 using Amazon;
+using Amazon.CloudWatch;
+using Amazon.CloudWatch.Model;
 using Amazon.Runtime;
 using Amazon.S3;
 using Amazon.S3.Model;
@@ -10,6 +12,9 @@ namespace Habilis.Aws.S3;
 
 /// <summary>A bucket of the bucket list; the region when S3 reports it with the list.</summary>
 internal sealed record S3BucketInfo(string Name, DateTime? Created, string? Region = null);
+
+/// <summary>Daily CloudWatch storage metrics for a bucket; either value can be absent when AWS has no data yet.</summary>
+internal sealed record S3BucketMetrics(long? Size, long? Objects, DateTime? MeasuredAt = null);
 
 /// <summary>An object: its exact key, size, last change (UTC), ETag and storage class.</summary>
 internal sealed record S3ObjectInfo(string Key, long Size, DateTime? Modified = null, string? ETag = null, string? StorageClass = null);
@@ -24,6 +29,9 @@ internal sealed record S3DeleteFailure(string Key, string Code, string Message);
 internal interface IS3Api : IDisposable
 {
     IAsyncEnumerable<IReadOnlyList<S3BucketInfo>> ListBucketsAsync(CancellationToken cancellationToken);
+
+    /// <summary>Precomputed daily AWS/S3 metrics; this never lists the bucket's objects.</summary>
+    Task<IReadOnlyDictionary<string, S3BucketMetrics>> BucketMetricsAsync(IReadOnlyList<S3BucketInfo> buckets, CancellationToken cancellationToken);
 
     /// <summary>The bucket's location constraint as S3 reports it ("" for us-east-1, "EU" for eu-west-1).</summary>
     Task<string> GetBucketLocationAsync(string bucket, CancellationToken cancellationToken);
@@ -77,6 +85,7 @@ internal sealed class S3Api : IS3Api
     private readonly AWSCredentials? _credentials;
     private readonly HttpClientFactory? _http;
     private readonly Dictionary<string, AmazonS3Client> _clients = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, AmazonCloudWatchClient> _cloudWatchClients = new(StringComparer.Ordinal);
 
     public S3Api(AwsSession session)
         : this(session, null, null)
@@ -103,6 +112,92 @@ internal sealed class S3Api : IS3Api
             next = response.ContinuationToken;
         }
         while (!string.IsNullOrEmpty(next));
+    }
+
+    public async Task<IReadOnlyDictionary<string, S3BucketMetrics>> BucketMetricsAsync(IReadOnlyList<S3BucketInfo> buckets, CancellationToken cancellationToken)
+    {
+        var found = new Dictionary<string, S3BucketMetrics>(StringComparer.Ordinal);
+        foreach (var regionGroup in buckets.Where(b => !string.IsNullOrEmpty(b.Region)).GroupBy(b => BucketRegions.FromLocation(b.Region), StringComparer.Ordinal))
+        {
+            foreach (var batch in regionGroup.Chunk(200))
+            {
+                var queries = BucketMetricQueries(batch);
+                var values = new Dictionary<string, (double Value, DateTime? Stamp)>(StringComparer.Ordinal);
+                var now = DateTime.UtcNow;
+                string? next = null;
+                do
+                {
+                    var response = await CloudWatch(regionGroup.Key).GetMetricDataAsync(new GetMetricDataRequest
+                    {
+                        StartTime = now.AddDays(-3),
+                        EndTime = now,
+                        MetricDataQueries = queries,
+                        ScanBy = ScanBy.TimestampDescending,
+                        NextToken = next,
+                    }, cancellationToken).ConfigureAwait(false);
+                    foreach (var result in response.MetricDataResults ?? [])
+                    {
+                        if (result.Values is { Count: > 0 })
+                        {
+                            // TimestampDescending makes the first page authoritative; later pages contain older days.
+                            values.TryAdd(result.Id, (result.Values[0], result.Timestamps is { Count: > 0 } ? Utc(result.Timestamps[0]) : null));
+                        }
+                    }
+
+                    next = response.NextToken;
+                }
+                while (!string.IsNullOrEmpty(next));
+
+                for (var i = 0; i < batch.Length; i++)
+                {
+                    var size = values.TryGetValue($"s{i}", out var s) ? (long?)Math.Max(0, Math.Round(s.Value)) : null;
+                    var objects = values.TryGetValue($"n{i}", out var n) ? (long?)Math.Max(0, Math.Round(n.Value)) : null;
+                    if (size is not null || objects is not null)
+                    {
+                        found[batch[i].Name] = new S3BucketMetrics(size, objects, Latest(s.Stamp, n.Stamp));
+                    }
+                }
+            }
+        }
+
+        return found;
+    }
+
+    internal static List<MetricDataQuery> BucketMetricQueries(IReadOnlyList<S3BucketInfo> buckets)
+    {
+        var queries = new List<MetricDataQuery>(buckets.Count * 2);
+        for (var i = 0; i < buckets.Count; i++)
+        {
+            var name = buckets[i].Name;
+            queries.Add(new MetricDataQuery
+            {
+                Id = $"s{i}",
+                Label = $"{name} size",
+                Expression = $"SUM(SEARCH('{{AWS/S3,BucketName,StorageType}} MetricName=\"BucketSizeBytes\" BucketName=\"{name}\"', 'Average', 86400))",
+            });
+            queries.Add(new MetricDataQuery
+            {
+                Id = $"n{i}",
+                Label = $"{name} objects",
+                MetricStat = new MetricStat
+                {
+                    Metric = new Amazon.CloudWatch.Model.Metric
+                    {
+                        Namespace = "AWS/S3",
+                        MetricName = "NumberOfObjects",
+                        Dimensions =
+                        [
+                            new Dimension { Name = "BucketName", Value = name },
+                            new Dimension { Name = "StorageType", Value = "AllStorageTypes" },
+                        ],
+                    },
+                    Period = 86400,
+                    Stat = "Average",
+                },
+            });
+        }
+
+        return queries;
     }
 
     public async Task<string> GetBucketLocationAsync(string bucket, CancellationToken cancellationToken)
@@ -239,6 +334,13 @@ internal sealed class S3Api : IS3Api
             }
 
             _clients.Clear();
+
+            foreach (var client in _cloudWatchClients.Values)
+            {
+                client.Dispose();
+            }
+
+            _cloudWatchClients.Clear();
         }
     }
 
@@ -282,6 +384,29 @@ internal sealed class S3Api : IS3Api
             return client;
         }
     }
+
+    private AmazonCloudWatchClient CloudWatch(string region)
+    {
+        lock (_clients)
+        {
+            if (!_cloudWatchClients.TryGetValue(region, out var client))
+            {
+                var config = _session.Configure(new AmazonCloudWatchConfig());
+                config.RegionEndpoint = RegionEndpoint.GetBySystemName(region);
+                if (_http is not null)
+                {
+                    config.HttpClientFactory = _http;
+                }
+
+                client = new AmazonCloudWatchClient(_credentials ?? _session.Credentials, config);
+                _cloudWatchClients[region] = client;
+            }
+
+            return client;
+        }
+    }
+
+    private static DateTime? Latest(DateTime? left, DateTime? right) => left is null ? right : right is null || left >= right ? left : right;
 }
 
 /// <summary>Bucket locations as region names.</summary>

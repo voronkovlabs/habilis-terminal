@@ -66,6 +66,7 @@ plugin connects only to AWS and sends no telemetry.
 | Permission | Needed for |
 |---|---|
 | `s3:ListAllMyBuckets` | The bucket list |
+| `cloudwatch:GetMetricData` | Daily bucket size and object count; optional, the bucket list still works without it |
 | `s3:GetBucketLocation` | Finding a bucket's region when it was opened by address (the bucket list usually reports regions itself) |
 | `s3:ListBucket` | Listing folders. Also needed for downloads and deletes of folders, and for the "already exists" check on upload |
 | `s3:GetObject` | Downloads and F3 |
@@ -78,6 +79,12 @@ When a permission is missing, the message names it, for example "Permission miss
 
 ## Behaviour and limits
 
+- **Bucket size and object count** come from the precomputed daily `AWS/S3` CloudWatch storage metrics. Opening the
+  bucket list never scans objects. The values can be about a day old and include versions, delete markers and
+  incomplete multipart data, following AWS's definitions. A blank value means CloudWatch has no data or permission.
+- **Folder totals stay blank.** Standard S3 and CloudWatch APIs do not provide storage/count metrics for an arbitrary
+  prefix. Storage Lens prefix metrics require an explicitly configured advanced daily export, so the plugin does not
+  recursively list a folder merely to fill these columns.
 - **Large folders** are listed 1,000 keys at a time. Each page shows as soon as it arrives.
 - **Buckets in any commercial region** work from one panel. Each bucket's region is found once and kept.
 - **Parallel transfers:** files, and the parts of large files, run in parallel up to the configured limit. Memory use

@@ -21,6 +21,8 @@ internal sealed class FakeS3 : IS3Api
 
     public Exception? ListError { get; set; }
 
+    public Exception? MetricsError { get; set; }
+
     /// <summary>Thrown by reads of these keys.</summary>
     public Dictionary<string, Exception> ReadErrors { get; } = new(StringComparer.Ordinal);
 
@@ -45,6 +47,8 @@ internal sealed class FakeS3 : IS3Api
     public ConcurrentQueue<int> DeleteBatchSizes { get; } = new();
 
     public int LocationCalls;
+
+    public int MetricsCalls;
 
     public int OpenUploads
     {
@@ -125,6 +129,27 @@ internal sealed class FakeS3 : IS3Api
             return _buckets.TryGetValue(bucket, out var found)
                 ? Task.FromResult(found.Location)
                 : Task.FromException<string>(new AmazonS3Exception("The specified bucket does not exist") { ErrorCode = "NoSuchBucket", StatusCode = HttpStatusCode.NotFound });
+        }
+    }
+
+    public Task<IReadOnlyDictionary<string, S3BucketMetrics>> BucketMetricsAsync(IReadOnlyList<S3BucketInfo> buckets, CancellationToken cancellationToken)
+    {
+        Interlocked.Increment(ref MetricsCalls);
+        if (MetricsError is not null)
+        {
+            return Task.FromException<IReadOnlyDictionary<string, S3BucketMetrics>>(MetricsError);
+        }
+
+        lock (_lock)
+        {
+            return Task.FromResult<IReadOnlyDictionary<string, S3BucketMetrics>>(buckets.ToDictionary(
+                b => b.Name,
+                b =>
+                {
+                    var objects = _buckets[b.Name].Objects.Values;
+                    return new S3BucketMetrics(objects.Sum(o => (long)o.Data.Length), objects.Count, new DateTime(2024, 1, 3, 0, 0, 0, DateTimeKind.Utc));
+                },
+                StringComparer.Ordinal));
         }
     }
 
