@@ -50,6 +50,7 @@ public partial class MainWindow
         if (refocus)
         {
             FocusActivePanel();
+            ReturnToFindResults();
         }
     }
 

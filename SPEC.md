@@ -87,6 +87,13 @@ All keys are handled by the panels, except:
 - **Printable characters** (including Space) move focus to the terminal and are sent to the shell.
   Typing a command with panels visible works like in Far; focus stays in the terminal afterwards.
 - Quick search is **Alt+letter**, as in Far.
+- **Alt+F7 finds files (#198)**, as Far's "Find file": masks (Far syntax, exclusions after `|`), optional text inside
+  (case, whole words; a text file in its own encoding, any other file as ANSI, UTF-8 and UTF-16), folders too when no
+  text is given, and where: from the current folder, the current folder only, the selected folders, the root of the
+  drive, all local drives. Links are not walked. Results come as they are found: Enter goes to the file, F3 views and
+  F4 edits it and then returns to the results, Panel shows them in a temporary panel (names with their folders; F5, F6
+  and F8 work on the real files, Ctrl+R checks them again, `..` leaves), Stop ends the search. Not searched: inside
+  archives and plugin panels.
 
 ### goto
 `goto <path or address>` typed at the prompt (#152) does what a paste into the drive menu does: a folder opens, a file's path opens its folder with the cursor on it, a plugin's address opens the plugin. It is also taken relative to the shell's folder, with `~` and `%VARIABLES%`. The line does not reach the shell, and goes into its history. A program waiting for input gets the line as usual.

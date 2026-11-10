@@ -161,6 +161,7 @@ public partial class MainWindow
         "console.paste" => PasteIntoTerminal,
         "plugins.menu" => () => Fire(ShowPluginMenuAsync()),
         "plugins.configure" => OpenPluginsPage,
+        "files.find" => FindFiles,
         "plugins.panelCommands" => () => Fire(ShowPluginCommandsAsync(_active)),
         "settings.open" => OpenSettingsPage,
         "settings.file" => OpenSettingsFile,

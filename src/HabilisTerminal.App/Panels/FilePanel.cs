@@ -41,6 +41,7 @@ public sealed partial class FilePanel : Border
     private CancellationTokenSource? _loading;
     private FolderCount? _counting;
     private DirectoryWatcher? _watcher;
+    private FoundListing? _found;
     private Border? _statusBorder;
     private bool _isActive;
     private bool _autoSizing;
@@ -383,7 +384,10 @@ public sealed partial class FilePanel : Border
         // A folder replaces a plugin panel (Alt+F1, history, the shell's cd).
         ClosePlugin();
 
-        var samePath = string.Equals(path, State.Path, StringComparison.OrdinalIgnoreCase);
+        // Search results left for a real listing, even of their own root.
+        var leavingFound = _found is not null;
+        _found = null;
+        var samePath = !leavingFound && string.Equals(path, State.Path, StringComparison.OrdinalIgnoreCase);
         if (!samePath)
         {
             SizeWorker.Cancel(this); // leaving the folder stops its counting
@@ -444,7 +448,45 @@ public sealed partial class FilePanel : Border
     }
 
     /// <summary>Re-reads the directory, keeping cursor and selection.</summary>
-    public Task<bool> ReloadAsync() => NavigateAsync(State.Path);
+    public Task<bool> ReloadAsync() => _found is not null ? RefreshFoundAsync() : NavigateAsync(State.Path);
+
+    /// <summary>Alt+F7's Panel (issue #198): the search results, named by their path below the root. Leaving the panel ends it.</summary>
+    public async Task ShowFoundAsync(string root, string title, IReadOnlyList<string> names)
+    {
+        ClosePlugin();
+        _loading?.Cancel();
+        SizeWorker.Cancel(this);
+        var entries = await Task.Run(() => ReadFound(root, names));
+        _found = new FoundListing(title, [.. names]);
+        _watcher?.Dispose(); // changes below the root are not followed; Ctrl+R checks the files again
+        _watcher = null;
+        Message = null;
+        CloseQuickSearch();
+        State.Selection.Clear();
+        State.SetListing(root, entries, hasParent: true);
+        Refresh();
+        RequestFolderSizes();
+    }
+
+    /// <summary>After an operation or Ctrl+R: what is gone leaves the list, what changed shows its new size.</summary>
+    private async Task<bool> RefreshFoundAsync()
+    {
+        var found = _found!;
+        var root = State.Path;
+        var entries = await Task.Run(() => ReadFound(root, found.Names));
+        if (_found == found)
+        {
+            State.SetListing(root, entries, hasParent: true);
+            Refresh();
+        }
+
+        return true;
+    }
+
+    private static FileEntry[] ReadFound(string root, IReadOnlyList<string> names) =>
+        [.. names.Select(name => DirectoryReader.ReadEntry(root, name)).Where(e => e is not null).Select(e => e!.Value)];
+
+    private sealed record FoundListing(string Title, IReadOnlyList<string> Names);
 
     /// <summary>Ctrl+R: re-reads the directory and counts its folder sizes again.</summary>
     public Task<bool> RefreshAsync()
@@ -1115,6 +1157,12 @@ public sealed partial class FilePanel : Border
 
     private void GoToParent()
     {
+        if (_found is not null)
+        {
+            _ = NavigateAsync(State.Path); // out of the results, into the folder they were found in
+            return;
+        }
+
         if (IsPlugin)
         {
             _ = PluginUpAsync();
@@ -1148,7 +1196,7 @@ public sealed partial class FilePanel : Border
 
     private void ApplyChanges(string path, DirectoryChanges changes)
     {
-        if (!string.Equals(path, State.Path, StringComparison.OrdinalIgnoreCase))
+        if (_found is not null || !string.Equals(path, State.Path, StringComparison.OrdinalIgnoreCase))
         {
             return;
         }
@@ -1171,6 +1219,13 @@ public sealed partial class FilePanel : Border
         {
             _title.Text = PluginManager.Guard(Plugin!, () => provider.Title, Plugin!.Name).ToUpperInvariant();
             _path.Text = State.Path;
+            return;
+        }
+
+        if (_found is { } found)
+        {
+            _title.Text = found.Title.ToUpperInvariant();
+            _path.Text = $"{State.Path}  ·  {found.Names.Count:N0} found  ·  .. leaves";
             return;
         }
 

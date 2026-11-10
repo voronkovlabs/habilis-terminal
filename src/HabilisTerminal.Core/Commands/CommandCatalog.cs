@@ -169,6 +169,7 @@ public static class CommandCatalog
         new("files.open", Files, "Render or open in its program", "Alt+F3", c => Local(c) && c.Cursor == CursorKind.File) { Help = "Markdown rendered; other files in their associated program" },
         new("files.edit", Files, "Edit", "F4", c => Local(c) && c.Cursor == CursorKind.File) { DynamicTitle = c => Items(c with { Marked = 0 }, "Edit") },
         new("files.new", Files, "New file", "Shift+F4", Local) { Help = "New file: asks for a name, created when saved" },
+        new("files.find", Files, "Find file", "Alt+F7", Local) { Help = "Find files by masks and text, as in Far; Panel puts the results in a temporary panel" },
         new("files.copy", Files, "Copy", "F5", CanCopy) { DynamicTitle = c => Items(c, "Copy") },
         new("files.copyHere", Files, "Copy the item under the cursor", "Shift+F5", c => Local(c) && c.Cursor is CursorKind.File or CursorKind.Folder),
         new("files.move", Files, "Rename or move", "F6", CanMoveItems) { DynamicTitle = c => c.ActiveIsPlugin ? Items(c, "Move") : Items(c, "Rename or move") },

@@ -201,6 +201,9 @@ public partial class MainWindow
             case Key.F2 when modifiers == KeyModifiers.Alt:
                 Fire(ShowDriveMenuAsync(_right));
                 return true;
+            case Key.F7 when modifiers == KeyModifiers.Alt:
+                FindFiles();
+                return true;
         }
 
         if (!AnyPanelVisible || modifiers != KeyModifiers.Control)
@@ -259,6 +262,10 @@ public partial class MainWindow
 
             case Key.F2 when modifiers == KeyModifiers.Alt:
                 Fire(ShowDriveMenuAsync(_right));
+                return true;
+
+            case Key.F7 when modifiers == KeyModifiers.Alt:
+                FindFiles();
                 return true;
 
             case Key.F12 when modifiers == KeyModifiers.Alt:

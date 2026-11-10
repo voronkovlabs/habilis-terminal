@@ -44,6 +44,7 @@ public partial class MainWindow
             ]),
             new("Commands",
             [
+                MenuRow("files.find"),
                 MenuRow("go.folderHistory"),
                 MenuRow("go.fileHistory"),
                 MenuCommand.Separator,
