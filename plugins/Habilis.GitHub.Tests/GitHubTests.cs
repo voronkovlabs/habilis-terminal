@@ -240,12 +240,31 @@ public sealed class GitHubTests : IDisposable
     }
 
     [Fact]
-    public async Task Opening_without_a_token_and_without_a_client_id_says_what_to_set()
+    public async Task Opening_without_a_token_signs_in_with_the_built_in_client_id()
     {
-        var plugin = new GitHubPlugin { Tokens = new MemoryTokens() };
+        Assert.StartsWith("Ov23", GitHubPlugin.DefaultClientId, StringComparison.Ordinal);
+        var handler = new ScriptedHandler(
+            """{"device_code":"dc","user_code":"ABCD-1234","verification_uri":"https://github.com/login/device","expires_in":900,"interval":5}""");
+        var host = new FakeHost();
+        host.ConfirmAnswers.Enqueue(false);
+        var tokens = new MemoryTokens();
+        var plugin = new GitHubPlugin { Tokens = tokens, Http = new HttpClient(handler) };
+        plugin.Initialize(host);
+
+        // The code is shown; declining the question opens nothing and keeps nothing.
+        Assert.Null(await plugin.OpenAddressAsync("gh:", CancellationToken.None));
+        Assert.Contains("ABCD-1234", host.Confirmations.Single().Message, StringComparison.Ordinal);
+        Assert.Contains("client_id=" + GitHubPlugin.DefaultClientId, handler.Bodies[0], StringComparison.Ordinal);
+        Assert.Null(tokens.Token);
+    }
+
+    [Fact]
+    public async Task An_app_without_device_flow_says_what_to_tick()
+    {
+        var plugin = new GitHubPlugin { Tokens = new MemoryTokens(), Http = new HttpClient(new ScriptedHandler("""{"error":"device_flow_disabled"}""")) };
         plugin.Initialize(new FakeHost());
         var error = await Assert.ThrowsAsync<PluginException>(() => plugin.OpenAddressAsync("gh:", CancellationToken.None));
-        Assert.Contains("client ID", error.Message, StringComparison.Ordinal);
+        Assert.Contains("Enable Device Flow", error.Message, StringComparison.Ordinal);
     }
 
     [Fact]

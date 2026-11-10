@@ -656,7 +656,8 @@ internal sealed class GitHubPanel : IPanelProvider, IPanelCommands, IGetFiles
 
     private static CellValue Missing { get; } = new("", null);
 
-    private static CellValue DateCell(DateTime utc) => new(utc.ToLocalTime().ToString("yyyy-MM-dd HH:mm", CultureInfo.CurrentCulture), utc);
+    /// <summary>As the host shows dates in its own columns, so Created and Last commit read alike.</summary>
+    private static CellValue DateCell(DateTime utc) => new(utc.ToLocalTime().ToString("g", CultureInfo.CurrentCulture), utc);
 
     private static CellValue Count(int count) => new(count.ToString("N0", CultureInfo.CurrentCulture), count);
 

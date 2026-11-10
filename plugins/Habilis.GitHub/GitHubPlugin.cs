@@ -12,7 +12,7 @@ namespace Habilis.GitHub;
 public sealed class GitHubPlugin : Plugin
 {
     /// <summary>The Habilis Terminal OAuth App on GitHub (device flow). Not a secret; the settings can replace it.</summary>
-    public const string DefaultClientId = "";
+    public const string DefaultClientId = "Ov23litdCqb7kVF7RRSs";
 
     private const string ClientIdKey = "clientId";
 
@@ -38,7 +38,11 @@ public sealed class GitHubPlugin : Plugin
 
     public override bool HasConfiguration => true;
 
-    internal HttpClient Http => _http ??= new HttpClient { Timeout = TimeSpan.FromSeconds(60) };
+    internal HttpClient Http
+    {
+        get => _http ??= new HttpClient { Timeout = TimeSpan.FromSeconds(60) };
+        set => _http = value;
+    }
 
     public override Task<IPanelProvider?> OpenAddressAsync(string address, CancellationToken cancellationToken) =>
         OpenAsync(GitHubLocation.Parse(address), cancellationToken);
