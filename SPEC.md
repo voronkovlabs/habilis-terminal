@@ -88,8 +88,8 @@ All keys are handled by the panels, except:
   Typing a command with panels visible works like in Far; focus stays in the terminal afterwards.
 - Quick search is **Alt+letter**, as in Far.
 - **Ctrl+Alt+letter is a quick filter (#201):** the same box, but the panel shows only files and folders whose names
-  contain the text, in any case. Enter closes the box and keeps the filter, shown in the header with a cross that
-  clears it; Esc clears it, in the box or on the panel; another folder clears it. Marks on hidden names are dropped.
+  contain the text, in any case. Enter keeps the filter, and its box stays below the list with a cross that
+  clears it (#205); Esc clears it, in the box or on the panel; another folder clears it. Marks on hidden names are dropped.
   Every Ctrl+Alt+letter starts it: copying full paths moved to Ctrl+Shift+C and Ctrl+Shift+Ins (#203).
 - **Alt+F7 finds files (#198)**, as Far's "Find file": masks (Far syntax, exclusions after `|`), optional text inside
   (case, whole words; a text file in its own encoding, any other file as ANSI, UTF-8 and UTF-16), folders too when no
