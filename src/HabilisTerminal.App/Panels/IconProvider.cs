@@ -26,6 +26,7 @@ internal static class IconProvider
     private static readonly Dictionary<(string Id, bool Light), Drawing> ThemeDrawings = [];
     private static readonly Dictionary<string, ImageSource?> SystemIcons = new(StringComparer.OrdinalIgnoreCase);
     private static readonly HashSet<string> Pending = new(StringComparer.OrdinalIgnoreCase);
+    private static readonly SemaphoreSlim SystemIconLoadGate = new(1, 1);
     private static FileIconTheme _theme = LoadTheme();
 
     /// <summary>A system icon finished loading: repaint the panels.</summary>
@@ -150,16 +151,54 @@ internal static class IconProvider
 
         if (Pending.Add(path))
         {
-            // One icon per idle slot keeps scrolling smooth.
-            Dispatcher.CurrentDispatcher.BeginInvoke(() =>
-            {
-                Pending.Remove(path);
-                SystemIcons[path] = LoadSystemIcon(path);
-                SystemIconLoaded?.Invoke();
-            }, DispatcherPriority.Background);
+            // Shell icon handlers can load packages, libraries and antivirus filters. Reports #192 and #193 caught
+            // SHGetFileInfo blocking the UI thread for seconds, so extraction happens away from the Dispatcher.
+            _ = LoadSystemIconAsync(path, Dispatcher.CurrentDispatcher);
         }
 
         return null;
+    }
+
+    private static async Task LoadSystemIconAsync(string path, Dispatcher dispatcher)
+    {
+        BitmapSource? icon = null;
+        try
+        {
+            icon = await Task.Run(async () =>
+            {
+                await SystemIconLoadGate.WaitAsync().ConfigureAwait(false);
+                try
+                {
+                    return LoadSystemIcon(path);
+                }
+                finally
+                {
+                    SystemIconLoadGate.Release();
+                }
+            }).ConfigureAwait(false);
+        }
+        catch (Exception error) when (error is IOException or UnauthorizedAccessException or ExternalException or ArgumentException)
+        {
+            // A shell extension or protected file may reject the request; cache the fallback just as before.
+        }
+
+        try
+        {
+            await dispatcher.InvokeAsync(() =>
+            {
+                Pending.Remove(path);
+                SystemIcons[path] = icon;
+                SystemIconLoaded?.Invoke();
+            }, DispatcherPriority.Background);
+        }
+        catch (TaskCanceledException)
+        {
+            // The window is closing; there is nobody left to repaint.
+        }
+        catch (InvalidOperationException)
+        {
+            // The Dispatcher has already shut down.
+        }
     }
 
     private static BitmapSource? LoadSystemIcon(string path)
