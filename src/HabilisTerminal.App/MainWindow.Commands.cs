@@ -64,7 +64,8 @@ public partial class MainWindow
 
             // Terminal-level clipboard; Ctrl+V goes to the shell (SPEC §12). Ctrl+C and Ctrl+Insert copy a selection
             // in the console, as in Windows Terminal; with none they go on to the shell, an interrupt (issue #137).
-            case Key.C when modifiers == (KeyModifiers.Control | KeyModifiers.Shift) && TerminalHasFocus:
+            // With a panel holding the keys, Ctrl+Shift+C copies its full paths instead (issue #203).
+            case Key.C when modifiers == (KeyModifiers.Control | KeyModifiers.Shift) && TerminalHasFocus && FocusedPanel() is null:
                 CopyTerminalSelection();
                 return true;
 
@@ -406,15 +407,16 @@ public partial class MainWindow
                 _shell?.Host.SendKey(Win32InputSequence.VkSpace, ' ', Win32InputSequence.LeftCtrl);
                 return true;
 
-            // Clipboard; Ctrl+C / Ctrl+Alt+C as well (issue #54): with a panel focused they never reach the shell.
+            // Clipboard; Ctrl+C / Ctrl+Shift+C as well (issues #54, #203): with a panel focused they never reach the shell.
             case Key.Insert when modifiers == KeyModifiers.Control:
             case Key.C when modifiers == KeyModifiers.Control:
                 CopyNames(panel, fullPaths: false);
                 return true;
 
-            case Key.Insert when modifiers == (KeyModifiers.Control | KeyModifiers.Alt):
+            // Ctrl+Alt+letter is the quick filter (issue #201), so full paths moved to Ctrl+Shift (issue #203).
+            case Key.Insert when modifiers == (KeyModifiers.Control | KeyModifiers.Shift):
             case Key.Insert when modifiers == (KeyModifiers.Alt | KeyModifiers.Shift):
-            case Key.C when modifiers == (KeyModifiers.Control | KeyModifiers.Alt):
+            case Key.C when modifiers == (KeyModifiers.Control | KeyModifiers.Shift):
                 CopyNames(panel, fullPaths: true);
                 return true;
 

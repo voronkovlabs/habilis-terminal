@@ -439,7 +439,7 @@ The command line (Ctrl+Shift+P, in the title bar) shows the commands that apply 
 
 ```csharp
 public override IEnumerable<PluginCommand> Commands =>
-    [new("Refresh the cache", "Ctrl+Alt+J", token => RefreshAsync(token))];
+    [new("Refresh the cache", "Ctrl+Shift+F5", token => RefreshAsync(token))]; // not Ctrl+Alt+letter: the quick filter
 
 public IReadOnlyList<PanelCommand> Commands =>
     [new("Purge", "Shift+F8", PurgeAsync) { AppliesTo = (current, selected) => selected.Count > 0 }];

@@ -90,7 +90,7 @@ All keys are handled by the panels, except:
 - **Ctrl+Alt+letter is a quick filter (#201):** the same box, but the panel shows only files and folders whose names
   contain the text, in any case. Enter closes the box and keeps the filter, shown in the header with a cross that
   clears it; Esc clears it, in the box or on the panel; another folder clears it. Marks on hidden names are dropped.
-  Ctrl+Alt+C (copy full names) keeps its meaning.
+  Every Ctrl+Alt+letter starts it: copying full paths moved to Ctrl+Shift+C and Ctrl+Shift+Ins (#203).
 - **Alt+F7 finds files (#198)**, as Far's "Find file": masks (Far syntax, exclusions after `|`), optional text inside
   (case, whole words; a text file in its own encoding, any other file as ANSI, UTF-8 and UTF-16), folders too when no
   text is given, and where: from the current folder, the current folder only, the selected folders, the root of the
@@ -131,7 +131,7 @@ Far Manager defaults unless noted.
 | Ctrl+[ / Ctrl+] | Insert left / right panel path into the command line |
 | Ctrl+F | Insert full file name into the command line |
 | Ctrl+Ins, Ctrl+C | Copy names to the clipboard (the item under the cursor, or the selection; Ctrl+C only with a panel focused, issue #54) |
-| Ctrl+Alt+Ins / Alt+Shift+Ins / Ctrl+Alt+C | Copy full names (paths) to the clipboard |
+| Ctrl+Shift+Ins / Alt+Shift+Ins / Ctrl+Shift+C | Copy full names (paths) to the clipboard; Ctrl+Shift+C copies the console's selection while the console has the keys |
 | Ctrl+E / Ctrl+X | Previous / next command in the shell history (sent to PSReadLine) |
 | Ctrl+Space | Completion in the command line (PSReadLine `MenuComplete`) |
 | Alt+F1 / Alt+F2 | Drive menu for the left / right panel |

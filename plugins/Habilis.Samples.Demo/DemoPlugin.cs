@@ -24,7 +24,7 @@ public sealed class DemoPlugin : Plugin
 
     /// <summary>In the command line while the plugin is loaded, wherever the keyboard is.</summary>
     public override IEnumerable<PluginCommand> Commands =>
-        [new("Say hello", "Ctrl+Alt+J", _ => Host.Dialogs.ShowMessageAsync("Demo", "Hello from a command of the demo plugin."))];
+        [new("Say hello", null, _ => Host.Dialogs.ShowMessageAsync("Demo", "Hello from a command of the demo plugin."))];
 
     public override bool HasConfiguration => true;
 

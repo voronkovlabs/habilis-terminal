@@ -222,7 +222,7 @@ public static class CommandCatalog
         new("line.previous", CommandLine, "Previous command", "Ctrl+E", Workspace),
         new("line.next", CommandLine, "Next command", "Ctrl+X", Workspace),
         new("line.copyNames", CommandLine, "Copy names to the clipboard", "Ctrl+Ins", HasItems) { Help = "Copy names to the clipboard (panel focused). Ctrl+C too" },
-        new("line.copyFull", CommandLine, "Copy full names to the clipboard", "Ctrl+Alt+Ins", HasItems) { Help = "Copy full names to the clipboard. Ctrl+Alt+C too" },
+        new("line.copyFull", CommandLine, "Copy full names to the clipboard", "Ctrl+Shift+Ins", HasItems) { Help = "Copy full names to the clipboard. Ctrl+Alt+C too" },
         new("console.copy", CommandLine, "Copy the console's selection", "Ctrl+Shift+C", c => c.Area == CommandArea.Console) { Help = "Copy the console's selection. A right click, and Ctrl+C or Ctrl+Ins with a selection, too" },
         new("console.paste", CommandLine, "Paste into the console", "Ctrl+Shift+V", c => c.Area == CommandArea.Console) { Help = "Paste into the console. A right click with no selection too" },
 

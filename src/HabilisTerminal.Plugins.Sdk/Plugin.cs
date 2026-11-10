@@ -74,8 +74,8 @@ public abstract class Plugin
 }
 
 /// <summary>
-/// A command available anywhere. <paramref name="Key"/> uses the host's notation, e.g. "Ctrl+Alt+J"; null: none. A key the
-/// host itself uses is ignored and not shown, as the host's keys win.
+/// A command available anywhere. <paramref name="Key"/> uses the host's notation, e.g. "Ctrl+Shift+F5"; null: none. A key the
+/// host itself uses is ignored and not shown, as the host's keys win. Leave Ctrl+Alt+letter alone: it is the quick filter.
 /// </summary>
 public sealed record PluginCommand(string Title, string? Key, Func<CancellationToken, Task> Run);
 
