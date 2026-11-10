@@ -37,6 +37,48 @@ public sealed class BundlePlugin : Plugin
         var bundle = Bundle.Parse(text);
         return bundle is null ? null : new BundlePanel(request.Path, bundle, request.InnerPath);
     }
+
+    /// <summary>
+    /// What Alt+F7 may search inside a bundle (SDK 1.7). The plugin decides: here the bundle's index, <c>.index</c> files,
+    /// is left out, as a search hit in it would only point back at the other files.
+    /// </summary>
+    public override IAsyncEnumerable<SearchEntry>? SearchFile(FileSearchSource source, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(source);
+        return Search(source.Path, cancellationToken);
+    }
+
+    private static async IAsyncEnumerable<SearchEntry> Search(string path, [EnumeratorCancellation] CancellationToken cancellationToken)
+    {
+        string text;
+        try
+        {
+            text = await File.ReadAllTextAsync(path, cancellationToken).ConfigureAwait(false);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            throw new PluginException(ex.Message, ex);
+        }
+
+        if (Bundle.Parse(text) is not { } bundle)
+        {
+            yield break;
+        }
+
+        foreach (var (inner, content) in bundle.Files)
+        {
+            if (inner.EndsWith(".index", StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            var bytes = Encoding.UTF8.GetBytes(content);
+            yield return new SearchEntry(inner.Replace('/', '\\'), Size: bytes.Length)
+            {
+                OpenAsync = _ => Task.FromResult<Stream>(new MemoryStream(bytes, writable: false)),
+            };
+        }
+    }
 }
 
 /// <summary>A bundle's inner files, by path with "/" separators.</summary>

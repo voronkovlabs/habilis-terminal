@@ -12,7 +12,8 @@ folder next to a portable `habi.exe`).
 
 - Entry points: `Plugin.MenuItems` (F11), `Plugin.DriveMenuItems` (Alt+F1 / Alt+F2), `Plugin.Prefixes` with
   `Plugin.OpenAddressAsync` (command line, e.g. `sqs:prod/eu-west-1`), `Plugin.FileExtensions` with
-  `Plugin.OpenFileAsync` (a file opened as a folder, SDK 1.5), `Plugin.ConfigureAsync`.
+  `Plugin.OpenFileAsync` (a file opened as a folder, SDK 1.5), `Plugin.SearchFile` (Alt+F7 inside such a file, SDK 1.7),
+  `Plugin.ConfigureAsync`.
 - Panels: implement `IPanelProvider`; add `IGetFiles`, `IPutFiles`, `IDeleteEntries`, `IMakeFolder`, `IViewEntry`,
   `IPanelCommands` for the operations you support.
 - UI: use `IPluginHost.Dialogs`; the host draws every dialog in its own look.

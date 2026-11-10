@@ -118,4 +118,22 @@ public sealed class BundlePluginTests : IDisposable
         {
         }
     }
+
+    [Fact]
+    public async Task SearchLeavesOutTheIndex()
+    {
+        var token = TestContext.Current.CancellationToken;
+        var path = Path.Combine(_folder, "b.habibundle");
+        await File.WriteAllTextAsync(path, "= readme.txt\nhello\n= docs/guide.txt\nguide\n= bundle.index\nreadme.txt docs/guide.txt\n", token);
+        var found = new Dictionary<string, string>();
+        await foreach (var entry in new BundlePlugin().SearchFile(new FileSearchSource(path), token)!.WithCancellation(token))
+        {
+            await using var stream = await entry.OpenAsync!(token);
+            using var reader = new StreamReader(stream);
+            found[entry.InnerPath] = await reader.ReadToEndAsync(token);
+        }
+
+        Assert.Equal(["docs\\guide.txt", "readme.txt"], found.Keys.Order(StringComparer.Ordinal));
+        Assert.Equal("guide\n", found["docs\\guide.txt"]);
+    }
 }

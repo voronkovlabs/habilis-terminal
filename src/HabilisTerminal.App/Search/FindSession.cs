@@ -14,23 +14,60 @@ internal sealed class FindSession : IDisposable
     private readonly CancellationTokenSource _cancel = new();
     private string _folder = string.Empty;
 
-    public FindSession(FindOptions options, IReadOnlyList<string> roots)
+    /// <param name="cacheDirectory">Where results of text searches are kept for the next time (issue #211); null keeps none.</param>
+    /// <param name="containers">The plugins that look inside archives (issue #210); disposed on the UI thread when the search ends.</param>
+    public FindSession(FindOptions options, IReadOnlyList<string> roots, string? cacheDirectory, PluginContainerSearch? containers)
     {
         Options = options;
         Roots = roots;
         var request = new FileSearchRequest(FileMask.Parse(options.Masks), options.Text, options.MatchCase, options.WholeWords, options.Folders, roots,
-            Recursive: options.Scope != SearchScope.CurrentFolderOnly);
+            Recursive: options.Scope != SearchScope.CurrentFolderOnly)
+        {
+            Regex = options.Regex,
+            Archives = containers is not null,
+        };
+        var dispatcher = System.Windows.Threading.Dispatcher.CurrentDispatcher;
         Task = System.Threading.Tasks.Task.Run(() =>
         {
+            var cache = cacheDirectory is not null && !string.IsNullOrEmpty(options.Text)
+                ? SearchCache.Open(cacheDirectory, SearchCache.KeyOf(options.Text, options.MatchCase, options.WholeWords, options.Regex))
+                : null;
+            _cache = cache;
             try
             {
-                Unreadable = FileSearch.Run(request, Add, folder => Volatile.Write(ref _folder, folder), _cancel.Token);
+                Unreadable = FileSearch.Run(request, Add, folder => Volatile.Write(ref _folder, folder), cache, containers, _cancel.Token);
             }
             catch (OperationCanceledException)
             {
                 Stopped = true;
             }
+            finally
+            {
+                // A stopped search keeps what it learnt too.
+                cache?.Save();
+                if (containers is not null)
+                {
+                    dispatcher.BeginInvoke(containers.Dispose);
+                }
+            }
         });
+    }
+
+    private volatile SearchCache? _cache;
+
+    /// <summary>Files answered from the cache of an earlier search with the same text, not read again.</summary>
+    public int CacheHits => _cache?.Hits ?? 0;
+
+    /// <summary>Results inside archives.</summary>
+    public int InArchives
+    {
+        get
+        {
+            lock (_gate)
+            {
+                return _found.Count(f => f.Container is not null);
+            }
+        }
     }
 
     public FindOptions Options { get; }

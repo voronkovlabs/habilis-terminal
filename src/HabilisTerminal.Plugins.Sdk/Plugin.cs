@@ -54,6 +54,17 @@ public abstract class Plugin
         Task.FromResult<IPanelProvider?>(null);
 
     /// <summary>
+    /// What Alt+F7 may search inside a file this plugin opens (SDK 1.7): the entries, each with its content. Called only
+    /// for files whose name matches <see cref="FileExtensions"/>, off the UI thread, when the user asks to search in
+    /// archives. Null: the plugin does not search this file, and the search treats it as a plain file. Give only what
+    /// the user would want found: an entry left out here is never searched (a format with an index or a signature file
+    /// can leave that out). Entries come one at a time: the search reads an entry's content, if it wants it, before it
+    /// asks for the next, so an archive that must be unpacked in order can do so. Throw <see cref="PluginException"/>
+    /// for a file that cannot be read; the search counts it and goes on.
+    /// </summary>
+    public virtual IAsyncEnumerable<SearchEntry>? SearchFile(FileSearchSource source, CancellationToken cancellationToken) => null;
+
+    /// <summary>
     /// The plugin is being unloaded (SDK 1.5): its panels are already closed. Stop timers and threads, and free native
     /// libraries. What is left running keeps the old code in memory, and an exception here is only reported.
     /// </summary>
@@ -84,6 +95,25 @@ public sealed record PluginCommand(string Title, string? Key, Func<CancellationT
 /// <param name="InnerPath">A place inside it to show, as <c>docs\sub</c> for <c>C:\a.zip\docs\sub</c>, or empty. It comes from folder history: when it no longer exists, show the top.</param>
 /// <param name="AnyFormat">Ctrl+PgDn, or a location from history: look at the content whatever the file is called. Otherwise the file's name matched <see cref="Plugin.FileExtensions"/>.</param>
 public sealed record FileOpenRequest(string Path, string InnerPath, bool AnyFormat);
+
+/// <summary>The file Alt+F7 asks <see cref="Plugin.SearchFile"/> about (SDK 1.7).</summary>
+/// <param name="Path">The full path of the local file.</param>
+public sealed record FileSearchSource(string Path);
+
+/// <summary>
+/// An entry inside a file, given to Alt+F7 (SDK 1.7). <paramref name="InnerPath"/> is below the file's top, folders
+/// separated by backslashes, as <c>docs\readme.txt</c>; it must be a place <see cref="Plugin.OpenFileAsync"/> can show,
+/// as Go to opens it there. Folders need not be listed: an entry's path says where it is. <paramref name="Size"/> and
+/// <paramref name="Modified"/> let a repeated search skip an entry that has not changed; leave them null when unknown.
+/// </summary>
+public sealed record SearchEntry(string InnerPath, bool IsFolder = false, long? Size = null, DateTime? Modified = null)
+{
+    /// <summary>
+    /// The entry's content, called at most once and only before the next entry is asked for; the search disposes the
+    /// stream. Null for a folder or an entry whose content cannot be read. The stream need not seek.
+    /// </summary>
+    public Func<CancellationToken, Task<Stream>>? OpenAsync { get; init; }
+}
 
 /// <summary>A menu entry: its title and what it opens (a panel, or null after doing something else).</summary>
 public sealed record PluginMenuItem(string Title, Func<CancellationToken, Task<IPanelProvider?>> Open)

@@ -7,5 +7,7 @@ Opens archives as folders in a panel, on 7-Zip's `7z.dll` (`native/<arch>/`, lic
 - **F3** views, **F5** copies out, and where 7-Zip writes the format **F5 / F6** in, **F6** out, **F8** and **F7** change it.
 - An archive inside an archive opens in place from a temporary copy; it is read-only.
 - Encrypted archives ask for the password once per archive; it stays in memory.
+- **Alt+F7** with "Search in archives" looks inside (SDK 1.7). Each entry is unpacked to a temporary file when its text is
+  searched: quick for zip, slower for solid 7z. Encrypted entries are found by name only, as a search never asks for a password.
 
 Without `7z.dll` the plugin claims no files, and Enter opens them in their program.

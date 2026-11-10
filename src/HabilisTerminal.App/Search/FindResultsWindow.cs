@@ -174,7 +174,11 @@ internal sealed class FindResultsWindow : Window
         }
 
         var count = _items.Count == 1 ? "1 found" : $"{_items.Count:N0} found";
-        var unreadable = _session.Unreadable > 0 ? $", {_session.Unreadable:N0} folders could not be read" : string.Empty;
+        var unreadable = _session.Unreadable > 0 ? $", {_session.Unreadable:N0} folders or archives could not be read" : string.Empty;
+        if (_session.CacheHits > 0)
+        {
+            unreadable += $", {_session.CacheHits:N0} unchanged files answered from the last search";
+        }
         _status.Text = !_session.IsDone ? $"{count}. Searching {_session.Folder}"
             : _session.Stopped ? $"{count}. Stopped{unreadable}." : $"{count}. Done{unreadable}.";
         _stop.IsEnabled = !_session.IsDone;

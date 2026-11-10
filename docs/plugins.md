@@ -155,6 +155,7 @@ public abstract class Plugin
     public virtual Task<IPanelProvider?> OpenFileAsync(FileOpenRequest request, CancellationToken token); // SDK 1.5
     public virtual Task ShutdownAsync();                               // SDK 1.5: being unloaded
     public virtual IEnumerable<PluginCommand> Commands { get; }        // SDK 1.6: anywhere, in the command line
+    public virtual IAsyncEnumerable<SearchEntry>? SearchFile(FileSearchSource source, CancellationToken token); // SDK 1.7: Alt+F7 inside a file
     public virtual bool HasConfiguration { get; }
     public virtual Task ConfigureAsync(CancellationToken token);       // Enter in the plugin manager, Alt+Shift+F9
 }
@@ -168,6 +169,13 @@ public sealed record PluginCommand(string Title, string? Key, Func<CancellationT
 // SDK 1.5. InnerPath: a place inside the file such as docs\\sub, or empty; from folder history, so it may be gone. Compare it
 // the way your format compares names. AnyFormat: Ctrl+PgDn or a location from history, so look at the content.
 public sealed record FileOpenRequest(string Path, string InnerPath, bool AnyFormat);
+
+// SDK 1.7. What Alt+F7 may search inside a file of FileExtensions; null: search it as a plain file.
+public sealed record FileSearchSource(string Path);
+public sealed record SearchEntry(string InnerPath, bool IsFolder = false, long? Size = null, DateTime? Modified = null)
+{
+    public Func<CancellationToken, Task<Stream>>? OpenAsync { get; init; }   // read before the next entry is asked for
+}
 ```
 `OpenAddressAsync` gets the full text after Enter on the command line, e.g. `s3://bucket/path/` or
 `sqs:prod/eu-west-1`. With a command from `AddressCommands` in front it gets the address alone, without quotes.
@@ -401,6 +409,21 @@ An encrypted format asks with `await Host.Dialogs.InputSecretAsync(...)` and kee
 
 Before reading a file in `OpenFileAsync`, check its size and first bytes, and reject inner names that could leave the target folder. The sample does both.
 
+**Searching inside (SDK 1.7).** Alt+F7 with "Search in archives" calls `SearchFile` for files your `FileExtensions` claim. Yield the entries the user would want found, each with `OpenAsync` for its content; **what you leave out is never searched**, so a format with an index or a signature file leaves that out (the sample skips `.index` entries). Folders need not be listed. Give `Size` and `Modified` when you know them: a repeated search then skips entries that have not changed. The search reads an entry's content before it asks for the next one, so a format that must be unpacked in order can stream it. `InnerPath` uses backslashes and must be a place `OpenFileAsync` can show, as Go to opens it there. Never ask a question here (a password, say): list such entries without `OpenAsync`. Return null, or throw `PluginException`, for a file you cannot read.
+
+```csharp
+public override IAsyncEnumerable<SearchEntry>? SearchFile(FileSearchSource source, CancellationToken token) => Search(source.Path, token);
+
+private static async IAsyncEnumerable<SearchEntry> Search(string path, [EnumeratorCancellation] CancellationToken token)
+{
+    foreach (var (inner, bytes) in await Read(path, token))
+    {
+        if (inner.EndsWith(".index", StringComparison.OrdinalIgnoreCase)) continue;   // not for the search
+        yield return new SearchEntry(inner, Size: bytes.Length) { OpenAsync = _ => Task.FromResult<Stream>(new MemoryStream(bytes)) };
+    }
+}
+```
+
 ### Recipe: testing a plugin
 
 Reference the plugin from a test project and call it directly, with no app and no window. `plugins/Habilis.Samples.FileFormat.Tests` is a small example with a do-nothing `IOperationProgress`; `plugins/Habilis.Aws.Tests/FakeHost.cs` is a whole fake `IPluginHost` with scripted dialogs, which you can copy. A plugin's own logic is checked this way, and how it looks in the app with `habi-plugin.ps1 open` and `state`.
@@ -485,6 +508,7 @@ In a window:
 - [ ] A failing call shows a plain message, not an exception's text meant for developers.
 - [ ] Folder history (Alt+F12) reopens a place inside it.
 - [ ] A format plugin: ".." at the top returns to the file with the cursor on it, and Ctrl+PgDn on another file does not hang or take it.
+- [ ] A format plugin with `SearchFile`: Alt+F7 with "Search in archives" finds text inside, leaves out what it should, and Go to on a result opens that place.
 - [ ] A README: what it does, how to install it, settings, permissions.
 
 ## 11. Common mistakes

@@ -30,6 +30,9 @@ public sealed record AppPaths(string SettingsDirectory, string StateDirectory, b
     /// <summary>The user's plugins, one folder each (docs/plugins.md §3); next to the executable when portable.</summary>
     public string PluginsDirectory => Path.Combine(StateDirectory, "plugins");
 
+    /// <summary>What recent Alt+F7 text searches found (issue #211).</summary>
+    public string SearchCacheDirectory => Path.Combine(StateDirectory, "search-cache");
+
     /// <summary>Plugin settings, one JSON file per plugin id.</summary>
     public string PluginSettingsDirectory => Path.Combine(SettingsDirectory, "plugin-settings");
 

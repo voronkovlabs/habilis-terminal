@@ -3,5 +3,5 @@
   "name": "Archives",
   "version": "1.0.0",
   "assembly": "Habilis.Archives.dll",
-  "sdk": "1.5"
+  "sdk": "1.7"
 }

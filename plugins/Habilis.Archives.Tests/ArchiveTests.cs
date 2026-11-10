@@ -440,4 +440,46 @@ public class ArchiveTests
 
         public void CompleteItem() => Completed++;
     }
+
+    [Fact]
+    public async Task Search_gives_every_entry_with_its_content()
+    {
+        using var sandbox = new TestSandbox();
+        var zip = MakeZip(sandbox, "a.zip", ("readme.txt", "hello"), ("docs/guide.txt", "find the needle"));
+        var found = new Dictionary<string, string>();
+        await foreach (var entry in ArchivesPlugin.SearchArchive(SevenZipLibrary.Default!, zip, CancellationToken.None))
+        {
+            if (entry.IsFolder)
+            {
+                continue;
+            }
+
+            Assert.NotNull(entry.OpenAsync);
+            Assert.NotNull(entry.Modified); // zip keeps local DOS time: only its being stable matters, for the cache
+            await using var stream = await entry.OpenAsync(CancellationToken.None);
+            using var reader = new StreamReader(stream);
+            found[entry.InnerPath] = await reader.ReadToEndAsync();
+        }
+
+        Assert.Equal("hello", found["readme.txt"]);
+        Assert.Equal("find the needle", found[@"docs\guide.txt"]);
+
+        // The temporary copies are gone once read.
+        Assert.DoesNotContain(Directory.GetFiles(Path.GetTempPath(), "habi-search-*"), f => File.GetCreationTimeUtc(f) > DateTime.UtcNow.AddMinutes(-1));
+    }
+
+    [Fact]
+    public async Task Search_of_a_file_that_is_no_archive_gives_nothing()
+    {
+        using var sandbox = new TestSandbox();
+        var path = Path.Combine(sandbox.Path, "fake.zip");
+        await File.WriteAllTextAsync(path, "not an archive");
+        var count = 0;
+        await foreach (var unused in ArchivesPlugin.SearchArchive(SevenZipLibrary.Default!, path, CancellationToken.None))
+        {
+            count++;
+        }
+
+        Assert.Equal(0, count);
+    }
 }

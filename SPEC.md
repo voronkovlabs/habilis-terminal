@@ -91,6 +91,12 @@ All keys are handled by the panels, except:
   contain the text, in any case. Enter keeps the filter, and its box stays below the list with a cross that
   clears it (#205); Esc clears it, in the box or on the panel; another folder clears it. Marks on hidden names are dropped.
   Every Ctrl+Alt+letter starts it: copying full paths moved to Ctrl+Shift+C and Ctrl+Shift+Ins (#203).
+- **Alt+F7 options (#209, #210, #211).** The text can be a regular expression, matched within a line (a mask written
+  `/expression/` matches names by one, as in Far). "Search in archives" looks inside files plugins open as folders,
+  through `Plugin.SearchFile` (SDK 1.7): the plugin decides what the search sees; masks apply to the entries' names,
+  results show as `archive\inner\path`, Go to opens the archive there, View and Edit show a temporary copy, and the
+  temporary panel leaves them out. Text searches are cached per query (last 8, under the state folder): searching the
+  same text again reads only files and entries whose size or date changed.
 - **Alt+F7 finds files (#198)**, as Far's "Find file": masks (Far syntax, exclusions after `|`), optional text inside
   (case, whole words; a text file in its own encoding, any other file as ANSI, UTF-8 and UTF-16), folders too when no
   text is given, and where: from the current folder, the current folder only, the selected folders, the root of the
