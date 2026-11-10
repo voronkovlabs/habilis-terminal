@@ -301,7 +301,14 @@ public sealed partial class FilePanel
 
             if (wentUp)
             {
-                await ListPluginAsync(LastSegment(previous));
+                // The place just left, by name; a name the address writes escaped is tried unescaped too (issue #220).
+                var names = Core.Plugins.PluginLocations.NamesAfterUp(previous);
+                if (await ListPluginAsync(names.Count > 0 ? names[0] : null) && names.Count > 1
+                    && !string.Equals(State.Current.Name, names[0], StringComparison.OrdinalIgnoreCase) && State.TrySetCursor(names[1]))
+                {
+                    Refresh();
+                }
+
                 return;
             }
         }
@@ -372,13 +379,6 @@ public sealed partial class FilePanel
         }
     }
 
-    /// <summary>The last segment of a plugin location ("s3://b/x/y/" → "y"), to keep the cursor on it after going up.</summary>
-    private static string? LastSegment(string location)
-    {
-        var trimmed = location.TrimEnd('/', '\\');
-        var cut = trimmed.LastIndexOfAny(['/', '\\', ':']);
-        return cut >= 0 && cut < trimmed.Length - 1 ? trimmed[(cut + 1)..] : null;
-    }
 
     /// <summary>A provider with its own WPF view (issue #78) shows it in place of the list; a failing view leaves the list.</summary>
     private void ShowPluginView(LoadedPlugin plugin, IPanelProvider provider)
