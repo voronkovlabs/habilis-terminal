@@ -10,6 +10,9 @@
     <PackageVersion Include="Velopack" Version="1.2.161" />
     <!-- Editor -->
     <PackageVersion Include="AvalonEdit" Version="6.3.1.120" />
+    <!-- Syntax colours as in VS Code (issue #207) -->
+    <PackageVersion Include="TextMateSharp" Version="2.0.4" />
+    <PackageVersion Include="TextMateSharp.Grammars" Version="2.0.4" />
     <!-- Markdown view (Alt+F3, issue #57) -->
     <PackageVersion Include="Markdig" Version="1.4.1" />
     <PackageVersion Include="Microsoft.Web.WebView2" Version="1.0.4258.31" />

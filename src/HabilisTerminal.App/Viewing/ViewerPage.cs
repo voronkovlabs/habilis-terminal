@@ -431,10 +431,10 @@ public sealed class ViewerPage : DockPanel, IDisposable, IPage
             ShowLineNumbers = true,
             WordWrap = settings.ViewerWrap,
             Document = document,
-            SyntaxHighlighting = settings.EditorSyntaxHighlighting && !Core.Editing.LongLines.TooLongToColor(file.Text) ? HighlightingManager.Instance.GetDefinitionByExtension(Path.GetExtension(file.Path)) : null,
         };
         editor.Options.HighlightCurrentLine = true;
         editor.Options.IndentationSize = settings.EditorTabSize;
+        SyntaxColors.Set(editor, file.Path, settings.EditorSyntaxHighlighting && !Core.Editing.LongLines.TooLongToColor(file.Text));
         editor.TextArea.Caret.PositionChanged += (_, _) => UpdateInfo();
         TextEditorTheme.Apply(editor, theme);
         return editor;

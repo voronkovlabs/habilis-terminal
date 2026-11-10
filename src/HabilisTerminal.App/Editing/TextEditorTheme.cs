@@ -9,7 +9,8 @@ namespace HabilisTerminal.App.Editing;
 
 /// <summary>
 /// AvalonEdit colours from the colour theme (<c>editor.*</c>) and syntax colours from its <c>tokenColors</c>; shared by
-/// the editor (F4) and the viewer's text mode (F3, issue #56).
+/// the editor (F4) and the viewer's text mode (F3, issue #56). TextMate grammars colour most files
+/// (<see cref="SyntaxColors"/>, issue #207); the rest keep AvalonEdit's definitions, recoloured here.
 /// </summary>
 internal static class TextEditorTheme
 {
@@ -34,6 +35,7 @@ internal static class TextEditorTheme
         editor.TextArea.TextView.CurrentLineBackground = Brush(theme, "editor.lineHighlightBackground");
         editor.TextArea.TextView.CurrentLineBorder = new Pen(Brush(theme, "editor.lineHighlightBorder", "editor.lineHighlightBackground"), 1);
         RecolorSyntax(editor, theme);
+        SyntaxColors.Recolor(editor, theme);
     }
 
     private static void RecolorSyntax(TextEditor editor, ColorTheme theme)

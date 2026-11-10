@@ -396,8 +396,10 @@ F6 switches between viewer and editor, as in Far. One page at a time (no F12 scr
 - Saving preserves encoding, BOM and line endings (CRLF / LF; dominant style for mixed files).
   Atomic write: temporary file, then `ReplaceFile` (keeps attributes, ACL, creation time).
   Read-only file: "Clear the attribute and save?". File changed on disk: warning on save.
-- Syntax highlighting by extension using AvalonEdit built-in definitions; can be disabled.
-  Colours come from the theme (`editor.*`, `editorLineNumber.foreground`, `tokenColors`).
+- Syntax highlighting as in VS Code (#207): the TextMate grammars VS Code ships (TextMateSharp), coloured by the
+  theme's `tokenColors` with TextMate's own selector matching, font styles included. Files with no TextMate grammar
+  use AvalonEdit's built-in definitions. Can be disabled. Other colours come from the theme (`editor.*`,
+  `editorLineNumber.foreground`).
 
 ## 10. Themes and icons
 

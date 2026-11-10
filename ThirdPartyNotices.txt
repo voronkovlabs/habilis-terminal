@@ -384,3 +384,21 @@ The license for original unRAR code has the following restriction:
   not be used to develop a RAR (WinRAR) compatible archiver.
 
 --
+
+-------------------------------------------------------------------------------
+11. TextMateSharp 2.0.4 and TextMateSharp.Grammars 2.0.4 — TextMate grammar
+   engine and the grammars bundled with it, used for syntax colours in the
+   editor (F4) and the viewer. Copyright (c) Daniel Peñalba.
+   Source: https://github.com/danipen/TextMateSharp
+   License: MIT (the license text is the same as in section 5).
+   The bundled grammars come from the Visual Studio Code repository
+   (https://github.com/microsoft/vscode, MIT, Copyright (c) Microsoft
+   Corporation) and the projects it takes them from, each under its own
+   license as listed in the TextMateSharp repository.
+
+   Onigwrap 1.0.11 — the Oniguruma regular expression library wrapped for .NET,
+   used by TextMateSharp. Copyright (c) 2024 Aikawa Yataro.
+   Source: https://github.com/aikawayataro/Onigwrap
+   License: MIT (the license text is the same as in section 5).
+   Oniguruma: Copyright (c) 2002-2021 K.Kosako, BSD 2-Clause License,
+   https://github.com/kkos/oniguruma

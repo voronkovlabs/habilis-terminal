@@ -6,6 +6,11 @@
     <EmbeddedResource Include="Assets\icons\*.json" />
   </ItemGroup>
   <ItemGroup>
+    <!-- Syntax colours as in VS Code (issue #207). -->
+    <PackageReference Include="TextMateSharp" />
+    <PackageReference Include="TextMateSharp.Grammars" />
+  </ItemGroup>
+  <ItemGroup>
     <InternalsVisibleTo Include="HabilisTerminal.Themes.Tests" />
   </ItemGroup>
 </Project>

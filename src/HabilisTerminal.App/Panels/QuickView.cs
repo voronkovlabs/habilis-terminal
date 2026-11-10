@@ -327,7 +327,7 @@ public sealed class QuickView : Grid, IDisposable
         _editor.FontSize = settings.ViewerFontSize;
         _editor.WordWrap = settings.ViewerWrap;
         _editor.Options.IndentationSize = settings.EditorTabSize;
-        _editor.SyntaxHighlighting = settings.EditorSyntaxHighlighting && !Core.Editing.LongLines.TooLongToColor(file.Text) ? HighlightingManager.Instance.GetDefinitionByExtension(Path.GetExtension(file.Path)) : null;
+        SyntaxColors.Set(_editor, file.Path, settings.EditorSyntaxHighlighting && !Core.Editing.LongLines.TooLongToColor(file.Text));
         _editor.Text = file.Text;
         _editor.ScrollToHome();
         if (Theme is { } theme)
