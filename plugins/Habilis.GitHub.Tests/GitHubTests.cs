@@ -45,7 +45,7 @@ public sealed class GitHubTests : IDisposable
         var owners = await Listing.AllAsync(panel);
         Assert.Equal(["acme", "me"], owners.Select(o => o.Name).Order());
         Assert.Equal(0, owners.Single(o => o.Name == "me").Group);
-        Assert.Equal("2", owners.Single(o => o.Name == "me").Cells![GitHubPanel.ReposKey].Text);
+        Assert.Equal("4", owners.Single(o => o.Name == "me").Cells![GitHubPanel.ReposKey].Text);
         Assert.False(panel.ShowsParent);
 
         Assert.True(await panel.EnterAsync(owners.Single(o => o.Name == "me"), CancellationToken.None));
@@ -140,6 +140,44 @@ public sealed class GitHubTests : IDisposable
         }
 
         Assert.Equal(Day2, (await Listing.AllAsync(panel)).Single(r => r.Name == "README.md").Modified);
+    }
+
+    [Fact]
+    public async Task An_empty_repository_lists_nothing_and_says_so()
+    {
+        var host = new FakeHost();
+        var panel = new GitHubPanel(host, new FakeApi(), GitHubLocation.Parse("gh:me"), () => { });
+        var repos = await Listing.AllAsync(panel);
+        Assert.Equal("private, empty", repos.Single(r => r.Name == "empty-repo").Cells![GitHubPanel.KindKey].Text);
+
+        Assert.True(await panel.EnterAsync(repos.Single(r => r.Name == "empty-repo"), CancellationToken.None));
+        Assert.Empty(await Listing.AllAsync(panel));
+        Assert.Contains(host.Messages, m => m.Message.Contains("is empty", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task A_place_that_cannot_be_listed_leaves_the_panel_where_it_was()
+    {
+        var panel = new GitHubPanel(new FakeHost(), new FakeApi(), GitHubLocation.Parse("gh:me"), () => { });
+        var repos = await Listing.AllAsync(panel);
+
+        Assert.True(await panel.EnterAsync(repos.Single(r => r.Name == "broken"), CancellationToken.None));
+        await Assert.ThrowsAsync<PluginException>(() => Listing.AllAsync(panel));
+        Assert.Equal("gh:me", panel.Location);
+
+        // The next Enter starts from the repositories, as the host still shows them.
+        Assert.True(await panel.EnterAsync(repos.Single(r => r.Name == "app"), CancellationToken.None));
+        Assert.Equal("gh:me/app", panel.Location);
+        Assert.Contains("main", (await Listing.AllAsync(panel)).Select(b => b.Name));
+    }
+
+    [Fact]
+    public void Sign_out_shows_once_in_the_command_line()
+    {
+        var panel = new GitHubPanel(new FakeHost(), new FakeApi(), GitHubLocation.Top, () => { });
+        var signOut = panel.Commands.Single(c => c.Title == "Sign out of GitHub");
+        Assert.False(signOut.AppliesTo!(null, []));
+        Assert.Single(new GitHubPlugin().Commands, c => c.Title == "Sign out of GitHub");
     }
 
     [Fact]
@@ -331,13 +369,25 @@ public sealed class GitHubTests : IDisposable
             [
                 new RepoInfo("me", "app", true, false, false, Day1, Day2, "main", null, ""),
                 new RepoInfo("me", "old", false, false, true, Day1, Day1, "main", null, ""),
-                new RepoInfo("acme", "site", false, true, false, Day1, null, null, null, ""),
+                new RepoInfo("acme", "site", false, true, false, Day1, null, "main", null, ""),
+                new RepoInfo("me", "empty-repo", true, false, false, Day1, null, null, null, ""),
+                new RepoInfo("me", "broken", false, false, false, Day1, Day1, "main", null, ""),
             ]));
         }
 
         public Task<IReadOnlyList<BranchInfo>> BranchesAsync(string owner, string repo, CancellationToken cancellationToken)
         {
             BranchCalls++;
+            if (repo == "empty-repo")
+            {
+                return Task.FromResult<IReadOnlyList<BranchInfo>>([]);
+            }
+
+            if (repo == "broken")
+            {
+                throw new PluginException("GitHub answered 500 Internal Server Error.");
+            }
+
             return Task.FromResult<IReadOnlyList<BranchInfo>>(
             [
                 new BranchInfo("main", Day2, "me", "c1", "tree-main"),

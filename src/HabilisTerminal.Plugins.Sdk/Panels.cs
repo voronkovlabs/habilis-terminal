@@ -17,7 +17,10 @@ public interface IPanelProvider : IAsyncDisposable
     /// </summary>
     string Location { get; }
 
-    /// <summary>Layouts the user switches with Ctrl+1, Ctrl+2...; the first is the default. At least one.</summary>
+    /// <summary>
+    /// Layouts the user switches with Ctrl+1, Ctrl+2...; the first is the default. At least one. Asked after each
+    /// listing, so a provider with levels may give each level its own columns; the user's choice is kept by number.
+    /// </summary>
     IReadOnlyList<PanelLayout> Layouts { get; }
 
     /// <summary>Extra sort keys (Ctrl+F12 lists them with name, size and date). Usually custom columns.</summary>

@@ -139,7 +139,7 @@ public sealed partial class FilePanel
                 {
                     shownFirst = true;
                     session.Entries = new Dictionary<(string, bool), PanelEntry>(entries);
-                    session.Extension.NameColumns = NameColumns(session);
+                    ReadShape(session);
                     State.SetListing(location, rows.ToArray(), focusName, hasParent: ShowsParent(session));
                     Refresh();
                     Message = "Loading…";
@@ -161,7 +161,7 @@ public sealed partial class FilePanel
             // Cancelled from the card: the provider is already at the new location, so the panel goes there too, with
             // what has arrived.
             session.Entries = entries;
-            session.Extension.NameColumns = NameColumns(session);
+            ReadShape(session);
             State.SetListing(location, rows, focusName, hasParent: ShowsParent(session));
             Refresh();
             Message = "Cancelled: the list is incomplete.";
@@ -185,7 +185,7 @@ public sealed partial class FilePanel
 
         session.Entries = entries;
         Message = null;
-        session.Extension.NameColumns = NameColumns(session);
+        ReadShape(session);
         State.SetListing(location, rows, focusName, hasParent: ShowsParent(session));
         Refresh();
         if (!samePath)
@@ -412,6 +412,16 @@ public sealed partial class FilePanel
         PluginManager.Guard(session.Plugin, () => session.Provider.ShowsParent, true);
 
     /// <summary>The provider's name columns (issue #97); a provider that fails to answer keeps one.</summary>
+    /// <summary>
+    /// What a provider may change from one place to the next, asked after each listing: its name columns and the
+    /// columns of the layout in use (issue #218; a plugin with levels, as GitHub's, has different columns on each).
+    /// </summary>
+    private static void ReadShape(PluginSession session)
+    {
+        session.Extension.NameColumns = NameColumns(session);
+        session.ReapplyLayout();
+    }
+
     private static int NameColumns(PluginSession session) =>
         PluginManager.Guard(session.Plugin, () => session.Provider.NameColumns, 1);
 
@@ -507,14 +517,33 @@ public sealed partial class FilePanel
 
         public Dictionary<(string, bool), PanelEntry> Entries { get; set; } = [];
 
+        /// <summary>The numbered layout in use (Ctrl+1, Ctrl+2...); null while the alternative one is.</summary>
+        public int? LayoutIndex { get; private set; }
+
         public void ApplyLayout(int index, IPanelProvider provider)
         {
             var layouts = PluginManager.Guard(Plugin, () => provider.Layouts, []);
             var layout = layouts.Count == 0 ? null : layouts[Math.Clamp(index, 0, layouts.Count - 1)];
-            ApplyLayout(layout);
+            SetColumns(layout);
+            LayoutIndex = index;
         }
 
         public void ApplyLayout(PanelLayout? layout)
+        {
+            SetColumns(layout);
+            LayoutIndex = null;
+        }
+
+        /// <summary>The numbered layout again, as the provider gives it for the place it is at now.</summary>
+        public void ReapplyLayout()
+        {
+            if (LayoutIndex is { } index)
+            {
+                ApplyLayout(index, Provider);
+            }
+        }
+
+        private void SetColumns(PanelLayout? layout)
         {
             Extension.Columns = layout?.Columns.Select(c => new ExtensionColumn(c.Key, c.Title, c.Width, c.AlignRight)).ToArray() ?? [];
         }

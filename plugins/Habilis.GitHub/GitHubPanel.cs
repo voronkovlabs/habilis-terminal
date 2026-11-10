@@ -52,7 +52,8 @@ internal sealed class GitHubPanel : IPanelProvider, IPanelCommands, IGetFiles
             new PanelCommand("Open in browser", null, OpenInBrowserAsync),
             new PanelCommand("Clone address", null, ShowCloneAddressAsync) { AppliesTo = (current, _) => !_location.IsTop && (!_location.IsOwner || current is not null) },
             new PanelCommand("Refresh from GitHub", null, RefreshAsync),
-            new PanelCommand("Sign out of GitHub", null, SignOutAsync),
+            // The plugin's own command already offers it in the command line (issue #218); this one is for F9 > Panel.
+            new PanelCommand("Sign out of GitHub", null, SignOutAsync) { AppliesTo = (_, _) => false },
         ];
     }
 
@@ -65,7 +66,7 @@ internal sealed class GitHubPanel : IPanelProvider, IPanelCommands, IGetFiles
     public IReadOnlyList<PanelLayout> Layouts => _location switch
     {
         { IsTop: true } => [new("Owners", [new PanelColumn(ReposKey, "Repositories", 100, AlignRight: true)])],
-        { IsOwner: true } => [new("Repositories", [Created, LastCommit, new PanelColumn(KindKey, "Kind", 90)]), new("Names", [])],
+        { IsOwner: true } => [new("Repositories", [Created, LastCommit, new PanelColumn(KindKey, "Kind", 130)]), new("Names", [])],
         { IsRepo: true } =>
         [
             new("Branches", [Created, LastCommit, new PanelColumn(AheadKey, "Ahead", 60, AlignRight: true), new PanelColumn(BehindKey, "Behind", 60, AlignRight: true)]),
@@ -128,20 +129,42 @@ internal sealed class GitHubPanel : IPanelProvider, IPanelCommands, IGetFiles
             RestartBackground();
         }
 
-        _listed = _location;
+        // When this place cannot be listed the host keeps showing the last listing (issue #218): go back to its place,
+        // or the next Enter would start from where the panel never arrived.
+        var previous = _listed;
         IReadOnlyList<PanelEntry> rows;
         try
         {
             rows = await RowsAsync(cancellationToken).ConfigureAwait(false);
+        }
+        catch (SignInExpiredException) when (GoBack(previous))
+        {
+            throw;
         }
         catch (SignInExpiredException)
         {
             _signedOut();
             throw;
         }
+        catch (Exception) when (GoBack(previous))
+        {
+            throw;
+        }
 
+        _listed = _location;
         _rowCount = rows.Count;
         yield return rows;
+    }
+
+    /// <summary>Back to the place last listed; false, so it fits an exception filter and the exception goes on.</summary>
+    private bool GoBack(GitHubLocation? previous)
+    {
+        if (previous is not null)
+        {
+            _location = previous;
+        }
+
+        return false;
     }
 
     public async Task<bool> EnterAsync(PanelEntry entry, CancellationToken cancellationToken)
@@ -337,7 +360,9 @@ internal sealed class GitHubPanel : IPanelProvider, IPanelCommands, IGetFiles
             var branches = await BranchesAsync(place, cancellationToken).ConfigureAwait(false);
             if (branches.Count == 0)
             {
-                throw new PluginException($"{place.Owner}/{place.Repo} has no branches yet.");
+                // An empty repository: nothing to list, which is not an error (issue #218).
+                _host.ShowStatus($"{place.Owner}/{place.Repo} is empty: it has no commits yet.");
+                return [];
             }
 
             var missing = new List<BranchInfo>();
@@ -378,14 +403,16 @@ internal sealed class GitHubPanel : IPanelProvider, IPanelCommands, IGetFiles
         }
 
         var items = await FolderAsync(place, cancellationToken).ConfigureAwait(false);
+        // The rows first, then the dates still missing: what arrives later comes with the next refresh.
+        PanelEntry[] files = [.. items.Select(i => new PanelEntry(i.Name, i.IsFolder, i.IsFolder ? null : i.Size,
+            _fileDates.TryGetValue(FileKey(place, i.Path), out var date) ? date : null) { Tag = i })];
         var undated = items.Where(i => !_fileDates.ContainsKey(FileKey(place, i.Path))).Select(i => i.Path).ToList();
         if (undated.Count > 0)
         {
             FillFileDates(place, undated);
         }
 
-        return [.. items.Select(i => new PanelEntry(i.Name, i.IsFolder, i.IsFolder ? null : i.Size,
-            _fileDates.TryGetValue(FileKey(place, i.Path), out var date) ? date : null) { Tag = i })];
+        return files;
     }
 
     private async Task<RepoInfo?> RepoAsync(GitHubLocation place, CancellationToken cancellationToken)
@@ -662,5 +689,5 @@ internal sealed class GitHubPanel : IPanelProvider, IPanelCommands, IGetFiles
     private static CellValue Count(int count) => new(count.ToString("N0", CultureInfo.CurrentCulture), count);
 
     private static string Kind(RepoInfo repo) =>
-        string.Join(", ", new[] { repo.IsPrivate ? "private" : "public", repo.IsFork ? "fork" : null, repo.IsArchived ? "archived" : null }.Where(k => k is not null));
+        string.Join(", ", new[] { repo.IsPrivate ? "private" : "public", repo.IsFork ? "fork" : null, repo.IsArchived ? "archived" : null, repo.DefaultBranch is null ? "empty" : null }.Where(k => k is not null));
 }
