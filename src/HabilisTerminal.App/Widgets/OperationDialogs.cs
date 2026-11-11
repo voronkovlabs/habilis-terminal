@@ -1,7 +1,11 @@
 using System.Globalization;
 using System.IO;
-using System.Windows;
-using System.Windows.Controls;
+using Avalonia;
+using Avalonia.Controls;
+using Avalonia.Media;
+using Avalonia.Controls.Primitives;
+using Avalonia.Layout;
+using Avalonia.Interactivity;
 using HabilisTerminal.App.Panels;
 using HabilisTerminal.Core.FileSystem;
 using HabilisTerminal.Core.Operations;
@@ -49,7 +53,7 @@ public static class OperationDialogs
             return null;
         }
 
-        var policy = (ExistingFilePolicy)radios.First(r => r.IsChecked == true).Tag;
+        var policy = (ExistingFilePolicy)radios.First(r => r.IsChecked == true).Tag!;
         return (destination.Text.Trim(), new CopyOptions
         {
             ExistingFiles = policy,
@@ -76,7 +80,11 @@ public static class OperationDialogs
     public static string? Rename(Window owner, string name, bool isFolder)
     {
         var box = new TextBox { Text = name };
-        box.Loaded += (_, _) => box.Select(0, Core.Operations.RenameItem.EditableLength(name, isFolder));
+        box.Loaded += (_, _) => Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+        {
+            box.SelectionStart = 0;
+            box.SelectionEnd = Core.Operations.RenameItem.EditableLength(name, isFolder);
+        }, Avalonia.Threading.DispatcherPriority.Input);
         var accepted = ThemedDialog.Show(owner, $"Rename '{name}'", box,
             [new DialogButton<bool>("Rename", true, IsDefault: true), new DialogButton<bool>("Cancel", false, IsCancel: true)], false, box);
         return accepted ? box.Text : null;
@@ -236,7 +244,7 @@ public static class OperationDialogs
                 Text = rows[i].Value,
                 IsReadOnly = true,
                 BorderThickness = new Thickness(0),
-                Background = System.Windows.Media.Brushes.Transparent,
+                Background = Avalonia.Media.Brushes.Transparent,
                 Padding = new Thickness(0),
                 Margin = new Thickness(0, 2, 0, 2),
                 TextWrapping = TextWrapping.Wrap,
@@ -265,14 +273,26 @@ public static class OperationDialogs
         var boxes = flags.Select(f => new CheckBox { Content = f.Label, IsThreeState = paths.Count > 1, IsChecked = State(f.Flag), Tag = f.Flag }).ToArray();
         var compressed = new CheckBox { Content = "_Compressed", IsThreeState = paths.Count > 1, IsChecked = State(FileAttributes.Compressed) };
         var encrypted = new CheckBox { Content = "_Encrypted", IsThreeState = paths.Count > 1, IsChecked = State(FileAttributes.Encrypted) };
-        compressed.Checked += (_, _) => encrypted.IsChecked = false;
-        encrypted.Checked += (_, _) => compressed.IsChecked = false;
+        compressed.IsCheckedChanged += (_, _) =>
+        {
+            if (compressed.IsChecked == true)
+            {
+                encrypted.IsChecked = false;
+            }
+        };
+        encrypted.IsCheckedChanged += (_, _) =>
+        {
+            if (encrypted.IsChecked == true)
+            {
+                compressed.IsChecked = false;
+            }
+        };
 
         var single = paths.Count == 1 ? infos[0] : null;
         var created = DateBox(single?.CreationTime);
         var modified = DateBox(single?.LastWriteTime);
         var accessed = DateBox(single?.LastAccessTime);
-        var recursive = new CheckBox { Content = "Apply to subfolders and files", Visibility = infos.Any(i => (i.Attributes & FileAttributes.Directory) != 0) ? Visibility.Visible : Visibility.Collapsed };
+        var recursive = new CheckBox { Content = "Apply to subfolders and files", IsVisible = infos.Any(i => (i.Attributes & FileAttributes.Directory) != 0) };
 
         var columns = new UniformGrid2(2);
         foreach (var box in boxes)
@@ -336,7 +356,7 @@ public static class OperationDialogs
         FileAttributes set = 0, clear = 0;
         foreach (var box in boxes)
         {
-            var flag = (FileAttributes)box.Tag;
+            var flag = (FileAttributes)box.Tag!;
             if (box.IsChecked == true)
             {
                 set |= flag;
@@ -378,14 +398,14 @@ public static class OperationDialogs
     private static TextBlock Label(string text)
     {
         var block = new TextBlock { Text = text };
-        block.SetResourceReference(FrameworkElement.StyleProperty, "Habi.LabelStyle");
+        block.Classes.Add("label");
         return block;
     }
 
     private static TextBlock Description(string text, double top)
     {
         var block = new TextBlock { Text = text, Margin = new Thickness(0, top, 0, 0) };
-        block.SetResourceReference(FrameworkElement.StyleProperty, "Habi.DescriptionStyle");
+        block.Classes.Add("description");
         return block;
     }
 
@@ -396,7 +416,7 @@ public static class OperationDialogs
 
         public Grid Panel { get; } = CreateGrid(columns);
 
-        public void Add(UIElement element)
+        public void Add(Control element)
         {
             var row = _count / columns;
             if (row >= Panel.RowDefinitions.Count)

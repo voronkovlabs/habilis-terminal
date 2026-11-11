@@ -1,7 +1,11 @@
 using System.Globalization;
-using System.Windows;
-using System.Windows.Input;
-using System.Windows.Media;
+using Avalonia;
+using Avalonia.Controls;
+using Avalonia.Controls.Primitives;
+using Avalonia.Layout;
+using Avalonia.Interactivity;
+using Avalonia.Input;
+using Avalonia.Media;
 using HabilisTerminal.App.Theming;
 using HabilisTerminal.Core.FileSystem;
 using HabilisTerminal.Core.Panels;
@@ -13,7 +17,7 @@ namespace HabilisTerminal.App.Panels;
 /// every Far view mode including multi-column Brief, and looks like a VS Code list (22 px rows, 13 px Segoe UI).
 /// The view never changes <see cref="PanelState"/> on its own except scrolling; clicks are reported as events.
 /// </summary>
-public sealed class FileListView : FrameworkElement
+public sealed class FileListView : Control
 {
     private const double HeaderHeight = 22;
     private const double IconWidth = 20;
@@ -24,8 +28,8 @@ public sealed class FileListView : FrameworkElement
     private const double MinimumScrollbarThumbHeight = 16;
     private const int TextCacheLimit = 4096;
 
-    private static Typeface UiTypeface = new(new FontFamily("Segoe UI"), FontStyles.Normal, FontWeights.Normal, FontStretches.Normal);
-    private static Typeface UiTypefaceBold = new(new FontFamily("Segoe UI"), FontStyles.Normal, FontWeights.SemiBold, FontStretches.Normal);
+    private static Typeface UiTypeface = new(new FontFamily("Segoe UI"), FontStyle.Normal, FontWeight.Normal, FontStretch.Normal);
+    private static Typeface UiTypefaceBold = new(new FontFamily("Segoe UI"), FontStyle.Normal, FontWeight.SemiBold, FontStretch.Normal);
     private static double FontSize = 13;
     private static int FontVersion;
     private int _renderedFontVersion;
@@ -33,7 +37,7 @@ public sealed class FileListView : FrameworkElement
     private static readonly Geometry LinkGeometry = Geometry.Parse("M9,15 L15,9 M11,9 L15,9 L15,13");
     private static readonly Geometry HardLinkGeometry = Geometry.Parse("M8.5,10 L15.5,10 M8.5,14 L15.5,14");
 
-    private readonly Dictionary<(string Text, Brush Brush, bool Bold), FormattedText> _textCache = [];
+    private readonly Dictionary<(string Text, IBrush IBrush, bool Bold), FormattedText> _textCache = [];
 
     public static double RowHeight { get; private set; } = 22;
 
@@ -41,8 +45,8 @@ public sealed class FileListView : FrameworkElement
     public static void SetFont(string family, double size)
     {
         var fontFamily = new FontFamily(string.IsNullOrWhiteSpace(family) ? "Segoe UI" : family);
-        UiTypeface = new Typeface(fontFamily, FontStyles.Normal, FontWeights.Normal, FontStretches.Normal);
-        UiTypefaceBold = new Typeface(fontFamily, FontStyles.Normal, FontWeights.SemiBold, FontStretches.Normal);
+        UiTypeface = new Typeface(fontFamily, FontStyle.Normal, FontWeight.Normal, FontStretch.Normal);
+        UiTypefaceBold = new Typeface(fontFamily, FontStyle.Normal, FontWeight.SemiBold, FontStretch.Normal);
         FontSize = size;
         RowHeight = Math.Round(size * 22 / 13);
         FontVersion++;
@@ -59,14 +63,13 @@ public sealed class FileListView : FrameworkElement
         IconProvider.SystemIconLoaded += InvalidateVisual;
         Focusable = false;
         ClipToBounds = true;
-        SnapsToDevicePixels = true;
     }
 
     /// <summary>Left click on an item: index, click count.</summary>
     public event Action<int, int>? ItemClicked;
 
     /// <summary>Right click: the item index (-1 for empty space) and the click point in physical screen pixels.</summary>
-    public event Action<int, Point>? ContextMenuRequested;
+    public event Action<int, PixelPoint>? ContextMenuRequested;
 
     public event Action<SortMode>? HeaderClicked;
 
@@ -128,9 +131,9 @@ public sealed class FileListView : FrameworkElement
     public bool HasPanelFocus { get; set; }
 
     /// <summary>The panel supplies the same brush it currently uses for its frame.</summary>
-    public Brush ScrollbarBrush { get; set; } = PanelPalette.Border;
+    public IBrush ScrollbarBrush { get; set; } = PanelPalette.Border;
 
-    public int RowsPerColumn => Math.Max(1, (int)Math.Floor((ActualHeight - ListTop) / RowHeight));
+    public int RowsPerColumn => Math.Max(1, (int)Math.Floor((Bounds.Height - ListTop) / RowHeight));
 
     public int ColumnCount => _state is null ? 1 : PanelColumns.NameColumnCount(_state);
 
@@ -140,7 +143,7 @@ public sealed class FileListView : FrameworkElement
     private double ListTop => HasHeader ? HeaderHeight : 0;
 
     /// <summary>The visible thumb owns the inset at the right; cells never draw text underneath it.</summary>
-    private double ListWidth => Math.Max(0, ActualWidth - (MaxTopIndex > 0 ? ScrollbarWidth + ScrollbarRightInset : 0));
+    private double ListWidth => Math.Max(0, Bounds.Width - (MaxTopIndex > 0 ? ScrollbarWidth + ScrollbarRightInset : 0));
 
     /// <summary>Table modes, and name-column modes with detail columns (Medium, issue #40); Brief has none.</summary>
     private bool HasHeader =>
@@ -162,7 +165,7 @@ public sealed class FileListView : FrameworkElement
 
     public void EnsureCursorVisible()
     {
-        if (_state is null || ActualHeight <= 0 || _state.Extension is { CursorVisible: false })
+        if (_state is null || Bounds.Height <= 0 || _state.Extension is { CursorVisible: false })
         {
             return;
         }
@@ -225,24 +228,17 @@ public sealed class FileListView : FrameworkElement
         return index < _state.Count ? index : -1;
     }
 
-    protected override void OnDpiChanged(DpiScale oldDpi, DpiScale newDpi)
+    protected override void OnSizeChanged(SizeChangedEventArgs e)
     {
-        base.OnDpiChanged(oldDpi, newDpi);
-        _textCache.Clear();
-        InvalidateVisual();
-    }
-
-    protected override void OnRenderSizeChanged(SizeChangedInfo sizeInfo)
-    {
-        base.OnRenderSizeChanged(sizeInfo);
+        base.OnSizeChanged(e);
         EnsureCursorVisible();
     }
 
-    protected override void OnRender(DrawingContext drawingContext)
+    public override void Render(DrawingContext context)
     {
         using var measure = Core.Diagnostics.Perf.Measure("panel.render");
-        var dc = drawingContext;
-        dc.DrawRectangle(PanelPalette.Background, null, new Rect(RenderSize));
+        var dc = context;
+        dc.DrawRectangle(PanelPalette.Background, null, new Rect(Bounds.Size));
         if (_state is null)
         {
             return;
@@ -255,7 +251,7 @@ public sealed class FileListView : FrameworkElement
         }
 
         _firstTextOfRender = true;
-        var pixelsPerDip = VisualTreeHelper.GetDpi(this).PixelsPerDip;
+        const double pixelsPerDip = 1;
         var columns = ColumnCount;
         var rows = RowsPerColumn;
         IReadOnlyList<ColumnSpec> details;
@@ -294,7 +290,7 @@ public sealed class FileListView : FrameworkElement
 
         if (ScrollbarThumb() is { } thumb)
         {
-            dc.DrawRoundedRectangle(ScrollbarBrush, null, thumb, ScrollbarWidth / 2, ScrollbarWidth / 2);
+            dc.DrawRectangle(ScrollbarBrush, null, new RoundedRect(thumb, ScrollbarWidth / 2));
         }
 
         if (VisibleRange != _reportedRange)
@@ -305,9 +301,9 @@ public sealed class FileListView : FrameworkElement
         }
     }
 
-    protected override void OnMouseMove(MouseEventArgs e)
+    protected override void OnPointerMoved(PointerEventArgs e)
     {
-        base.OnMouseMove(e);
+        base.OnPointerMoved(e);
         var point = e.GetPosition(this);
         if (_scrollbarDragOffset is { } dragOffset)
         {
@@ -328,16 +324,16 @@ public sealed class FileListView : FrameworkElement
         Cursor = HasHeader && point.Y < HeaderHeight && HeaderSeparatorAt(point.X) is not null ? Cursors.SizeWE : null;
     }
 
-    protected override void OnMouseDown(MouseButtonEventArgs e)
+    protected override void OnPointerPressed(PointerPressedEventArgs e)
     {
-        base.OnMouseDown(e);
+        base.OnPointerPressed(e);
         var point = e.GetPosition(this);
         if (e.ChangedButton == MouseButton.Left && ScrollbarThumb() is { } thumb && point.X >= thumb.X && point.X <= thumb.Right)
         {
             if (point.Y >= thumb.Y && point.Y <= thumb.Bottom)
             {
                 _scrollbarDragOffset = point.Y - thumb.Y;
-                CaptureMouse();
+                e.Pointer.Capture(this);
             }
             else
             {
@@ -353,7 +349,7 @@ public sealed class FileListView : FrameworkElement
             if (e.ChangedButton == MouseButton.Left && HeaderSeparatorAt(point.X) is { } column)
             {
                 _resizing = (column, point.X, WidthOf(column));
-                CaptureMouse();
+                e.Pointer.Capture(this);
             }
             else if (e.ChangedButton == MouseButton.Left && HeaderColumnAt(point.X) is { Kind: ColumnKind.Custom, Key: { } key })
             {
@@ -381,13 +377,13 @@ public sealed class FileListView : FrameworkElement
         }
     }
 
-    protected override void OnMouseUp(MouseButtonEventArgs e)
+    protected override void OnPointerReleased(PointerReleasedEventArgs e)
     {
-        base.OnMouseUp(e);
+        base.OnPointerReleased(e);
         if (_scrollbarDragOffset is not null)
         {
             _scrollbarDragOffset = null;
-            ReleaseMouseCapture();
+            e.Pointer.Capture(null);
             e.Handled = true;
             return;
         }
@@ -395,26 +391,26 @@ public sealed class FileListView : FrameworkElement
         if (_resizing is not null)
         {
             _resizing = null;
-            ReleaseMouseCapture();
+            e.Pointer.Capture(null);
         }
 
         var point = e.GetPosition(this);
         if (e.ChangedButton == MouseButton.Right && !(HasHeader && point.Y < HeaderHeight))
         {
-            ContextMenuRequested?.Invoke(HitTest(point), PointToScreen(point));
+            ContextMenuRequested?.Invoke(HitTest(point), this.PointToScreen(point));
             e.Handled = true;
         }
     }
 
-    protected override void OnLostMouseCapture(MouseEventArgs e)
+    protected override void OnPointerCaptureLost(PointerCaptureLostEventArgs e)
     {
-        base.OnLostMouseCapture(e);
+        base.OnPointerCaptureLost(e);
         _scrollbarDragOffset = null;
         _resizing = null;
     }
 
     /// <summary>Where a keyboard-opened context menu goes: below the start of the cursor row, in physical screen pixels.</summary>
-    public Point CursorMenuPoint()
+    public PixelPoint CursorMenuPoint()
     {
         if (_state is null || !IsVisible)
         {
@@ -428,19 +424,19 @@ public sealed class FileListView : FrameworkElement
         var row = ColumnCount == 1 ? Math.Min(rows - 1, offset) : offset % rows;
         var x = (column * (ListWidth / ColumnCount)) + (2 * CellPadding) + IconWidth;
         var y = ListTop + ((row + 1) * RowHeight);
-        return PointToScreen(new Point(x, y));
+        return this.PointToScreen(new Point(x, y));
     }
 
-    protected override void OnMouseWheel(MouseWheelEventArgs e)
+    protected override void OnPointerWheelChanged(PointerWheelEventArgs e)
     {
-        base.OnMouseWheel(e);
+        base.OnPointerWheelChanged(e);
         if (_state is null)
         {
             return;
         }
 
         var step = ColumnCount == 1 ? 3 : RowsPerColumn;
-        ScrollBy(e.Delta > 0 ? -step : step);
+        ScrollBy(e.Delta.Y > 0 ? -step : step);
         e.Handled = true;
     }
 
@@ -475,8 +471,8 @@ public sealed class FileListView : FrameworkElement
     private Rect? ScrollbarThumb()
     {
         var maxTop = MaxTopIndex;
-        var trackHeight = ActualHeight - ListTop;
-        if (_state is null || maxTop == 0 || trackHeight <= 0 || ActualWidth < ScrollbarWidth + ScrollbarRightInset)
+        var trackHeight = Bounds.Height - ListTop;
+        if (_state is null || maxTop == 0 || trackHeight <= 0 || Bounds.Width < ScrollbarWidth + ScrollbarRightInset)
         {
             return null;
         }
@@ -484,7 +480,7 @@ public sealed class FileListView : FrameworkElement
         var height = Math.Min(trackHeight, Math.Max(MinimumScrollbarThumbHeight, trackHeight * PageSize / _state.Count));
         var travel = Math.Max(0, trackHeight - height);
         var top = ListTop + (travel * _topIndex / maxTop);
-        return new Rect(ActualWidth - ScrollbarWidth - ScrollbarRightInset, top, ScrollbarWidth, height);
+        return new Rect(Bounds.Width - ScrollbarWidth - ScrollbarRightInset, top, ScrollbarWidth, height);
     }
 
     private void ScrollThumbTo(double top)
@@ -494,7 +490,7 @@ public sealed class FileListView : FrameworkElement
             return;
         }
 
-        var travel = ActualHeight - ListTop - thumb.Height;
+        var travel = Bounds.Height - ListTop - thumb.Height;
         if (travel <= 0)
         {
             return;
@@ -568,8 +564,8 @@ public sealed class FileListView : FrameworkElement
 
     private void DrawHeader(DrawingContext dc, IReadOnlyList<ColumnSpec> details, double pixelsPerDip)
     {
-        dc.DrawRectangle(PanelPalette.HeaderBackground, null, new Rect(0, 0, ActualWidth, HeaderHeight));
-        dc.DrawRectangle(PanelPalette.Border, null, new Rect(0, HeaderHeight - 1, ActualWidth, 1));
+        dc.DrawRectangle(PanelPalette.HeaderBackground, null, new Rect(0, 0, Bounds.Width, HeaderHeight));
+        dc.DrawRectangle(PanelPalette.Border, null, new Rect(0, HeaderHeight - 1, Bounds.Width, 1));
         var sort = _state!.Sort;
         foreach (var (column, x, width) in HeaderLayout(details))
         {
@@ -609,7 +605,7 @@ public sealed class FileListView : FrameworkElement
         }
 
         // A plugin row may carry a tone (issue #49): it colours the row unless it is marked or under the cursor.
-        Brush? tone = null;
+        IBrush? tone = null;
         if (!item.IsParent && state.Extension is { } extension)
         {
             using var plugin = Core.Diagnostics.Perf.Measure("panel.render.plugin");
@@ -621,10 +617,7 @@ public sealed class FileListView : FrameworkElement
             : cursorFocused ? PanelPalette.ActiveSelectionForeground
             : tone ?? PanelPalette.Foreground;
         var dimmed = !item.IsParent && (item.Entry.IsHidden || item.Entry.IsSystem);
-        if (dimmed)
-        {
-            dc.PushOpacity(0.6);
-        }
+        DrawingContext.PushedState? dim = dimmed ? dc.PushOpacity(0.6) : null;
 
         var columns = details.Count == 0
             ? [(PanelColumns.Name, cell.X, cell.Width)]
@@ -676,23 +669,13 @@ public sealed class FileListView : FrameworkElement
 
                 // A running total is dimmed until the folder is fully counted.
                 var counting = folderSize is { IsFinal: false } && column.Kind is ColumnKind.Size or ColumnKind.CompactSize;
-                if (counting)
-                {
-                    dc.PushOpacity(0.5);
-                }
-
+                DrawingContext.PushedState? faded = counting ? dc.PushOpacity(0.5) : null;
                 DrawText(dc, text, brush, x + CellPadding, cell.Y, width - (2 * CellPadding), RowHeight, column.AlignRight, false, pixelsPerDip);
-                if (counting)
-                {
-                    dc.Pop();
-                }
+                faded?.Dispose();
             }
         }
 
-        if (dimmed)
-        {
-            dc.Pop();
-        }
+        dim?.Dispose();
     }
 
     private void DrawIcon(DrawingContext dc, PanelItem item, double x, double y)
@@ -712,20 +695,22 @@ public sealed class FileListView : FrameworkElement
         IconProvider.Draw(dc, item, _state!.Path, x, y);
         if (!item.IsParent && item.Entry.IsLink)
         {
-            dc.PushTransform(new TranslateTransform(x, y));
-            dc.DrawGeometry(PanelPalette.Background, new Pen(PanelPalette.FocusOutline, 1.4), LinkGeometry);
-            dc.Pop();
+            using (dc.PushTransform(Matrix.CreateTranslation(x, y)))
+            {
+                dc.DrawGeometry(PanelPalette.Background, new Pen(PanelPalette.FocusOutline, 1.4), LinkGeometry);
+            }
         }
         else if (!item.IsParent && HardLinks?.ContainsKey(item.Name) == true)
         {
             // On a plate of its own: file icons are mostly the colour a line alone would have.
-            dc.PushTransform(new TranslateTransform(x, y));
-            dc.DrawRectangle(PanelPalette.Background, null, new Rect(7, 7, 10, 10));
-            dc.DrawGeometry(null, new Pen(PanelPalette.Foreground, 1.5), HardLinkGeometry);
-            dc.Pop();
+            using (dc.PushTransform(Matrix.CreateTranslation(x, y)))
+            {
+                dc.DrawRectangle(PanelPalette.Background, null, new Rect(7, 7, 10, 10));
+                dc.DrawGeometry(null, new Pen(PanelPalette.Foreground, 1.5), HardLinkGeometry);
+            }
         }
     }
-    private void DrawText(DrawingContext dc, string text, Brush brush, double x, double y, double width, double height, bool alignRight, bool bold, double pixelsPerDip)
+    private void DrawText(DrawingContext dc, string text, IBrush brush, double x, double y, double width, double height, bool alignRight, bool bold, double pixelsPerDip)
     {
         if (width <= 4 || text.Length == 0)
         {
@@ -735,7 +720,7 @@ public sealed class FileListView : FrameworkElement
         if (!_textCache.TryGetValue((text, brush, bold), out var formatted))
         {
             using var measure = Core.Diagnostics.Perf.Measure("panel.render.new-text");
-            formatted = new FormattedText(text, CultureInfo.CurrentUICulture, FlowDirection.LeftToRight, bold ? UiTypefaceBold : UiTypeface, FontSize, brush, pixelsPerDip)
+            formatted = new FormattedText(text, CultureInfo.CurrentUICulture, FlowDirection.LeftToRight, bold ? UiTypefaceBold : UiTypeface, FontSize, brush)
             {
                 MaxLineCount = 1,
                 Trimming = TextTrimming.CharacterEllipsis,

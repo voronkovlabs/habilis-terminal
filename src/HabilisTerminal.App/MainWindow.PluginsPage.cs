@@ -1,5 +1,7 @@
 using System.IO;
-using System.Windows.Controls;
+using Avalonia.Controls;
+using Avalonia.Media;
+using Avalonia.Controls.Primitives;
 using HabilisTerminal.App.Plugins;
 using HabilisTerminal.App.Widgets;
 using HabilisTerminal.Core.Plugins;
@@ -142,8 +144,8 @@ public partial class MainWindow
         box.Loaded += (_, _) => box.SelectAll();
         var body = new StackPanel();
         body.Children.Add(box);
-        var hint = new TextBlock { Text = "A .zip file or a folder with a plugin.json.", Margin = new System.Windows.Thickness(0, 6, 0, 0) };
-        hint.SetResourceReference(StyleProperty, "Habi.DescriptionStyle");
+        var hint = new TextBlock { Text = "A .zip file or a folder with a plugin.json.", Margin = new Avalonia.Thickness(0, 6, 0, 0) };
+        hint.Classes.Add("description");
         body.Children.Add(hint);
         var accepted = ThemedDialog.Show(this, "Install plugin from", body,
             [new DialogButton<bool>("Next", true, IsDefault: true), new DialogButton<bool>("Cancel", false, IsCancel: true)], false, box);
@@ -167,10 +169,10 @@ public partial class MainWindow
     {
         var body = new StackPanel();
         var what = new TextBlock { Text = previous?.Version is { } version ? $"{manifest.Name} {manifest.Version}, in place of version {version}." : $"{manifest.Name} {manifest.Version} ({manifest.Id})." };
-        what.SetResourceReference(StyleProperty, "Habi.LabelStyle");
+        what.Classes.Add("label");
         body.Children.Add(what);
-        var warning = new TextBlock { Text = "A plugin runs with all the rights of this app and can read and change your files. Install only what you trust.", TextWrapping = System.Windows.TextWrapping.Wrap, MaxWidth = 460, Margin = new System.Windows.Thickness(0, 8, 0, 0) };
-        warning.SetResourceReference(StyleProperty, "Habi.DescriptionStyle");
+        var warning = new TextBlock { Text = "A plugin runs with all the rights of this app and can read and change your files. Install only what you trust.", TextWrapping = Avalonia.Media.TextWrapping.Wrap, MaxWidth = 460, Margin = new Avalonia.Thickness(0, 8, 0, 0) };
+        warning.Classes.Add("description");
         body.Children.Add(warning);
         return ThemedDialog.Show(this, "Install plugin", body,
             [new DialogButton<bool>("_Install", true, IsDefault: true), new DialogButton<bool>("Cancel", false, IsCancel: true)], false);

@@ -1,7 +1,10 @@
-using System.Windows;
-using System.Windows.Controls;
-using System.Windows.Input;
-using System.Windows.Media;
+using Avalonia;
+using Avalonia.Controls;
+using Avalonia.Controls.Primitives;
+using Avalonia.Layout;
+using Avalonia.Interactivity;
+using Avalonia.Input;
+using Avalonia.Media;
 using HabilisTerminal.App.Theming;
 using HabilisTerminal.Core.Plugins;
 
@@ -71,11 +74,11 @@ internal sealed class PluginsPage : DockPanel, IPage
     {
         _rowsSource = rows;
         Focusable = true;
-        FocusVisualStyle = null;
+        ;
         LastChildFill = true;
-        SetResourceReference(BackgroundProperty, "Habi.Background");
+        this.SetResourceReference(BackgroundProperty, "Habi.Background");
 
-        var title = new TextBlock { Text = "Plugins", FontSize = 13, FontWeight = FontWeights.SemiBold, VerticalAlignment = VerticalAlignment.Center };
+        var title = new TextBlock { Text = "Plugins", FontSize = 13, FontWeight = FontWeight.SemiBold, VerticalAlignment = VerticalAlignment.Center };
         title.SetResourceReference(TextBlock.ForegroundProperty, "Habi.Foreground");
         var hint = new TextBlock { Text = "Ins install · Space on or off · F8 remove · F5 reload · Enter configure · Esc close", FontSize = 12, VerticalAlignment = VerticalAlignment.Center };
         hint.SetResourceReference(TextBlock.ForegroundProperty, "Habi.Description");
@@ -89,7 +92,7 @@ internal sealed class PluginsPage : DockPanel, IPage
         SetDock(headerBorder, Dock.Top);
         Children.Add(headerBorder);
 
-        var columns = Row("Name", "Version", "Source", "State", Brushes.Transparent, null, FontWeights.SemiBold);
+        var columns = Row("Name", "Version", "Source", "State", Brushes.Transparent, null, FontWeight.SemiBold);
         var columnsBorder = new Border { Child = columns, BorderThickness = new Thickness(0, 0, 0, 1) };
         columnsBorder.SetResourceReference(Border.BorderBrushProperty, "Habi.WidgetBorder");
         SetDock(columnsBorder, Dock.Top);
@@ -121,7 +124,7 @@ internal sealed class PluginsPage : DockPanel, IPage
         _remove.Click += (_, _) => Act(RemoveRequested);
         _reload.Click += (_, _) => Act(ReloadRequested);
         _configure.Click += (_, _) => Configure();
-        PreviewKeyDown += OnKeyDown;
+        AddHandler(Avalonia.Input.InputElement.KeyDownEvent, OnKeyDown, Avalonia.Interactivity.RoutingStrategies.Tunnel);
         Refresh();
     }
 
@@ -142,7 +145,7 @@ internal sealed class PluginsPage : DockPanel, IPage
     public void FocusContent()
     {
         Focus();
-        Keyboard.Focus(this);
+        this.Focus();
     }
 
     /// <summary>An action starts; false while another one runs.</summary>
@@ -181,8 +184,8 @@ internal sealed class PluginsPage : DockPanel, IPage
             var index = i;
             var row = _rows[i];
             var isSelected = i == _selected;
-            var element = Row(row.Name, row.Version ?? "-", row.OriginText, row.StateText, isSelected ? PanelPalette.ActiveSelectionBackground : Brushes.Transparent, row, FontWeights.Normal);
-            element.MouseLeftButtonDown += (_, e) =>
+            var element = Row(row.Name, row.Version ?? "-", row.OriginText, row.StateText, isSelected ? PanelPalette.ActiveSelectionBackground : Brushes.Transparent, row, FontWeight.Normal);
+            element.PointerPressed += (_, e) =>
             {
                 Select(index);
                 FocusContent();
@@ -197,7 +200,7 @@ internal sealed class PluginsPage : DockPanel, IPage
         UpdateDetails();
     }
 
-    private static Grid Row(string name, string version, string origin, string state, Brush background, PluginRow? row, FontWeight weight)
+    private static Grid Row(string name, string version, string origin, string state, IBrush background, PluginRow? row, FontWeight weight)
     {
         var grid = new Grid { Height = RowHeight, Background = background };
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
@@ -280,14 +283,14 @@ internal sealed class PluginsPage : DockPanel, IPage
         }
     }
 
-    private void OnKeyDown(object sender, KeyEventArgs e)
+    private void OnKeyDown(object? sender, KeyEventArgs e)
     {
-        if (Keyboard.Modifiers != ModifierKeys.None)
+        if (Keyboard.Modifiers != KeyModifiers.None)
         {
             return;
         }
 
-        var page = Math.Max(1, (int)(_scroll.ViewportHeight / RowHeight) - 1);
+        var page = Math.Max(1, (int)(_scroll.Viewport.Height / RowHeight) - 1);
         switch (e.Key)
         {
             case Key.Escape:

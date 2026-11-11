@@ -1,5 +1,10 @@
 using System.IO;
-using System.Windows;
+using Avalonia;
+using Avalonia.Controls;
+using Avalonia.Media;
+using Avalonia.Controls.Primitives;
+using Avalonia.Layout;
+using Avalonia.Interactivity;
 using HabilisTerminal.App.Operations;
 using HabilisTerminal.App.Panels;
 using HabilisTerminal.App.Widgets;

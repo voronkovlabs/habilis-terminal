@@ -1,9 +1,9 @@
 using System.Text.Json;
-using System.Windows.Media;
+using Avalonia.Media;
 using HabilisTerminal.App.Theming;
 using HabilisTerminal.Themes;
-using ICSharpCode.AvalonEdit;
-using ICSharpCode.AvalonEdit.Highlighting;
+using AvaloniaEdit;
+using AvaloniaEdit.Highlighting;
 
 namespace HabilisTerminal.App.Editing;
 
@@ -14,12 +14,11 @@ namespace HabilisTerminal.App.Editing;
 /// </summary>
 internal static class TextEditorTheme
 {
-    public static Brush Brush(ColorTheme theme, string key, string fallbackKey = "editor.background")
+    public static IBrush Brush(ColorTheme theme, string key, string fallbackKey = "editor.background")
     {
         var background = theme.GetOpaque("editor.background");
         var color = (theme.Get(key) ?? theme.Get(fallbackKey) ?? background).Over(background);
         var brush = new SolidColorBrush(PanelPalette.ToColor(color));
-        brush.Freeze();
         return brush;
     }
 
@@ -87,7 +86,7 @@ internal static class TextEditorTheme
                 : name.Contains("Preprocessor", StringComparison.OrdinalIgnoreCase) ? Scope("keyword.control.directive", "meta.preprocessor", "keyword")
                 : name is "Keywords" || name.Contains("Goto", StringComparison.OrdinalIgnoreCase) || name.Contains("Exception", StringComparison.OrdinalIgnoreCase) ? Scope("keyword.control", "keyword")
                 : Scope("storage.modifier", "keyword.other", "keyword");
-            named.Foreground = color is { } c ? new SimpleHighlightingBrush(c) : new SimpleHighlightingBrush(((SolidColorBrush)editor.Foreground).Color);
+            named.Foreground = color is { } c ? new SimpleHighlightingBrush(c) : new SimpleHighlightingBrush((editor.Foreground as ISolidColorBrush)?.Color ?? Colors.Gray);
             named.Background = null;
             named.FontWeight = null;
             named.FontStyle = null;

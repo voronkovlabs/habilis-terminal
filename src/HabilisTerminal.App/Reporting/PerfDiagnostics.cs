@@ -2,8 +2,7 @@ using System.Diagnostics;
 using System.IO;
 using System.Reflection;
 using System.Runtime.InteropServices;
-using System.Windows.Interop;
-using System.Windows.Threading;
+using Avalonia.Threading;
 using HabilisTerminal.Core.Diagnostics;
 using HabilisTerminal.Core.Reporting;
 
@@ -31,13 +30,11 @@ internal static class PerfDiagnostics
     private static readonly TimeSpan FlushEvery = TimeSpan.FromSeconds(30);
     private static readonly TimeSpan SampleThreadsEvery = TimeSpan.FromSeconds(5);
     private static readonly TimeSpan RetryAfter = TimeSpan.FromMinutes(30);
-    private static readonly PropertyInfo? OperationName = typeof(DispatcherOperation).GetProperty("Name", BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public);
 
     private static Dispatcher? _dispatcher;
     private static PerfStore? _store;
     private static Timer? _flush;
     private static Timer? _threadSampling;
-    private static volatile int _lastMessage;
     private static Thread? _watchdog;
     private static volatile bool _running;
     private static volatile string? _dispatched;
@@ -82,10 +79,6 @@ internal static class PerfDiagnostics
         Perf.Stop();
         if (_dispatcher is { } dispatcher)
         {
-            dispatcher.Hooks.OperationStarted -= OnOperationStarted;
-            dispatcher.Hooks.OperationCompleted -= OnOperationEnded;
-            dispatcher.Hooks.OperationAborted -= OnOperationEnded;
-            ComponentDispatcher.ThreadFilterMessage -= OnThreadMessage;
         }
 
         _flush?.Dispose();
@@ -124,10 +117,7 @@ internal static class PerfDiagnostics
         _dispatched = "startup";
         Perf.Start(Environment.CurrentManagedThreadId);
         _uiThreadId = (int)GetCurrentThreadId();
-        dispatcher.Hooks.OperationStarted += OnOperationStarted;
-        dispatcher.Hooks.OperationCompleted += OnOperationEnded;
-        dispatcher.Hooks.OperationAborted += OnOperationEnded;
-        ComponentDispatcher.ThreadFilterMessage += OnThreadMessage;
+        // Avalonia's dispatcher has no operation hooks and no message filter (issue #253): a stall names no operation yet.
         _processorsAtPeriodStart = MachineLoad.ProcessorTimes();
         _stacks = new StackSamplerClient();
         var uiThread = OpenThread(ThreadQueryLimitedInformation, false, GetCurrentThreadId());
@@ -143,7 +133,7 @@ internal static class PerfDiagnostics
     {
         if (int.TryParse(Environment.GetEnvironmentVariable("HABI_TEST_STALL"), out var ms))
         {
-            var timer = new DispatcherTimer(DispatcherPriority.Normal, dispatcher) { Interval = TimeSpan.FromSeconds(20) };
+            var timer = new DispatcherTimer(DispatcherPriority.Normal) { Interval = TimeSpan.FromSeconds(20) };
             timer.Tick += (_, _) =>
             {
                 timer.Stop();
@@ -152,9 +142,6 @@ internal static class PerfDiagnostics
             timer.Start();
         }
     }
-
-    /// <summary>The window message under way names a stall that no dispatcher operation explains. Only its number is kept.</summary>
-    private static void OnThreadMessage(ref MSG msg, ref bool handled) => _lastMessage = msg.message;
 
     private static string? MessageName(int message) => message switch
     {
@@ -174,20 +161,6 @@ internal static class PerfDiagnostics
         _ => string.Create(System.Globalization.CultureInfo.InvariantCulture, $"0x{message:X4}"),
     };
 
-    private static void OnOperationStarted(object? sender, DispatcherHookEventArgs e)
-    {
-        try
-        {
-            _dispatched = OperationName?.GetValue(e.Operation) as string ?? e.Operation.GetType().Name;
-        }
-        catch (TargetInvocationException)
-        {
-            _dispatched = null;
-        }
-    }
-
-    private static void OnOperationEnded(object? sender, DispatcherHookEventArgs e) => _dispatched = null;
-
     /// <summary>A ping on the UI thread's queue that takes long to be answered is a stall. CPU tells working from blocking.</summary>
     private static void Watch(Dispatcher dispatcher, IntPtr uiThread)
     {
@@ -200,7 +173,7 @@ internal static class PerfDiagnostics
             var collectionsBefore = GC.CollectionCount(0);
             try
             {
-                dispatcher.BeginInvoke(() => Volatile.Write(ref answered, 1), DispatcherPriority.Normal);
+                dispatcher.Post(() => Volatile.Write(ref answered, 1), DispatcherPriority.Normal);
             }
             catch (TaskCanceledException)
             {
@@ -215,7 +188,7 @@ internal static class PerfDiagnostics
             Dictionary<string, int>? states = null;
             (long Total, long Idle)? processors = null;
             Task<(string? Chain, string? Stack)>? closer = null;
-            while (Volatile.Read(ref answered) == 0 && _running && !dispatcher.HasShutdownStarted)
+            while (Volatile.Read(ref answered) == 0 && _running)
             {
                 var beforeSleep = Stopwatch.GetTimestamp();
                 Thread.Sleep(10);
@@ -226,7 +199,7 @@ internal static class PerfDiagnostics
                 {
                     sampled = true;
                     operation = Perf.UiOperation;
-                    dispatched = _dispatched ?? (MessageName(_lastMessage) is { } message ? PerfReport.WindowMessagePrefix + message : null);
+                    dispatched = _dispatched;
                     states = [];
                     processors = MachineLoad.ProcessorTimes();
                     load.Mark();
@@ -509,7 +482,7 @@ internal static class PerfDiagnostics
 
         if (pending >= SendAtBytes && (ReportSender.HasToken || DryRun is not null) && DateTime.UtcNow >= _nextAutomaticSend)
         {
-            _dispatcher?.BeginInvoke(async () =>
+            _dispatcher?.Post(async () =>
             {
                 var result = await SendPendingAsync().ConfigureAwait(true);
                 if (result is not { Link: not null })

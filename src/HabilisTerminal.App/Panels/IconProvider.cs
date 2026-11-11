@@ -1,10 +1,13 @@
 using System.IO;
 using System.Runtime.InteropServices;
-using System.Windows;
-using System.Windows.Interop;
-using System.Windows.Media;
-using System.Windows.Media.Imaging;
-using System.Windows.Threading;
+using Avalonia;
+using Avalonia.Controls;
+using Avalonia.Controls.Primitives;
+using Avalonia.Layout;
+using Avalonia.Interactivity;
+using Avalonia.Media;
+using Avalonia.Media.Imaging;
+using Avalonia.Threading;
 using HabilisTerminal.App.Theming;
 using HabilisTerminal.Core.Panels;
 using HabilisTerminal.Themes;
@@ -24,7 +27,7 @@ internal static class IconProvider
     private static readonly Geometry FolderGeometry = Freeze(Geometry.Parse("M1,3 L6,3 L7.5,4.5 L15,4.5 L15,13 L1,13 Z"));
     private static readonly Geometry ParentGeometry = Freeze(Geometry.Parse("M8,3 L3,8 M8,3 L13,8 M8,3 L8,13"));
     private static readonly Dictionary<(string Id, bool Light), Drawing> ThemeDrawings = [];
-    private static readonly Dictionary<string, ImageSource?> SystemIcons = new(StringComparer.OrdinalIgnoreCase);
+    private static readonly Dictionary<string, Bitmap?> SystemIcons = new(StringComparer.OrdinalIgnoreCase);
     private static readonly HashSet<string> Pending = new(StringComparer.OrdinalIgnoreCase);
     private static readonly SemaphoreSlim SystemIconLoadGate = new(1, 1);
     private static FileIconTheme _theme = LoadTheme();
@@ -74,9 +77,10 @@ internal static class IconProvider
             return;
         }
 
-        dc.PushTransform(new TranslateTransform(x, y));
-        dc.DrawDrawing(ThemeDrawing(definition));
-        dc.Pop();
+        using (dc.PushTransform(Matrix.CreateTranslation(x, y)))
+        {
+            ThemeDrawing(definition).Draw(dc);
+        }
     }
 
     /// <summary>Draws a named icon for plugin rows (<c>PanelIcons</c>, issue #69); false for an unknown name.</summary>
@@ -87,9 +91,11 @@ internal static class IconProvider
             return false;
         }
 
-        dc.PushTransform(new TranslateTransform(x, y));
-        dc.DrawDrawing(drawing);
-        dc.Pop();
+        using (dc.PushTransform(Matrix.CreateTranslation(x, y)))
+        {
+            drawing.Draw(dc);
+        }
+
         return true;
     }
 
@@ -119,8 +125,7 @@ internal static class IconProvider
         foreach (var shape in definition.Shapes)
         {
             var brush = new SolidColorBrush(PanelPalette.ToColor(shape.Fill));
-            brush.Freeze();
-            group.Children.Add(new GeometryDrawing(brush, null, Geometry.Parse(shape.Data)));
+            group.Children.Add(new GeometryDrawing { Brush = brush, Geometry = Geometry.Parse(shape.Data) });
         }
 
         // View box → 16×16 cell.
@@ -130,19 +135,19 @@ internal static class IconProvider
         transform.Children.Add(new ScaleTransform(scale, scale));
         group.Transform = transform;
         group.ClipGeometry = new RectangleGeometry(new Rect(definition.X, definition.Y, definition.Width, definition.Height));
-        group.Freeze();
         ThemeDrawings[key] = group;
         return group;
     }
 
-    private static void DrawOutline(DrawingContext dc, Geometry geometry, Brush brush, double x, double y)
+    private static void DrawOutline(DrawingContext dc, Geometry geometry, IBrush brush, double x, double y)
     {
-        dc.PushTransform(new TranslateTransform(x, y));
-        dc.DrawGeometry(null, new Pen(brush, 1.2), geometry);
-        dc.Pop();
+        using (dc.PushTransform(Matrix.CreateTranslation(x, y)))
+        {
+            dc.DrawGeometry(null, new Pen(brush, 1.2), geometry);
+        }
     }
 
-    private static ImageSource? SystemIcon(string path)
+    private static Bitmap? SystemIcon(string path)
     {
         if (SystemIcons.TryGetValue(path, out var icon))
         {
@@ -153,7 +158,7 @@ internal static class IconProvider
         {
             // Shell icon handlers can load packages, libraries and antivirus filters. Reports #192 and #193 caught
             // SHGetFileInfo blocking the UI thread for seconds, so extraction happens away from the Dispatcher.
-            _ = LoadSystemIconAsync(path, Dispatcher.CurrentDispatcher);
+            _ = LoadSystemIconAsync(path, Avalonia.Threading.Dispatcher.UIThread);
         }
 
         return null;
@@ -161,7 +166,7 @@ internal static class IconProvider
 
     private static async Task LoadSystemIconAsync(string path, Dispatcher dispatcher)
     {
-        BitmapSource? icon = null;
+        Bitmap? icon = null;
         try
         {
             icon = await Task.Run(async () =>
@@ -201,7 +206,7 @@ internal static class IconProvider
         }
     }
 
-    private static BitmapSource? LoadSystemIcon(string path)
+    private static Bitmap? LoadSystemIcon(string path)
     {
         using var measure = Core.Diagnostics.Perf.Enabled ? Core.Diagnostics.Perf.Measure("icon.system", Reporting.PerfDiagnostics.ExtensionKind(path)) : default;
         var info = new SHFILEINFO();
@@ -212,9 +217,7 @@ internal static class IconProvider
 
         try
         {
-            var image = Imaging.CreateBitmapSourceFromHIcon(info.hIcon, Int32Rect.Empty, BitmapSizeOptions.FromEmptyOptions());
-            image.Freeze();
-            return image;
+            return IconBitmap.FromHIcon(info.hIcon, (int)Size);
         }
         finally
         {
@@ -224,7 +227,6 @@ internal static class IconProvider
 
     private static Geometry Freeze(Geometry geometry)
     {
-        geometry.Freeze();
         return geometry;
     }
 

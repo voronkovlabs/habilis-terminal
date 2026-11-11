@@ -1,4 +1,9 @@
-using System.Windows;
+using Avalonia;
+using Avalonia.Controls;
+using Avalonia.Media;
+using Avalonia.Controls.Primitives;
+using Avalonia.Layout;
+using Avalonia.Interactivity;
 using HabilisTerminal.App.Widgets;
 using HabilisTerminal.Core.Operations;
 
@@ -8,14 +13,14 @@ namespace HabilisTerminal.App.Operations;
 internal sealed class UiOperationHandler(Window owner, OperationToasts.Card card) : IOperationHandler
 {
     public ConflictDecision ResolveConflict(ConflictInfo conflict) =>
-        owner.Dispatcher.Invoke(() => OperationDialogs.Conflict(owner, conflict));
+        Avalonia.Threading.Dispatcher.UIThread.Invoke(() => OperationDialogs.Conflict(owner, conflict));
 
     public ErrorAction ResolveError(OperationError failure) =>
-        owner.Dispatcher.Invoke(() => OperationDialogs.Error(owner, failure));
+        Avalonia.Threading.Dispatcher.UIThread.Invoke(() => OperationDialogs.Error(owner, failure));
 
     public ConfirmationAnswer Confirm(Confirmation confirmation) =>
-        owner.Dispatcher.Invoke(() => OperationDialogs.Confirm(owner, confirmation));
+        Avalonia.Threading.Dispatcher.UIThread.Invoke(() => OperationDialogs.Confirm(owner, confirmation));
 
     public void ReportProgress(OperationProgress progress) =>
-        owner.Dispatcher.BeginInvoke(() => card.Update(progress));
+        Avalonia.Threading.Dispatcher.UIThread.Post(() => card.Update(progress));
 }

@@ -1,7 +1,10 @@
-using System.Windows;
-using System.Windows.Controls;
-using System.Windows.Input;
-using System.Windows.Media;
+using Avalonia;
+using Avalonia.Controls;
+using Avalonia.Controls.Primitives;
+using Avalonia.Layout;
+using Avalonia.Interactivity;
+using Avalonia.Input;
+using Avalonia.Media;
 
 namespace HabilisTerminal.App.Help;
 
@@ -13,10 +16,10 @@ public sealed class HelpPage : DockPanel, IPage
     public HelpPage()
     {
         LastChildFill = true;
-        SetResourceReference(BackgroundProperty, "Habi.Background");
+        this.SetResourceReference(BackgroundProperty, "Habi.Background");
 
-        var title = Text("Keyboard", 12, FontWeights.SemiBold, "Habi.Foreground");
-        var hint = Text("Esc close", 12, FontWeights.Normal, "Habi.Description");
+        var title = Text("Keyboard", 12, FontWeight.SemiBold, "Habi.Foreground");
+        var hint = Text("Esc close", 12, FontWeight.Normal, "Habi.Description");
         var header = new DockPanel { Margin = new Thickness(10, 6, 10, 6) };
         DockPanel.SetDock(hint, Dock.Right);
         header.Children.Add(hint);
@@ -34,17 +37,17 @@ public sealed class HelpPage : DockPanel, IPage
             grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(170) });
             grid.ColumnDefinitions.Add(new ColumnDefinition());
             grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-            var heading = Text(section, 14, FontWeights.SemiBold, "Habi.Foreground");
+            var heading = Text(section, 14, FontWeight.SemiBold, "Habi.Foreground");
             heading.Margin = new Thickness(0, 0, 0, 6);
             Grid.SetColumnSpan(heading, 2);
             grid.Children.Add(heading);
             foreach (var (keys, action) in rows)
             {
                 grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-                var keyText = Text(keys, 13, FontWeights.Normal, "Habi.Accent");
+                var keyText = Text(keys, 13, FontWeight.Normal, "Habi.Accent");
                 keyText.FontFamily = new FontFamily("Cascadia Mono, Consolas");
                 keyText.FontSize = 12;
-                var actionText = Text(action, 13, FontWeights.Normal, "Habi.Foreground");
+                var actionText = Text(action, 13, FontWeight.Normal, "Habi.Foreground");
                 actionText.TextWrapping = TextWrapping.Wrap;
                 foreach (var cell in new[] { keyText, actionText })
                 {
@@ -59,18 +62,18 @@ public sealed class HelpPage : DockPanel, IPage
             columns.Children.Add(grid);
         }
 
-        _scroll = new ScrollViewer { Content = columns, VerticalScrollBarVisibility = ScrollBarVisibility.Auto, Focusable = true, FocusVisualStyle = null };
+        _scroll = new ScrollViewer { Content = columns, VerticalScrollBarVisibility = ScrollBarVisibility.Auto, Focusable = true,  };
         Children.Add(_scroll);
-        PreviewKeyDown += OnKeyDown;
+        AddHandler(Avalonia.Input.InputElement.KeyDownEvent, OnKeyDown, Avalonia.Interactivity.RoutingStrategies.Tunnel);
     }
 
     public event Action? CloseRequested;
 
     public void FocusContent() => _scroll.Focus();
 
-    private void OnKeyDown(object sender, KeyEventArgs e)
+    private void OnKeyDown(object? sender, KeyEventArgs e)
     {
-        if (e.Key is Key.Escape or Key.F1 or Key.F10 && Keyboard.Modifiers == ModifierKeys.None)
+        if (e.Key is Key.Escape or Key.F1 or Key.F10 && Keyboard.Modifiers == KeyModifiers.None)
         {
             e.Handled = true;
             CloseRequested?.Invoke();

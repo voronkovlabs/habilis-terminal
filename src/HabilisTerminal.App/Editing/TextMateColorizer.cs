@@ -1,14 +1,18 @@
 using System.Diagnostics;
 using System.IO;
-using System.Windows;
-using System.Windows.Media;
-using System.Windows.Threading;
+using Avalonia;
+using Avalonia.Controls;
+using Avalonia.Controls.Primitives;
+using Avalonia.Layout;
+using Avalonia.Interactivity;
+using Avalonia.Media;
+using Avalonia.Threading;
 using HabilisTerminal.App.Theming;
 using HabilisTerminal.Themes;
-using ICSharpCode.AvalonEdit;
-using ICSharpCode.AvalonEdit.Document;
-using ICSharpCode.AvalonEdit.Highlighting;
-using ICSharpCode.AvalonEdit.Rendering;
+using AvaloniaEdit;
+using AvaloniaEdit.Document;
+using AvaloniaEdit.Highlighting;
+using AvaloniaEdit.Rendering;
 using TextMateSharp.Grammars;
 using TextMateSharp.Internal.Grammars;
 using TextMateSharp.Themes;
@@ -186,11 +190,11 @@ internal sealed class TextMateColorizer : DocumentColorizingTransformer
         }
     }
 
-    private static Brush?[] s_brushes = [];
+    private static IBrush?[] s_brushes = [];
     private static int s_brushVersion = -1;
 
     /// <summary>Brushes by TextMate colour id for the current theme.</summary>
-    private static Brush?[] Brushes()
+    private static IBrush?[] Brushes()
     {
         if (s_brushVersion != TextMateSyntax.Version)
         {
@@ -198,11 +202,10 @@ internal sealed class TextMateColorizer : DocumentColorizingTransformer
             {
                 if (color is not { } c)
                 {
-                    return (Brush?)null;
+                    return (IBrush?)null;
                 }
 
                 var brush = new SolidColorBrush(PanelPalette.ToColor(c));
-                brush.Freeze();
                 return brush;
             })];
             s_brushVersion = TextMateSyntax.Version;
@@ -249,8 +252,8 @@ internal sealed class TextMateColorizer : DocumentColorizingTransformer
                 {
                     element.TextRunProperties.SetTypeface(new Typeface(
                         typeface.FontFamily,
-                        style.HasFlag(TmStyle.Italic) ? FontStyles.Italic : typeface.Style,
-                        style.HasFlag(TmStyle.Bold) ? FontWeights.Bold : typeface.Weight,
+                        style.HasFlag(TmStyle.Italic) ? Avalonia.Media.FontStyle.Italic : typeface.Style,
+                        style.HasFlag(TmStyle.Bold) ? FontWeight.Bold : typeface.Weight,
                         typeface.Stretch));
                 }
 
@@ -259,12 +262,12 @@ internal sealed class TextMateColorizer : DocumentColorizingTransformer
                     var decorations = new TextDecorationCollection();
                     if (style.HasFlag(TmStyle.Underline))
                     {
-                        decorations.Add(TextDecorations.Underline);
+                        decorations.AddRange(TextDecorations.Underline);
                     }
 
                     if (style.HasFlag(TmStyle.Strikethrough))
                     {
-                        decorations.Add(TextDecorations.Strikethrough);
+                        decorations.AddRange(TextDecorations.Strikethrough);
                     }
 
                     element.TextRunProperties.SetTextDecorations(decorations);
@@ -305,7 +308,7 @@ internal sealed class TextMateColorizer : DocumentColorizingTransformer
         }
 
         _catchUpQueued = true;
-        _editor.Dispatcher.BeginInvoke(DispatcherPriority.ApplicationIdle, () =>
+        Avalonia.Threading.Dispatcher.UIThread.Post(() =>
         {
             _catchUpQueued = false;
             if (_failed || _document is null || _version != TextMateSyntax.Version)
@@ -330,7 +333,7 @@ internal sealed class TextMateColorizer : DocumentColorizingTransformer
                 Trace.TraceWarning($"TextMate colouring failed: {ex.Message}");
                 _failed = true;
             }
-        });
+        }, Avalonia.Threading.DispatcherPriority.ApplicationIdle);
     }
 
     private void QueueRedraw()
@@ -341,11 +344,11 @@ internal sealed class TextMateColorizer : DocumentColorizingTransformer
         }
 
         _redrawQueued = true;
-        _editor.Dispatcher.BeginInvoke(DispatcherPriority.Background, () =>
+        Avalonia.Threading.Dispatcher.UIThread.Post(() =>
         {
             _redrawQueued = false;
             _editor.TextArea.TextView.Redraw();
-        });
+        }, Avalonia.Threading.DispatcherPriority.Background);
     }
 
     private void OnEditorDocumentChanged(object? sender, EventArgs e)

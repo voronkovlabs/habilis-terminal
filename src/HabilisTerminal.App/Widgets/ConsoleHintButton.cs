@@ -1,8 +1,10 @@
-using System.Windows;
-using System.Windows.Controls;
-using System.Windows.Controls.Primitives;
-using System.Windows.Input;
-using System.Windows.Media;
+using Avalonia;
+using Avalonia.Controls;
+using Avalonia.Layout;
+using Avalonia.Interactivity;
+using Avalonia.Controls.Primitives;
+using Avalonia.Input;
+using Avalonia.Media;
 
 namespace HabilisTerminal.App.Widgets;
 
@@ -21,7 +23,7 @@ internal sealed class ConsoleHintButton
     private readonly Popup _popup;
     private bool _wanted;
 
-    public ConsoleHintButton(Window owner, FrameworkElement target, Action click)
+    public ConsoleHintButton(Window owner, Control target, Action click)
     {
         _owner = owner;
         var plus = new TextBlock
@@ -48,14 +50,14 @@ internal sealed class ConsoleHintButton
 
         // Left of the button, in the theme's colours: the default one is white and opens past the window's edge.
         var tip = ConsoleTabStrip.Tip("New console (Ctrl+Shift+T)\nA long command goes on in its tab while you work in another one.");
-        tip.Placement = PlacementMode.Left;
         button.ToolTip = tip;
+        Avalonia.Controls.ToolTip.SetPlacement(button, PlacementMode.Left);
         button.SetResourceReference(Border.BackgroundProperty, "Habi.WidgetBackground");
         button.SetResourceReference(Border.BorderBrushProperty, "Habi.WidgetBorder");
-        button.MouseEnter += (_, _) => button.Opacity = 1;
-        button.MouseLeave += (_, _) => button.Opacity = RestOpacity;
-        button.MouseLeftButtonDown += (_, e) => e.Handled = true;
-        button.MouseLeftButtonUp += (_, e) =>
+        button.PointerEntered += (_, _) => button.Opacity = 1;
+        button.PointerExited += (_, _) => button.Opacity = RestOpacity;
+        button.PointerPressed += (_, e) => e.Handled = true;
+        button.PointerReleased += (_, e) =>
         {
             e.Handled = true;
             click();
@@ -65,16 +67,23 @@ internal sealed class ConsoleHintButton
         {
             Child = button,
             PlacementTarget = target,
-            Placement = PlacementMode.Relative,
-            AllowsTransparency = true,
-            StaysOpen = true,
+            Placement = PlacementMode.AnchorAndGravity,
+            PlacementAnchor = Avalonia.Controls.Primitives.PopupPositioning.PopupAnchor.TopLeft,
+            PlacementGravity = Avalonia.Controls.Primitives.PopupPositioning.PopupGravity.BottomRight,
+            IsLightDismissEnabled = false,
             Focusable = false,
         };
         UiZoom.Apply(_popup);
         owner.Activated += (_, _) => Apply();
         owner.Deactivated += (_, _) => _popup.IsOpen = false;
-        owner.StateChanged += (_, _) => Apply();
-        owner.LocationChanged += (_, _) => Nudge();
+        owner.PropertyChanged += (_, e) =>
+        {
+            if (e.Property == Window.WindowStateProperty)
+            {
+                Apply();
+            }
+        };
+        owner.PositionChanged += (_, _) => Nudge();
     }
 
     /// <param name="console">The console's area in the target's coordinates; null hides the button.</param>

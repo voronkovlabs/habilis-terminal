@@ -2,8 +2,12 @@ using System.IO;
 using HabilisTerminal.App.Reporting;
 using HabilisTerminal.Core.Diagnostics;
 using System.Runtime.InteropServices;
-using System.Windows;
-using System.Windows.Interop;
+using Avalonia;
+using Avalonia.Controls;
+using Avalonia.Media;
+using Avalonia.Controls.Primitives;
+using Avalonia.Layout;
+using Avalonia.Interactivity;
 using HabilisTerminal.App.Panels;
 using HabilisTerminal.App.Viewing;
 using HabilisTerminal.Core.Panels;
@@ -21,12 +25,15 @@ public partial class MainWindow
     private readonly List<FileHistoryEntry> _fileHistory = [];
     private AppSettings _settings = App.Settings?.Current ?? AppSettings.Defaults;
     private AppSettings? _appliedSettings;
-    private System.Windows.Threading.DispatcherTimer? _stateTimer;
+    private Avalonia.Threading.DispatcherTimer? _stateTimer;
 
     private string TerminalFontFamily => _settings.TerminalFontFamily;
 
     /// <summary><c>terminal.fontSize</c> in the interface zoom (issue #237): the console is native, so it is not scaled.</summary>
-    private int TerminalFontSize => Math.Clamp(Core.Settings.ZoomSteps.FontSize(_settings.TerminalFontSize, Widgets.UiZoom.Factor), 6, 96);
+    private int TerminalFontSize => Math.Clamp(_settings.TerminalFontSize, 6, 96);
+
+    /// <summary>The console's font size in device-independent pixels; the interface zoom scales it with the rest (issue #253).</summary>
+    private double TerminalEmSize => TerminalFontSize * 96.0 / 72.0;
 
     /// <summary>Applies settings that can change while running; the shell settings apply on the next start.</summary>
     private void ApplySettings(AppSettings settings)
@@ -71,7 +78,7 @@ public partial class MainWindow
         }
 
         QuickView.Settings = settings;
-        QuickView.Theme = _themes.Current;
+        QuickView.TextTheme = _themes.Current;
         if (previous is null || previous.ViewerFontFamily != settings.ViewerFontFamily || previous.ViewerFontSize != settings.ViewerFontSize)
         {
             ViewerView.SetFont(settings.ViewerFontFamily, settings.ViewerFontSize);
@@ -99,7 +106,7 @@ public partial class MainWindow
         ShowSettingsErrors();
     }
 
-    private void OnSettingsFileChanged(AppSettings settings) => Dispatcher.BeginInvoke(() => ApplySettings(settings));
+    private void OnSettingsFileChanged(AppSettings settings) => Avalonia.Threading.Dispatcher.UIThread.Post(() => ApplySettings(settings));
 
     private void ShowSettingsErrors()
     {
@@ -176,8 +183,13 @@ public partial class MainWindow
         }
 
         WindowStartupLocation = WindowStartupLocation.Manual;
-        SourceInitialized += (_, _) =>
+        Opened += (_, _) =>
         {
+            if (TryGetPlatformHandle()?.Handle is not { } handle)
+            {
+                return;
+            }
+
             var native = new WINDOWPLACEMENT
             {
                 length = Marshal.SizeOf<WINDOWPLACEMENT>(),
@@ -190,13 +202,13 @@ public partial class MainWindow
                     Bottom = (int)(placement.Top + placement.Height),
                 },
             };
-            SetWindowPlacement(new WindowInteropHelper(this).Handle, ref native);
+            SetWindowPlacement(handle, ref native);
         };
     }
 
     private WindowPlacement? CaptureWindowPlacement()
     {
-        var handle = new WindowInteropHelper(this).Handle;
+        var handle = TryGetPlatformHandle()?.Handle ?? IntPtr.Zero;
         var native = new WINDOWPLACEMENT { length = Marshal.SizeOf<WINDOWPLACEMENT>() };
         if (handle == IntPtr.Zero || !GetWindowPlacement(handle, ref native))
         {
@@ -321,7 +333,7 @@ public partial class MainWindow
     /// <summary>State is also written every minute, so a crash loses little (SPEC §14).</summary>
     private void StartStateTimer()
     {
-        _stateTimer = new System.Windows.Threading.DispatcherTimer(TimeSpan.FromMinutes(1), System.Windows.Threading.DispatcherPriority.Background, (_, _) => SaveStateInBackground(), Dispatcher);
+        _stateTimer = new Avalonia.Threading.DispatcherTimer(TimeSpan.FromMinutes(1), Avalonia.Threading.DispatcherPriority.Background, (_, _) => SaveStateInBackground());
         _stateTimer.Start();
     }
 

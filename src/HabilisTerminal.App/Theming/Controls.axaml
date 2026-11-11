@@ -1,0 +1,191 @@
+<Styles xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <!-- VS Code-like controls over the Fluent theme; colours are Habi.* dynamic resources filled from the theme
+         (PanelPalette), which also fills the Fluent keys the scroll bars use. -->
+
+    <Style Selector="Button">
+        <Setter Property="Foreground" Value="{DynamicResource Habi.SecondaryButtonForeground}" />
+        <Setter Property="Background" Value="{DynamicResource Habi.SecondaryButtonBackground}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource Habi.ButtonBorder}" />
+        <Setter Property="FontFamily" Value="Segoe UI" />
+        <Setter Property="FontSize" Value="13" />
+        <Setter Property="Padding" Value="14,4" />
+        <Setter Property="Margin" Value="6,0,0,0" />
+        <Setter Property="MinWidth" Value="76" />
+        <Setter Property="Template">
+            <ControlTemplate>
+                <Border Name="Body" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}"
+                        BorderThickness="1" CornerRadius="2" Padding="{TemplateBinding Padding}">
+                    <ContentPresenter Name="PART_ContentPresenter" Content="{TemplateBinding Content}"
+                                      Foreground="{TemplateBinding Foreground}"
+                                      HorizontalAlignment="Center" VerticalAlignment="Center" RecognizesAccessKey="True" />
+                </Border>
+            </ControlTemplate>
+        </Setter>
+    </Style>
+    <Style Selector="Button:pointerover /template/ Border#Body">
+        <Setter Property="Opacity" Value="0.85" />
+    </Style>
+    <Style Selector="Button:focus-visible /template/ Border#Body">
+        <Setter Property="BorderBrush" Value="{DynamicResource Habi.Accent}" />
+    </Style>
+    <Style Selector="Button[IsDefault=True]">
+        <Setter Property="Background" Value="{DynamicResource Habi.ButtonBackground}" />
+        <Setter Property="Foreground" Value="{DynamicResource Habi.ButtonForeground}" />
+    </Style>
+    <Style Selector="Button:disabled /template/ Border#Body">
+        <Setter Property="Opacity" Value="0.4" />
+    </Style>
+    <!-- Glyph buttons drawn by code (title bar, tabs, toasts) take this class to skip the dialog button look. -->
+    <Style Selector="Button.bare">
+        <Setter Property="Margin" Value="0" />
+        <Setter Property="MinWidth" Value="0" />
+        <Setter Property="Padding" Value="0" />
+        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="BorderBrush" Value="Transparent" />
+        <Setter Property="Template">
+            <ControlTemplate>
+                <Border Name="Body" Background="{TemplateBinding Background}" Padding="{TemplateBinding Padding}">
+                    <ContentPresenter Name="PART_ContentPresenter" Content="{TemplateBinding Content}"
+                                      Foreground="{TemplateBinding Foreground}"
+                                      HorizontalAlignment="Center" VerticalAlignment="Center" />
+                </Border>
+            </ControlTemplate>
+        </Setter>
+    </Style>
+
+    <!-- Text boxes keep the Fluent template; only the colours and the focus border change. -->
+    <Style Selector="TextBox">
+        <Setter Property="Background" Value="{DynamicResource Habi.InputBackground}" />
+        <Setter Property="Foreground" Value="{DynamicResource Habi.Foreground}" />
+        <Setter Property="CaretBrush" Value="{DynamicResource Habi.Foreground}" />
+        <Setter Property="SelectionBrush" Value="{DynamicResource Habi.Accent}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource Habi.InputBorder}" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="CornerRadius" Value="2" />
+        <Setter Property="Padding" Value="5,3" />
+        <Setter Property="MinHeight" Value="0" />
+        <Setter Property="FontFamily" Value="Segoe UI" />
+        <Setter Property="FontSize" Value="13" />
+    </Style>
+    <Style Selector="TextBox:pointerover /template/ Border#PART_BorderElement">
+        <Setter Property="Background" Value="{DynamicResource Habi.InputBackground}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource Habi.InputBorder}" />
+    </Style>
+    <Style Selector="TextBox:pointerover">
+        <Setter Property="Foreground" Value="{DynamicResource Habi.Foreground}" />
+    </Style>
+    <Style Selector="TextBox:focus /template/ Border#PART_BorderElement">
+        <Setter Property="Background" Value="{DynamicResource Habi.InputBackground}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource Habi.Accent}" />
+        <Setter Property="BorderThickness" Value="1" />
+    </Style>
+    <Style Selector="TextBox:focus">
+        <Setter Property="Foreground" Value="{DynamicResource Habi.Foreground}" />
+    </Style>
+
+    <Style Selector="CheckBox, RadioButton">
+        <Setter Property="Foreground" Value="{DynamicResource Habi.Foreground}" />
+        <Setter Property="FontFamily" Value="Segoe UI" />
+        <Setter Property="FontSize" Value="13" />
+        <Setter Property="Margin" Value="0,3" />
+        <Setter Property="MinHeight" Value="0" />
+    </Style>
+
+    <Style Selector="CheckBox">
+        <Setter Property="Template">
+            <ControlTemplate>
+                <StackPanel Orientation="Horizontal" Background="Transparent">
+                    <Border Name="Box" Width="16" Height="16" CornerRadius="3" BorderThickness="1"
+                            Background="{DynamicResource Habi.InputBackground}" BorderBrush="{DynamicResource Habi.InputBorder}">
+                        <Grid>
+                            <Path Name="Check" Data="M3,8 L6.5,11.5 L13,4.5" Stroke="{DynamicResource Habi.Foreground}" StrokeThickness="1.6" IsVisible="False" />
+                            <Rectangle Name="Indeterminate" Width="8" Height="2" Fill="{DynamicResource Habi.Foreground}" IsVisible="False" />
+                        </Grid>
+                    </Border>
+                    <ContentPresenter Name="PART_ContentPresenter" Content="{TemplateBinding Content}" Foreground="{TemplateBinding Foreground}"
+                                      Margin="8,0,0,0" VerticalAlignment="Center" RecognizesAccessKey="True" />
+                </StackPanel>
+            </ControlTemplate>
+        </Setter>
+    </Style>
+    <Style Selector="CheckBox:checked /template/ Path#Check">
+        <Setter Property="IsVisible" Value="True" />
+    </Style>
+    <Style Selector="CheckBox:indeterminate /template/ Rectangle#Indeterminate">
+        <Setter Property="IsVisible" Value="True" />
+    </Style>
+    <Style Selector="CheckBox:focus-visible /template/ Border#Box">
+        <Setter Property="BorderBrush" Value="{DynamicResource Habi.Accent}" />
+    </Style>
+    <Style Selector="CheckBox:disabled">
+        <Setter Property="Opacity" Value="0.4" />
+    </Style>
+
+    <!-- Radio buttons as a segmented choice (existing-file policy). -->
+    <Style Selector="RadioButton">
+        <Setter Property="Margin" Value="0,0,4,0" />
+        <Setter Property="Template">
+            <ControlTemplate>
+                <Border Name="Chip" CornerRadius="3" Padding="9,3" BorderThickness="1"
+                        Background="{DynamicResource Habi.InputBackground}" BorderBrush="{DynamicResource Habi.InputBorder}">
+                    <ContentPresenter Name="PART_ContentPresenter" Content="{TemplateBinding Content}" Foreground="{TemplateBinding Foreground}"
+                                      RecognizesAccessKey="True" />
+                </Border>
+            </ControlTemplate>
+        </Setter>
+    </Style>
+    <Style Selector="RadioButton:checked /template/ Border#Chip">
+        <Setter Property="Background" Value="{DynamicResource Habi.Selection}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource Habi.Accent}" />
+    </Style>
+    <Style Selector="RadioButton:checked">
+        <Setter Property="Foreground" Value="{DynamicResource Habi.SelectionForeground}" />
+    </Style>
+    <Style Selector="RadioButton:focus-visible /template/ Border#Chip">
+        <Setter Property="BorderBrush" Value="{DynamicResource Habi.Accent}" />
+    </Style>
+
+    <!-- Text styles; code adds the class (were Habi.LabelStyle and Habi.DescriptionStyle). -->
+    <Style Selector="TextBlock.label, TextBlock.description">
+        <Setter Property="Foreground" Value="{DynamicResource Habi.Foreground}" />
+        <Setter Property="FontFamily" Value="Segoe UI" />
+        <Setter Property="FontSize" Value="13" />
+        <Setter Property="TextWrapping" Value="Wrap" />
+    </Style>
+    <Style Selector="TextBlock.description">
+        <Setter Property="Foreground" Value="{DynamicResource Habi.Description}" />
+        <Setter Property="FontSize" Value="12" />
+    </Style>
+
+    <!-- A console tab's mark while its command runs (issue #119). -->
+    <Style Selector="TextBlock.pulsing">
+        <Style.Animations>
+            <Animation Duration="0:0:1.4" IterationCount="Infinite" PlaybackDirection="Alternate">
+                <KeyFrame Cue="0%">
+                    <Setter Property="Opacity" Value="1" />
+                </KeyFrame>
+                <KeyFrame Cue="100%">
+                    <Setter Property="Opacity" Value="0.25" />
+                </KeyFrame>
+            </Animation>
+        </Style.Animations>
+    </Style>
+
+    <Style Selector="ProgressBar">
+        <Setter Property="Height" Value="3" />
+        <Setter Property="MinHeight" Value="3" />
+        <Setter Property="CornerRadius" Value="0" />
+        <Setter Property="BorderThickness" Value="0" />
+        <Setter Property="Background" Value="{DynamicResource Habi.ProgressTrack}" />
+        <Setter Property="Foreground" Value="{DynamicResource Habi.Progress}" />
+    </Style>
+
+    <!-- VS Code scroll bars: no arrows, always shown. Thumb colours come through the Fluent keys PanelPalette fills. -->
+    <Style Selector="ScrollBar">
+        <Setter Property="AllowAutoHide" Value="False" />
+    </Style>
+    <Style Selector="ScrollBar /template/ RepeatButton">
+        <Setter Property="IsVisible" Value="False" />
+    </Style>
+</Styles>

@@ -1,27 +1,21 @@
-using System.Windows;
-using System.Windows.Controls;
-using System.Windows.Controls.Primitives;
-using System.Windows.Input;
-using System.Windows.Media;
+using Avalonia;
+using Avalonia.Controls;
+using Avalonia.Controls.Primitives;
+using Avalonia.Input;
+using Avalonia.Interactivity;
+using Avalonia.Media;
 using HabilisTerminal.Core.Settings;
-using Microsoft.Web.WebView2.Wpf;
 
 namespace HabilisTerminal.App.Widgets;
 
 /// <summary>
-/// The interface zoom (issue #237): one <see cref="ScaleTransform"/> shared as the layout transform of the main window's
-/// content, the dialogs' content, our popups and, through class handlers, every tooltip and context menu. Native parts
-/// follow <see cref="Changed"/>: the console's font size, WebView2's zoom factor.
+/// The interface zoom (issue #237): one <see cref="ScaleTransform"/> shared by the layout transforms that hold the main
+/// window's content, the dialogs' content and our popups. Avalonia has no layout transform on every control, so content
+/// is wrapped in a <see cref="LayoutTransformControl"/> (issue #253).
 /// </summary>
 public static class UiZoom
 {
     private static readonly ScaleTransform Scale = new(1, 1);
-
-    static UiZoom()
-    {
-        EventManager.RegisterClassHandler(typeof(ToolTip), ToolTip.OpenedEvent, new RoutedEventHandler((s, _) => Apply((FrameworkElement)s)));
-        EventManager.RegisterClassHandler(typeof(ContextMenu), ContextMenu.OpenedEvent, new RoutedEventHandler((s, _) => Apply((FrameworkElement)s)));
-    }
 
     /// <summary>After every change, on the UI thread.</summary>
     public static event Action? Changed;
@@ -50,76 +44,30 @@ public static class UiZoom
 
     public static bool Reset() => Set(1.0);
 
-    /// <summary>Scales this element and what it holds.</summary>
-    public static void Apply(FrameworkElement element) => element.LayoutTransform = Scale;
-
     /// <summary>
-    /// A bitmap drawn for the zoomed pixels (a PDF page) is kept out of the zoom, else it is filtered twice and blurs:
-    /// the element gets the inverse scale. Call again after <see cref="Changed"/>.
+    /// WPF kept a bitmap drawn for the zoomed pixels out of the zoom; Avalonia's layout transform scales it with the rest
+    /// for now (issue #253): a PDF page may be a little soft at zooms other than 100%.
     /// </summary>
-    public static void Unscale(FrameworkElement element) =>
-        element.LayoutTransform = Math.Abs(Factor - 1) < 0.0005 ? Transform.Identity : new ScaleTransform(1 / Factor, 1 / Factor);
-
-    /// <summary>
-    /// Keeps an unscaled bitmap on whole screen pixels: under the zoom, layout rounding no longer lands on them, and a
-    /// half-pixel offset blurs every line. A render transform moves the element by the remainder after each layout.
-    /// </summary>
-    public static void SnapToPixels(FrameworkElement element)
+    public static void Unscale(Control element)
     {
-        element.LayoutUpdated += (_, _) =>
-        {
-            if (PresentationSource.FromVisual(element)?.RootVisual is not { } root || !element.IsDescendantOf(root))
-            {
-                return;
-            }
-
-            var toRoot = element.TransformToAncestor(root);
-            var origin = toRoot.Transform(default);
-            var scale = toRoot.Transform(new Point(1, 1)) - origin;
-            if (scale.X <= 0 || scale.Y <= 0)
-            {
-                return;
-            }
-
-            var current = element.RenderTransform as TranslateTransform;
-            var dpi = VisualTreeHelper.GetDpi(element);
-            var x = (origin.X - ((current?.X ?? 0) * scale.X)) * dpi.DpiScaleX;
-            var y = (origin.Y - ((current?.Y ?? 0) * scale.Y)) * dpi.DpiScaleY;
-            var dx = (Math.Round(x) - x) / (dpi.DpiScaleX * scale.X);
-            var dy = (Math.Round(y) - y) / (dpi.DpiScaleY * scale.Y);
-            if (Math.Abs(dx - (current?.X ?? 0)) > 0.001 || Math.Abs(dy - (current?.Y ?? 0)) > 0.001)
-            {
-                element.RenderTransform = new TranslateTransform(dx, dy);
-            }
-        };
     }
+
+    /// <summary>Was a pixel snap for unscaled bitmaps under WPF; Avalonia's layout rounding covers it (issue #253).</summary>
+    public static void SnapToPixels(Control element)
+    {
+    }
+
+    /// <summary>The content, scaled with the interface.</summary>
+    public static LayoutTransformControl Wrap(Control content) => new() { LayoutTransform = Scale, Child = content };
 
     /// <summary>A popup's content, scaled; the popup's own offsets are the caller's.</summary>
     public static void Apply(Popup popup)
     {
-        if (popup.Child is FrameworkElement child)
+        if (popup.Child is Control child and not LayoutTransformControl)
         {
-            Apply(child);
+            popup.Child = null;
+            popup.Child = Wrap(child);
         }
-    }
-
-    /// <summary>
-    /// A WebView2 is a native window, which the transform only sizes: its page takes the zoom as its zoom factor, and
-    /// Ctrl+wheel inside it, which WPF never sees, zooms the whole interface. The returned action stops following.
-    /// </summary>
-    public static Action Follow(WebView2 web)
-    {
-        void FromZoom() => web.ZoomFactor = Factor;
-        void FromPage(object? sender, EventArgs e) => Set(web.ZoomFactor);
-
-        FromZoom();
-        Changed += FromZoom;
-        web.ZoomFactorChanged += FromPage;
-        return () =>
-        {
-            Changed -= FromZoom;
-            web.ZoomFactorChanged -= FromPage;
-        };
     }
 
     /// <summary>
@@ -129,21 +77,28 @@ public static class UiZoom
     {
         void ApplyContent()
         {
-            if (window.Content is FrameworkElement content)
+            if (window.Content is Control content and not LayoutTransformControl)
             {
-                Apply(content);
+                window.Content = null;
+                window.Content = Wrap(content);
             }
         }
 
         ApplyContent();
-        window.Loaded += (_, _) => ApplyContent();
-        window.PreviewMouseWheel += (_, e) =>
+        window.PropertyChanged += (_, e) =>
         {
-            if (Keyboard.Modifiers == ModifierKeys.Control && e.Delta != 0)
+            if (e.Property == ContentControl.ContentProperty)
             {
-                e.Handled = true;
-                Step(Math.Sign(e.Delta));
+                ApplyContent();
             }
         };
+        window.AddHandler(InputElement.PointerWheelChangedEvent, (_, e) =>
+        {
+            if (e.KeyModifiers == KeyModifiers.Control && e.Delta.Y != 0)
+            {
+                e.Handled = true;
+                Step(Math.Sign(e.Delta.Y));
+            }
+        }, RoutingStrategies.Tunnel);
     }
 }

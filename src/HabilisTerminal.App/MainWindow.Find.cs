@@ -99,7 +99,7 @@ public partial class MainWindow
         if (_returnToFind)
         {
             _returnToFind = false;
-            Dispatcher.BeginInvoke(ShowFindResults, System.Windows.Threading.DispatcherPriority.Background);
+            Avalonia.Threading.Dispatcher.UIThread.Post(ShowFindResults, Avalonia.Threading.DispatcherPriority.Background);
         }
     }
 

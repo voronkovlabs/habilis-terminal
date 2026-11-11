@@ -1,0 +1,5 @@
+<Project>
+  <!-- Directory.Build.targets is imported after the NuGet packages' targets, so this empty target replaces
+       Avalonia.BuildServices' one: builds send no usage statistics to Avalonia (issue #253). -->
+  <Target Name="AvaloniaStats" />
+</Project>

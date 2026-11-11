@@ -1,10 +1,11 @@
-using System.Windows;
-using System.Windows.Controls;
-using System.Windows.Controls.Primitives;
-using System.Windows.Input;
-using System.Windows.Media;
-using System.Windows.Media.Effects;
-using System.Windows.Shapes;
+using Avalonia;
+using Avalonia.Controls;
+using Avalonia.Layout;
+using Avalonia.Interactivity;
+using Avalonia.Controls.Primitives;
+using Avalonia.Input;
+using Avalonia.Media;
+using Avalonia.Controls.Shapes;
 using HabilisTerminal.App.Theming;
 
 namespace HabilisTerminal.App.Widgets;
@@ -33,11 +34,11 @@ public sealed class TopMenu
     private readonly Border _dropDown;
     private readonly TaskCompletionSource<MenuCommand?> _result = new();
     private readonly Border _root;
-    private readonly FrameworkElement _target;
+    private readonly Control _target;
     private int _group;
     private int _item;
 
-    private TopMenu(FrameworkElement target, IReadOnlyList<MenuGroup> groups, int group)
+    private TopMenu(Control target, IReadOnlyList<MenuGroup> groups, int group)
     {
         _groups = groups;
         _group = group;
@@ -49,12 +50,12 @@ public sealed class TopMenu
         {
             var index = i;
             var header = CreateHeader(groups[i].Title, target.ActualHeight);
-            header.MouseLeftButtonDown += (_, e) =>
+            header.PointerPressed += (_, e) =>
             {
                 e.Handled = true;
                 SelectGroup(index);
             };
-            header.MouseEnter += (_, _) => SelectGroup(index);
+            header.PointerEntered += (_, _) => SelectGroup(index);
             _bar.Children.Add(header);
         }
 
@@ -66,7 +67,7 @@ public sealed class TopMenu
             Padding = new Thickness(0, 4, 0, 4),
             MinWidth = 240,
             HorizontalAlignment = HorizontalAlignment.Left,
-            Effect = new DropShadowEffect { BlurRadius = 12, ShadowDepth = 3, Opacity = 0.4, Color = Colors.Black },
+            BoxShadow = BoxShadows.Parse("0 4 16 0 #73000000"),
         };
         _dropDown.SetResourceReference(Border.BackgroundProperty, "Habi.WidgetBackground");
         _dropDown.SetResourceReference(Border.BorderBrushProperty, "Habi.WidgetBorder");
@@ -74,14 +75,14 @@ public sealed class TopMenu
         var layout = new StackPanel();
         layout.Children.Add(barBorder);
         layout.Children.Add(_dropDown);
-        _root = new Border { Child = layout, Focusable = true, FocusVisualStyle = null, Background = Brushes.Transparent };
-        _root.PreviewKeyDown += OnKeyDown;
-        _root.PreviewTextInput += OnTextInput;
+        _root = new Border { Child = layout, Focusable = true,  Background = Brushes.Transparent };
+        _root.AddHandler(Avalonia.Input.InputElement.KeyDownEvent, OnKeyDown, Avalonia.Interactivity.RoutingStrategies.Tunnel);
+        _root.AddHandler(Avalonia.Input.InputElement.TextInputEvent, OnTextInput, Avalonia.Interactivity.RoutingStrategies.Tunnel);
 
         // Windows 11 draws the window's 1 px border over the top row of the title bar; the popup is a window of its own
         // and covered it, so the selected header stuck out above the frame. Its top row is left out.
-        var edge = 1 / VisualTreeHelper.GetDpi(target).DpiScaleY;
-        if (Window.GetWindow(target) is { WindowState: not WindowState.Maximized } window && target.TranslatePoint(default, window).Y < edge)
+        var edge = 1 / (TopLevel.GetTopLevel(target)?.RenderScaling ?? 1);
+        if ((TopLevel.GetTopLevel(target) as Window) is { WindowState: not WindowState.Maximized } window && (target.TranslatePoint(default, window)?.Y ?? 0) < edge)
         {
             _root.Clip = new RectangleGeometry(new Rect(0, edge, 100_000, 100_000));
         }
@@ -90,14 +91,15 @@ public sealed class TopMenu
         {
             Child = _root,
             PlacementTarget = target,
-            Placement = PlacementMode.Relative,
-            AllowsTransparency = true,
-            StaysOpen = false,
+            Placement = PlacementMode.AnchorAndGravity,
+            PlacementAnchor = Avalonia.Controls.Primitives.PopupPositioning.PopupAnchor.TopLeft,
+            PlacementGravity = Avalonia.Controls.Primitives.PopupPositioning.PopupGravity.BottomRight,
+            IsLightDismissEnabled = true,
             Focusable = true,
         };
         UiZoom.Apply(_popup);
         _popup.Closed += (_, _) => _result.TrySetResult(null);
-        _popup.Opened += (_, _) => Keyboard.Focus(_root);
+        _popup.Opened += (_, _) => _root.Focus();
     }
 
     /// <summary>A menu header; the title bar and the popup build theirs alike so they line up.</summary>
@@ -108,7 +110,7 @@ public sealed class TopMenu
         return new Border { Padding = new Thickness(8, 0, 8, 0), Height = height, Child = text, Background = Brushes.Transparent, CornerRadius = new CornerRadius(3) };
     }
 
-    public static async Task<MenuCommand?> ShowAsync(FrameworkElement target, IReadOnlyList<MenuGroup> groups, int initialGroup)
+    public static async Task<MenuCommand?> ShowAsync(Control target, IReadOnlyList<MenuGroup> groups, int initialGroup)
     {
         var menu = new TopMenu(target, groups, Math.Clamp(initialGroup, 0, groups.Count - 1));
         menu.SelectGroup(menu._group);
@@ -144,15 +146,15 @@ public sealed class TopMenu
         var left = 0.0;
         for (var i = 0; i < _group; i++)
         {
-            left += ((FrameworkElement)headers[i]).ActualWidth;
+            left += ((Control)headers[i]).ActualWidth;
         }
 
         // Shifted left when it would cross the window's right edge (Right's drop-down in a narrow window).
-        if (Window.GetWindow(_target) is { } window && _target.IsVisible)
+        if ((TopLevel.GetTopLevel(_target) as Window) is { } window && _target.IsVisible)
         {
             _dropDown.Margin = default; // DesiredSize includes the margin of the previous menu
             _dropDown.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
-            var room = window.ActualWidth - _target.TranslatePoint(default, window).X - 8;
+            var room = window.ActualWidth - (_target.TranslatePoint(default, window)?.X ?? 0) - 8;
             left = Math.Max(0, Math.Min(left, room - _dropDown.DesiredSize.Width));
         }
 
@@ -161,7 +163,7 @@ public sealed class TopMenu
         Move(1);
     }
 
-    private FrameworkElement BuildRow(MenuCommand command, int index)
+    private Control BuildRow(MenuCommand command, int index)
     {
         if (command.IsSeparator)
         {
@@ -170,7 +172,7 @@ public sealed class TopMenu
             return line;
         }
 
-        var check = new System.Windows.Shapes.Path { Width = 12, Height = 12, Stretch = Stretch.Uniform, Margin = new Thickness(0, 0, 8, 0), Data = command.IsChecked ? Codicon.GeometryOf(Codicon.Check) : null };
+        var check = new Avalonia.Controls.Shapes.Path { Width = 12, Height = 12, Stretch = Stretch.Uniform, Margin = new Thickness(0, 0, 8, 0), Data = command.IsChecked ? Codicon.GeometryOf(Codicon.Check) : null };
         check.SetResourceReference(Shape.FillProperty, "Habi.Foreground");
         var shortcut = Text(command.Shortcut ?? string.Empty);
         shortcut.Margin = new Thickness(32, 0, 0, 0);
@@ -182,8 +184,8 @@ public sealed class TopMenu
         row.Children.Add(shortcut);
         row.Children.Add(Text(command.Label));
         var border = new Border { Child = row, Padding = new Thickness(10, 4, 14, 4), Margin = new Thickness(4, 0, 4, 0), CornerRadius = new CornerRadius(3), Background = Brushes.Transparent };
-        border.MouseEnter += (_, _) => Highlight(index);
-        border.MouseLeftButtonUp += (_, e) =>
+        border.PointerEntered += (_, _) => Highlight(index);
+        border.PointerReleased += (_, e) =>
         {
             e.Handled = true;
             Accept(index);
@@ -201,7 +203,7 @@ public sealed class TopMenu
                 continue;
             }
 
-            var label = (TextBlock)((DockPanel)border.Child).Children[2];
+            var label = (TextBlock)((DockPanel)border.Child!).Children[2];
             if (i == index)
             {
                 border.SetResourceReference(Border.BackgroundProperty, "Habi.Selection");
@@ -244,9 +246,9 @@ public sealed class TopMenu
         _popup.IsOpen = false;
     }
 
-    private void OnKeyDown(object sender, KeyEventArgs e)
+    private void OnKeyDown(object? sender, KeyEventArgs e)
     {
-        var key = e.Key == Key.System ? e.SystemKey : e.Key;
+        var key = e.Key;
         e.Handled = true;
         switch (key)
         {
@@ -283,9 +285,9 @@ public sealed class TopMenu
     }
 
     /// <summary>A letter moves to the next command that starts with it.</summary>
-    private void OnTextInput(object sender, TextCompositionEventArgs e)
+    private void OnTextInput(object? sender, TextInputEventArgs e)
     {
-        if (e.Text.Length != 1)
+        if (e.Text is not { Length: 1 })
         {
             return;
         }

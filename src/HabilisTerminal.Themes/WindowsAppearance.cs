@@ -27,6 +27,28 @@ public static class WindowsAppearance
         }
     }
 
+    /// <summary>Windows high contrast is on (WPF's SystemParameters.HighContrast, which Avalonia has no twin of; issue #253).</summary>
+    public static bool IsHighContrast()
+    {
+        var info = new HighContrastInfo { Size = (uint)System.Runtime.InteropServices.Marshal.SizeOf<HighContrastInfo>() };
+        return SystemParametersInfo(SPI_GETHIGHCONTRAST, info.Size, ref info, 0) && (info.Flags & HCF_HIGHCONTRASTON) != 0;
+    }
+
+    private const uint SPI_GETHIGHCONTRAST = 0x0042;
+    private const uint HCF_HIGHCONTRASTON = 0x0001;
+
+    [System.Runtime.InteropServices.StructLayout(System.Runtime.InteropServices.LayoutKind.Sequential)]
+    private struct HighContrastInfo
+    {
+        public uint Size;
+        public uint Flags;
+        public IntPtr DefaultScheme;
+    }
+
+    [System.Runtime.InteropServices.DllImport("user32.dll", SetLastError = true)]
+    [return: System.Runtime.InteropServices.MarshalAs(System.Runtime.InteropServices.UnmanagedType.Bool)]
+    private static extern bool SystemParametersInfo(uint action, uint parameter, ref HighContrastInfo info, uint winIni);
+
     /// <summary>The built-in theme matching the current Windows mode.</summary>
     public static string BuiltInThemeFor(bool highContrast) =>
         highContrast

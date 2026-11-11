@@ -1,5 +1,5 @@
 using System.IO;
-using System.Windows.Media.Imaging;
+using Avalonia.Media.Imaging;
 using Windows.Data.Pdf;
 using Windows.Storage.Streams;
 
@@ -38,14 +38,14 @@ public sealed class PdfPreview : IDisposable
     });
 
     /// <summary>The page's size at 100%, in device-independent units (1/96 inch).</summary>
-    public System.Windows.Size PageSize(int index)
+    public Avalonia.Size PageSize(int index)
     {
         using var page = _document.GetPage((uint)index);
-        return new System.Windows.Size(page.Size.Width, page.Size.Height);
+        return new Avalonia.Size(page.Size.Width, page.Size.Height);
     }
 
     /// <summary>The page fitted into the given pixels, keeping its proportions.</summary>
-    public Task<BitmapSource> RenderAsync(int index, double width, double height) => Task.Run<BitmapSource>(async () =>
+    public Task<Bitmap> RenderAsync(int index, double width, double height) => Task.Run<Bitmap>(async () =>
     {
         using var page = _document.GetPage((uint)index);
         var scale = Math.Min(width / page.Size.Width, height / page.Size.Height);
@@ -58,13 +58,7 @@ public sealed class PdfPreview : IDisposable
         await page.RenderToStreamAsync(output, options);
         output.Seek(0);
         using var png = output.AsStreamForRead();
-        var bitmap = new BitmapImage();
-        bitmap.BeginInit();
-        bitmap.CacheOption = BitmapCacheOption.OnLoad;
-        bitmap.StreamSource = png;
-        bitmap.EndInit();
-        bitmap.Freeze();
-        return bitmap;
+        return new Bitmap(png);
     });
 
     public void Dispose() => _file.Dispose();

@@ -1,5 +1,9 @@
-using System.Windows;
-using System.Windows.Controls;
+using Avalonia;
+using Avalonia.Controls;
+using Avalonia.Media;
+using Avalonia.Controls.Primitives;
+using Avalonia.Layout;
+using Avalonia.Interactivity;
 using HabilisTerminal.App.Widgets;
 using HabilisTerminal.Core.FileSystem;
 using HabilisTerminal.Core.Search;
@@ -90,7 +94,7 @@ internal static class FindDialog
                 matchCase.IsChecked == true,
                 wholeWords.IsChecked == true,
                 folders.IsChecked == true,
-                (SearchScope)radios.First(r => r.IsChecked == true).Tag)
+                (SearchScope)radios.First(r => r.IsChecked == true).Tag!)
             {
                 Regex = regex.IsChecked == true,
                 Archives = archives.IsChecked == true || (last.Archives && !canSearchArchives),
@@ -128,7 +132,7 @@ internal static class FindDialog
     private static TextBlock Label(string text, double top = 0)
     {
         var label = new TextBlock { Text = text, Margin = new Thickness(0, top, 0, 4) };
-        label.SetResourceReference(FrameworkElement.StyleProperty, "Habi.DescriptionStyle");
+        label.Classes.Add("description");
         return label;
     }
 }

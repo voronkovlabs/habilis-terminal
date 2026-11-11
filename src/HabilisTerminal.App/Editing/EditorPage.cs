@@ -1,16 +1,19 @@
 using System.IO;
-using System.Windows;
-using System.Windows.Controls;
-using System.Windows.Input;
-using System.Windows.Media;
+using Avalonia;
+using Avalonia.Controls;
+using Avalonia.Controls.Primitives;
+using Avalonia.Layout;
+using Avalonia.Interactivity;
+using Avalonia.Input;
+using Avalonia.Media;
 using HabilisTerminal.App.Theming;
 using HabilisTerminal.App.Widgets;
 using HabilisTerminal.Core.Editing;
 using HabilisTerminal.Core.Settings;
 using HabilisTerminal.Core.Viewing;
 using HabilisTerminal.Themes;
-using ICSharpCode.AvalonEdit;
-using ICSharpCode.AvalonEdit.Highlighting;
+using AvaloniaEdit;
+using AvaloniaEdit.Highlighting;
 
 namespace HabilisTerminal.App.Editing;
 
@@ -43,7 +46,7 @@ public sealed class EditorPage : DockPanel, IPage
             text.Margin = new Thickness(0, 0, 16, 0);
         }
 
-        _title.FontWeight = FontWeights.SemiBold;
+        _title.FontWeight = FontWeight.SemiBold;
         var hint = new TextBlock { Text = "F2 or Ctrl+S save · Shift+F2 save as · F7 find · Ctrl+F7 replace · Shift+F8 encoding · Esc close", FontFamily = new FontFamily("Segoe UI"), FontSize = 12, VerticalAlignment = VerticalAlignment.Center };
         var header = new DockPanel { Margin = new Thickness(10, 6, 10, 6) };
         DockPanel.SetDock(hint, Dock.Right);
@@ -68,7 +71,7 @@ public sealed class EditorPage : DockPanel, IPage
         _editor.Document.Changed += OnDocumentChanged;
         _editor.TextArea.Caret.PositionChanged += (_, _) => UpdateStatus();
         _editor.Document.UndoStack.PropertyChanged += (_, _) => UpdateStatus();
-        _editor.PreviewKeyDown += OnEditorKeyDown;
+        _editor.AddHandler(Avalonia.Input.InputElement.KeyDownEvent, OnEditorKeyDown, Avalonia.Interactivity.RoutingStrategies.Tunnel);
         Children.Add(_editor);
 
         ApplyTheme(theme);
@@ -88,7 +91,7 @@ public sealed class EditorPage : DockPanel, IPage
     public bool IsModified => !_editor.Document.UndoStack.IsOriginalFile;
 
     /// <summary>A long line pasted or joined here would freeze the window as a long line in the file does (issue #163): colours go.</summary>
-    private void OnDocumentChanged(object? sender, ICSharpCode.AvalonEdit.Document.DocumentChangeEventArgs e)
+    private void OnDocumentChanged(object? sender, AvaloniaEdit.Document.DocumentChangeEventArgs e)
     {
         if (!SyntaxColors.IsOn(_editor))
         {
@@ -123,54 +126,54 @@ public sealed class EditorPage : DockPanel, IPage
         Header.BorderBrush = PanelPalette.Border;
         _title.Foreground = PanelPalette.Foreground;
         _status.Foreground = PanelPalette.DescriptionForeground;
-        ((TextBlock)((DockPanel)Header.Child).Children[0]).Foreground = PanelPalette.DescriptionForeground;
+        ((TextBlock)((DockPanel)Header.Child!).Children[0]).Foreground = PanelPalette.DescriptionForeground;
     }
 
-    private void OnEditorKeyDown(object sender, KeyEventArgs e)
+    private void OnEditorKeyDown(object? sender, KeyEventArgs e)
     {
-        var key = e.Key == Key.System ? e.SystemKey : e.Key;
+        var key = e.Key;
         var modifiers = Keyboard.Modifiers;
         var handled = true;
         switch (key)
         {
-            case Key.F2 when modifiers == ModifierKeys.None:
-            case Key.S when modifiers == ModifierKeys.Control:
+            case Key.F2 when modifiers == KeyModifiers.None:
+            case Key.S when modifiers == KeyModifiers.Control:
                 Save(null);
                 break;
-            case Key.F2 when modifiers == ModifierKeys.Shift:
+            case Key.F2 when modifiers == KeyModifiers.Shift:
                 Fire(SaveAsAsync());
                 break;
-            case Key.Escape or Key.F10 when modifiers == ModifierKeys.None:
+            case Key.Escape or Key.F10 when modifiers == KeyModifiers.None:
                 if (ConfirmLeave())
                 {
                     CloseRequested?.Invoke();
                 }
 
                 break;
-            case Key.F6 when modifiers == ModifierKeys.None:
+            case Key.F6 when modifiers == KeyModifiers.None:
                 if (ConfirmLeave())
                 {
                     ViewRequested?.Invoke(_file.Path);
                 }
 
                 break;
-            case Key.F10 when modifiers == ModifierKeys.Control:
+            case Key.F10 when modifiers == KeyModifiers.Control:
                 if (ConfirmLeave())
                 {
                     ShowInPanelRequested?.Invoke(_file.Path);
                 }
 
                 break;
-            case Key.F7 when modifiers == ModifierKeys.None:
+            case Key.F7 when modifiers == KeyModifiers.None:
                 Fire(FindAsync(prompt: true));
                 break;
-            case Key.F7 when modifiers == ModifierKeys.Shift:
+            case Key.F7 when modifiers == KeyModifiers.Shift:
                 Fire(FindAsync(prompt: false));
                 break;
-            case Key.F7 when modifiers == ModifierKeys.Control:
+            case Key.F7 when modifiers == KeyModifiers.Control:
                 Fire(ReplaceAsync());
                 break;
-            case Key.F8 when modifiers == ModifierKeys.Shift:
+            case Key.F8 when modifiers == KeyModifiers.Shift:
                 Fire(ChooseEncodingAsync());
                 break;
             default:
@@ -190,7 +193,7 @@ public sealed class EditorPage : DockPanel, IPage
         }
 
         var body = new TextBlock { Text = $"Save changes to '{Path.GetFileName(_file.Path)}'?" };
-        body.SetResourceReference(StyleProperty, "Habi.LabelStyle");
+        body.Classes.Add("label");
         var answer = ThemedDialog.Show(_owner, "Unsaved changes", body,
             [new DialogButton<int>("_Save", 1, IsDefault: true), new DialogButton<int>("Do_n't save", 2), new DialogButton<int>("Cancel", 0, IsCancel: true)], 0);
         _editor.Focus();
@@ -239,7 +242,7 @@ public sealed class EditorPage : DockPanel, IPage
     private bool Ask(string title, string question)
     {
         var body = new TextBlock { Text = question };
-        body.SetResourceReference(StyleProperty, "Habi.LabelStyle");
+        body.Classes.Add("label");
         var yes = ThemedDialog.Show(_owner, title, body, [new DialogButton<bool>("_Yes", true, IsDefault: true), new DialogButton<bool>("_No", false, IsCancel: true)], false);
         _editor.Focus();
         return yes;

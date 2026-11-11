@@ -1,5 +1,5 @@
 using System.IO;
-using System.Windows.Input;
+using Avalonia.Input;
 using HabilisTerminal.App.Input;
 using HabilisTerminal.App.Panels;
 using HabilisTerminal.App.Plugins;
@@ -613,29 +613,29 @@ public partial class MainWindow : IPluginWindow
     {
         ExistingFilePolicy.Overwrite => _ => Task.FromResult(OverwriteChoice.OverwriteAll),
         ExistingFilePolicy.Skip => _ => Task.FromResult(OverwriteChoice.SkipAll),
-        _ => name => Dispatcher.InvokeAsync(() => ThemedDialog.Show(this, "File exists", LabelBlock($"{name} already exists."),
+        _ => name => Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(() => ThemedDialog.Show(this, "File exists", LabelBlock($"{name} already exists."),
             [
                 new DialogButton<OverwriteChoice>("_Overwrite", OverwriteChoice.Overwrite, IsDefault: true),
                 new DialogButton<OverwriteChoice>("_Skip", OverwriteChoice.Skip),
                 new DialogButton<OverwriteChoice>("Overwrite _all", OverwriteChoice.OverwriteAll),
                 new DialogButton<OverwriteChoice>("S_kip all", OverwriteChoice.SkipAll),
                 new DialogButton<OverwriteChoice>("Cancel", OverwriteChoice.Cancel, IsCancel: true),
-            ], OverwriteChoice.Cancel)).Task,
+            ], OverwriteChoice.Cancel)).GetTask(),
     };
 
-    private static System.Windows.Controls.TextBlock LabelBlock(string text)
+    private static Avalonia.Controls.TextBlock LabelBlock(string text)
     {
-        var block = new System.Windows.Controls.TextBlock { Text = text, TextWrapping = System.Windows.TextWrapping.Wrap };
-        block.SetResourceReference(StyleProperty, "Habi.LabelStyle");
+        var block = new Avalonia.Controls.TextBlock { Text = text, TextWrapping = Avalonia.Media.TextWrapping.Wrap };
+        block.Classes.Add("label");
         return block;
     }
 
     Task IPluginWindow.ViewFileAsync(string path, string? title) =>
-        Dispatcher.InvokeAsync(() => OpenViewer(path, _active)).Task;
+        Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(() => OpenViewer(path, _active)).GetTask();
 
     /// <summary>Text from a plugin (a job summary, a full record) in the viewer, through a temporary file.</summary>
     public Task ViewTextAsync(string title, string text) =>
-        Dispatcher.InvokeAsync(() =>
+        Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(() =>
         {
             var folder = Path.Combine(Path.GetTempPath(), Core.Settings.AppPaths.ProductFolder, "plugin-views");
             Directory.CreateDirectory(folder);
@@ -644,10 +644,10 @@ public partial class MainWindow : IPluginWindow
             var file = Path.Combine(folder, Path.HasExtension(name) ? name : name + ".txt");
             File.WriteAllText(file, text);
             OpenViewer(file, _active);
-        }).Task;
+        }).GetTask();
 
     void IPluginWindow.Refresh(IPanelProvider provider) =>
-        Dispatcher.BeginInvoke(() =>
+        Avalonia.Threading.Dispatcher.UIThread.Post(() =>
         {
             foreach (var panel in new[] { _left, _right }.Where(p => p.Provider == provider))
             {
@@ -655,5 +655,5 @@ public partial class MainWindow : IPluginWindow
             }
         });
 
-    void IPluginWindow.ShowStatus(string message) => Dispatcher.BeginInvoke(() => _active.Message = message);
+    void IPluginWindow.ShowStatus(string message) => Avalonia.Threading.Dispatcher.UIThread.Post(() => _active.Message = message);
 }

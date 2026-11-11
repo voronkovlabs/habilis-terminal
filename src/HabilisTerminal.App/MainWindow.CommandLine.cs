@@ -1,4 +1,4 @@
-using System.Windows.Input;
+using Avalonia.Input;
 using HabilisTerminal.App.Hosting;
 using HabilisTerminal.App.Input;
 using HabilisTerminal.App.Panels;
@@ -30,7 +30,7 @@ public partial class MainWindow
     /// </summary>
     private static readonly TimeSpan FrameHoldTime = TimeSpan.FromSeconds(2);
 
-    private System.Windows.Threading.DispatcherTimer? _frameHold;
+    private Avalonia.Threading.DispatcherTimer? _frameHold;
 
     /// <summary>Keyboard popups open now (one can open as another closes).</summary>
     private int _openPopups;
@@ -44,14 +44,14 @@ public partial class MainWindow
     private void WireCommandLine(ConsoleTab tab)
     {
         var host = tab.Host;
-        host.PanelKeyReturned += name => Dispatcher.BeginInvoke(() =>
+        host.PanelKeyReturned += name => Avalonia.Threading.Dispatcher.UIThread.Post(() =>
         {
             if (tab == _tab)
             {
                 OnPanelKeyReturned(name);
             }
         });
-        host.CommandOutputStarted += (_, _, _) => Dispatcher.BeginInvoke(() =>
+        host.CommandOutputStarted += (_, _, _) => Avalonia.Threading.Dispatcher.UIThread.Post(() =>
         {
             if (tab == _tab)
             {
@@ -72,7 +72,7 @@ public partial class MainWindow
         {
             if (state == ShellState.Idle)
             {
-                Dispatcher.BeginInvoke(() =>
+                Avalonia.Threading.Dispatcher.UIThread.Post(() =>
                 {
                     var ended = tab.CommandRunning;
                     tab.CommandRunning = false;
@@ -98,16 +98,16 @@ public partial class MainWindow
 
     private void WireWindowKeys()
     {
-        Activated += (_, _) => Dispatcher.BeginInvoke(() =>
+        Activated += (_, _) => Avalonia.Threading.Dispatcher.UIThread.Post(() =>
         {
             // Back from another app: the keys go on where they were (WPF remembers no element to restore).
-            if (!IsPageOpen && Keyboard.FocusedElement is null && !TerminalHasFocus && OwnedWindows.Count == 0)
+            if (!IsPageOpen && FocusManager?.GetFocusedElement() is null && !TerminalHasFocus && OwnedWindows.Count == 0)
             {
                 PutFocusInTerminal();
             }
 
             UpdatePanelKeys();
-        }, System.Windows.Threading.DispatcherPriority.Input);
+        }, Avalonia.Threading.DispatcherPriority.Input);
         Deactivated += (_, _) => UpdatePanelKeys();
         PopupFocus.Opening += OnPopupOpening;
         PopupFocus.Closed += OnPopupClosed;
@@ -128,7 +128,7 @@ public partial class MainWindow
         panel.HoldsFrame = true;
         if (_frameHold is null)
         {
-            _frameHold = new System.Windows.Threading.DispatcherTimer { Interval = FrameHoldTime };
+            _frameHold = new Avalonia.Threading.DispatcherTimer { Interval = FrameHoldTime };
             _frameHold.Tick += (_, _) => ReleaseFrame();
         }
 
@@ -162,15 +162,15 @@ public partial class MainWindow
     private void OnPopupClosed()
     {
         _openPopups--;
-        Dispatcher.BeginInvoke(() =>
+        Avalonia.Threading.Dispatcher.UIThread.Post(() =>
         {
-            if (_openPopups == 0 && !IsPageOpen && OwnedWindows.Count == 0 && !TerminalHasFocus && !_left.IsKeyboardFocused && !_right.IsKeyboardFocused)
+            if (_openPopups == 0 && !IsPageOpen && OwnedWindows.Count == 0 && !TerminalHasFocus && !_left.IsKeyboardFocusWithin && !_right.IsKeyboardFocusWithin)
             {
                 PutFocusInTerminal();
             }
 
             UpdatePanelKeys();
-        }, System.Windows.Threading.DispatcherPriority.Background);
+        }, Avalonia.Threading.DispatcherPriority.Background);
     }
 
     /// <summary>Shows which panel has the keys, and tells the shell whether an empty line hands keys to a panel.</summary>
@@ -197,15 +197,15 @@ public partial class MainWindow
         Trace($"panel {panel.Side} got the WPF focus");
         _consoleMode = false;
 
-        Dispatcher.BeginInvoke(() =>
+        Avalonia.Threading.Dispatcher.UIThread.Post(() =>
         {
-            if (Keyboard.FocusedElement == panel && !IsPageOpen)
+            if (FocusManager?.GetFocusedElement() == panel && !IsPageOpen)
             {
                 PutFocusInTerminal();
             }
 
             UpdatePanelKeys();
-        }, System.Windows.Threading.DispatcherPriority.Input);
+        }, Avalonia.Threading.DispatcherPriority.Input);
     }
 
     /// <summary>

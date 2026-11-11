@@ -1,7 +1,13 @@
 using System.IO;
-using System.Windows;
+using Avalonia;
+using Avalonia.Controls;
+using Avalonia.Controls.Primitives;
+using Avalonia.Layout;
+using Avalonia.Interactivity;
 using HabilisTerminal.Themes;
-using Microsoft.Terminal.Wpf;
+using Avalonia.Media;
+using Avalonia.Threading;
+using HabilisTerminal.App.Hosting;
 
 namespace HabilisTerminal.App.Theming;
 
@@ -13,7 +19,7 @@ namespace HabilisTerminal.App.Theming;
 public sealed class ThemeService : IDisposable
 {
     private FileSystemWatcher? _fileWatcher;
-    private System.Windows.Threading.DispatcherTimer? _fileReload;
+    private Avalonia.Threading.DispatcherTimer? _fileReload;
     private string _requested = "auto";
     private bool _useAccent = true;
 
@@ -51,14 +57,14 @@ public sealed class ThemeService : IDisposable
             theme = file is not null ? ThemeLoader.LoadFile(file)
                 : BuiltInName(_requested) is { } builtIn ? ThemeLoader.LoadBuiltIn(builtIn)
                 : string.IsNullOrWhiteSpace(_requested) || _requested.Equals("auto", StringComparison.OrdinalIgnoreCase)
-                    ? ThemeLoader.LoadBuiltIn(WindowsAppearance.BuiltInThemeFor(SystemParameters.HighContrast))
+                    ? ThemeLoader.LoadBuiltIn(WindowsAppearance.BuiltInThemeFor(WindowsAppearance.IsHighContrast()))
                     : throw new ThemeLoadException($"Theme '{_requested}' was not found.");
         }
         catch (ThemeLoadException ex)
         {
             // Invalid theme: fall back to the built-in one and report it.
             LastError = ex.Message;
-            theme = ThemeLoader.LoadBuiltIn(WindowsAppearance.BuiltInThemeFor(SystemParameters.HighContrast));
+            theme = ThemeLoader.LoadBuiltIn(WindowsAppearance.BuiltInThemeFor(WindowsAppearance.IsHighContrast()));
         }
 
         var keepsOwnAccent = file is null && BuiltInName(_requested) is { } fixedPalette && ThemeLoader.KeepsOwnAccent(fixedPalette);
@@ -145,35 +151,32 @@ public sealed class ThemeService : IDisposable
         _fileWatcher.EnableRaisingEvents = true;
     }
 
-    private void ScheduleFileReload() => Application.Current?.Dispatcher.BeginInvoke(() =>
+    private void ScheduleFileReload() => Avalonia.Threading.Dispatcher.UIThread.Post(() =>
     {
         // Editors save in several writes: wait until the file is quiet.
-        _fileReload ??= new System.Windows.Threading.DispatcherTimer(TimeSpan.FromMilliseconds(250), System.Windows.Threading.DispatcherPriority.Background, (_, _) =>
+        _fileReload ??= new DispatcherTimer(TimeSpan.FromMilliseconds(250), DispatcherPriority.Background, (_, _) =>
         {
             _fileReload!.Stop();
             Reload();
-        }, Application.Current.Dispatcher);
+        });
         _fileReload.Stop();
         _fileReload.Start();
     });
 
-    /// <summary>Terminal colours from <c>terminal.*</c> keys (COLORREF values).</summary>
-    public static TerminalTheme ToTerminalTheme(ColorTheme theme)
+    /// <summary>The console's colours from the <c>terminal.*</c> keys.</summary>
+    public static TerminalPalette ToTerminalPalette(ColorTheme theme)
     {
         var background = theme.GetOpaque("terminal.background");
-        uint Ref(string key, ThemeColor? fallback = null)
+        Color Opaque(string key, ThemeColor? fallback = null)
         {
             var color = (theme.Get(key) ?? fallback ?? background).Over(background);
-            return (uint)(color.R | (color.G << 8) | (color.B << 16));
+            return Color.FromRgb(color.R, color.G, color.B);
         }
 
-        return new TerminalTheme
-        {
-            DefaultBackground = Ref("terminal.background"),
-            DefaultForeground = Ref("terminal.foreground"),
-            DefaultSelectionBackground = Ref("terminal.selectionBackground"),
-            CursorStyle = CursorStyle.BlinkingBar,
-            ColorTable = ThemeDefaults.TerminalAnsiKeys.Select(key => Ref(key)).ToArray(),
-        };
+        var foreground = Opaque("terminal.foreground");
+        var selection = theme.Get("terminal.selectionBackground") is { } s ? Color.FromArgb(s.A == 255 ? (byte)0x80 : s.A, s.R, s.G, s.B) : Color.FromArgb(0x80, 0x26, 0x4F, 0x78);
+        var cursor = theme.Get("terminalCursor.foreground") is { } c ? Color.FromRgb(c.R, c.G, c.B) : foreground;
+        return new TerminalPalette(foreground, Opaque("terminal.background"), selection, cursor,
+            ThemeDefaults.TerminalAnsiKeys.Select(key => Opaque(key)).ToList());
     }
 }

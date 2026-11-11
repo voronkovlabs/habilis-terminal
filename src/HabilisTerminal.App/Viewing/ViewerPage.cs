@@ -1,10 +1,13 @@
 using System.Globalization;
 using System.IO;
-using System.Windows;
-using System.Windows.Controls;
-using System.Windows.Input;
-using System.Windows.Media;
-using System.Windows.Media.Imaging;
+using Avalonia;
+using Avalonia.Controls;
+using Avalonia.Controls.Primitives;
+using Avalonia.Layout;
+using Avalonia.Interactivity;
+using Avalonia.Input;
+using Avalonia.Media;
+using Avalonia.Media.Imaging;
 using HabilisTerminal.App.Editing;
 using HabilisTerminal.App.Panels;
 using HabilisTerminal.App.Theming;
@@ -13,8 +16,8 @@ using HabilisTerminal.Core.Editing;
 using HabilisTerminal.Core.Settings;
 using HabilisTerminal.Core.Viewing;
 using HabilisTerminal.Themes;
-using ICSharpCode.AvalonEdit;
-using ICSharpCode.AvalonEdit.Highlighting;
+using AvaloniaEdit;
+using AvaloniaEdit.Highlighting;
 
 namespace HabilisTerminal.App.Viewing;
 
@@ -38,14 +41,15 @@ public sealed class ViewerPage : DockPanel, IDisposable, IPage
 
     public ViewerPage(string path, AppSettings settings, ColorTheme theme)
     {
+        AddHandler(KeyDownEvent, OnPreviewKeyDown, Avalonia.Interactivity.RoutingStrategies.Tunnel);
         _view.Wrap = settings.ViewerWrap;
         FilePath = path;
         Focusable = true;
-        FocusVisualStyle = null;
+        ;
         Background = PanelPalette.Background;
         LastChildFill = true;
 
-        _title.FontWeight = FontWeights.SemiBold;
+        _title.FontWeight = FontWeight.SemiBold;
         foreach (var text in new[] { _title, _info, _hint })
         {
             text.FontFamily = new FontFamily("Segoe UI");
@@ -125,18 +129,17 @@ public sealed class ViewerPage : DockPanel, IDisposable, IPage
         }
     }
 
-    protected override void OnPreviewKeyDown(KeyEventArgs e)
+    private void OnPreviewKeyDown(object? sender, KeyEventArgs e)
     {
-        base.OnPreviewKeyDown(e);
-        var key = e.Key == Key.System ? e.SystemKey : e.Key;
+        var key = e.Key;
         var modifiers = Keyboard.Modifiers;
         e.Handled = true;
         switch (key)
         {
-            case Key.Escape or Key.F3 or Key.F10 when modifiers == ModifierKeys.None:
+            case Key.Escape or Key.F3 or Key.F10 when modifiers == KeyModifiers.None:
                 CloseRequested?.Invoke();
                 return;
-            case Key.F6 when modifiers == ModifierKeys.None:
+            case Key.F6 when modifiers == KeyModifiers.None:
                 EditRequested?.Invoke(FilePath);
                 return;
         }
@@ -153,7 +156,7 @@ public sealed class ViewerPage : DockPanel, IDisposable, IPage
             return;
         }
 
-        if (key == Key.F4 && modifiers == ModifierKeys.None && _text is not null)
+        if (key == Key.F4 && modifiers == KeyModifiers.None && _text is not null)
         {
             ShowText();
             return;
@@ -161,10 +164,10 @@ public sealed class ViewerPage : DockPanel, IDisposable, IPage
 
         switch (key)
         {
-            case Key.Down when modifiers == ModifierKeys.None:
+            case Key.Down when modifiers == KeyModifiers.None:
                 _view.ScrollLines(1);
                 break;
-            case Key.Up when modifiers == ModifierKeys.None:
+            case Key.Up when modifiers == KeyModifiers.None:
                 _view.ScrollLines(-1);
                 break;
             case Key.PageDown:
@@ -173,22 +176,22 @@ public sealed class ViewerPage : DockPanel, IDisposable, IPage
             case Key.PageUp:
                 _view.ScrollPages(-1);
                 break;
-            case Key.Home when modifiers == ModifierKeys.Control:
+            case Key.Home when modifiers == KeyModifiers.Control:
                 _view.GoToStart();
                 break;
-            case Key.End when modifiers == ModifierKeys.Control:
+            case Key.End when modifiers == KeyModifiers.Control:
                 _view.GoToEnd();
                 break;
             case Key.Home:
                 _view.ScrollHorizontally(-_view.LeftColumn);
                 break;
             case Key.Right:
-                _view.ScrollHorizontally(modifiers == ModifierKeys.Control ? 20 : 1);
+                _view.ScrollHorizontally(modifiers == KeyModifiers.Control ? 20 : 1);
                 break;
             case Key.Left:
-                _view.ScrollHorizontally(modifiers == ModifierKeys.Control ? -20 : -1);
+                _view.ScrollHorizontally(modifiers == KeyModifiers.Control ? -20 : -1);
                 break;
-            case Key.F2 when modifiers == ModifierKeys.None:
+            case Key.F2 when modifiers == KeyModifiers.None:
                 _view.Wrap = !_view.Wrap;
                 _view.Refresh();
                 if (_text is not null)
@@ -197,27 +200,27 @@ public sealed class ViewerPage : DockPanel, IDisposable, IPage
                 }
 
                 break;
-            case Key.F4 when modifiers == ModifierKeys.None:
+            case Key.F4 when modifiers == KeyModifiers.None:
                 _view.Hex = !_view.Hex;
                 _view.Refresh();
                 break;
-            case Key.F7 when modifiers == ModifierKeys.None:
+            case Key.F7 when modifiers == KeyModifiers.None:
                 _ = SearchAsync(prompt: true, forward: true);
                 break;
-            case Key.F7 when modifiers == ModifierKeys.Shift:
+            case Key.F7 when modifiers == KeyModifiers.Shift:
                 _ = SearchAsync(prompt: false, forward: true);
                 break;
-            case Key.F7 when modifiers == ModifierKeys.Alt:
+            case Key.F7 when modifiers == KeyModifiers.Alt:
                 _ = SearchAsync(prompt: false, forward: false);
                 break;
-            case Key.F8 when modifiers == ModifierKeys.None:
+            case Key.F8 when modifiers == KeyModifiers.None:
                 // Far: F8 toggles between the ANSI and OEM code pages.
                 SetEncoding(_document.Encoding.Name == TextEncoding.Oem.Name ? TextEncoding.Ansi : TextEncoding.Oem);
                 break;
-            case Key.F8 when modifiers == ModifierKeys.Shift:
+            case Key.F8 when modifiers == KeyModifiers.Shift:
                 _ = ChooseEncodingAsync();
                 break;
-            case Key.F8 when modifiers == ModifierKeys.Alt:
+            case Key.F8 when modifiers == KeyModifiers.Alt:
                 _ = GoToAsync();
                 break;
             default:
@@ -364,10 +367,10 @@ public sealed class ViewerPage : DockPanel, IDisposable, IPage
     private async Task LoadTextModeAsync(string path, AppSettings settings, ColorTheme theme)
     {
         var ui = Dispatcher.Thread;
-        (TextFile File, ICSharpCode.AvalonEdit.Document.TextDocument Document)? result;
+        (TextFile File, AvaloniaEdit.Document.TextDocument Document)? result;
         try
         {
-            result = await Task.Run<(TextFile, ICSharpCode.AvalonEdit.Document.TextDocument)?>(() =>
+            result = await Task.Run<(TextFile, AvaloniaEdit.Document.TextDocument)?>(() =>
             {
                 if (Core.Editing.LongLines.HasHugeLine(path))
                 {
@@ -375,7 +378,7 @@ public sealed class ViewerPage : DockPanel, IDisposable, IPage
                 }
 
                 var file = TextFile.Load(path);
-                var document = new ICSharpCode.AvalonEdit.Document.TextDocument(file.Text);
+                var document = new AvaloniaEdit.Document.TextDocument(file.Text);
                 document.SetOwnerThread(ui);
                 return (file, document);
             });
@@ -406,11 +409,11 @@ public sealed class ViewerPage : DockPanel, IDisposable, IPage
         UpdateInfo();
         if (hadFocus)
         {
-            _ = Dispatcher.BeginInvoke(() => _text.Focus(), System.Windows.Threading.DispatcherPriority.Input);
+            Avalonia.Threading.Dispatcher.UIThread.Post(() => _text.Focus(), Avalonia.Threading.DispatcherPriority.Input);
         }
     }
 
-    private TextEditor CreateTextEditor(TextFile file, ICSharpCode.AvalonEdit.Document.TextDocument document, AppSettings settings, ColorTheme theme)
+    private TextEditor CreateTextEditor(TextFile file, AvaloniaEdit.Document.TextDocument document, AppSettings settings, ColorTheme theme)
     {
         var editor = new TextEditor
         {
@@ -430,34 +433,34 @@ public sealed class ViewerPage : DockPanel, IDisposable, IPage
     }
 
     /// <summary>Viewer keys in the text mode; everything else (moving, selecting, Ctrl+C) goes to the editor.</summary>
-    private bool HandleTextModeKey(Key key, ModifierKeys modifiers)
+    private bool HandleTextModeKey(Key key, KeyModifiers modifiers)
     {
         switch (key)
         {
-            case Key.F2 when modifiers == ModifierKeys.None:
+            case Key.F2 when modifiers == KeyModifiers.None:
                 _text!.WordWrap = !_text.WordWrap;
                 _view.Wrap = _text.WordWrap;
                 UpdateInfo();
                 return true;
-            case Key.F4 when modifiers == ModifierKeys.None:
+            case Key.F4 when modifiers == KeyModifiers.None:
                 ShowHex();
                 return true;
-            case Key.F7 when modifiers == ModifierKeys.None:
+            case Key.F7 when modifiers == KeyModifiers.None:
                 _ = FindInTextAsync(prompt: true, forward: true);
                 return true;
-            case Key.F7 when modifiers == ModifierKeys.Shift:
+            case Key.F7 when modifiers == KeyModifiers.Shift:
                 _ = FindInTextAsync(prompt: false, forward: true);
                 return true;
-            case Key.F7 when modifiers == ModifierKeys.Alt:
+            case Key.F7 when modifiers == KeyModifiers.Alt:
                 _ = FindInTextAsync(prompt: false, forward: false);
                 return true;
-            case Key.F8 when modifiers == ModifierKeys.None:
+            case Key.F8 when modifiers == KeyModifiers.None:
                 SetEncoding(_textFile!.Encoding.Name == TextEncoding.Oem.Name ? TextEncoding.Ansi : TextEncoding.Oem);
                 return true;
-            case Key.F8 when modifiers == ModifierKeys.Shift:
+            case Key.F8 when modifiers == KeyModifiers.Shift:
                 _ = ChooseEncodingAsync();
                 return true;
-            case Key.F8 when modifiers == ModifierKeys.Alt:
+            case Key.F8 when modifiers == KeyModifiers.Alt:
                 _ = GoToInTextAsync();
                 return true;
             default:
@@ -492,7 +495,7 @@ public sealed class ViewerPage : DockPanel, IDisposable, IPage
         Children.Remove(_view);
         Children.Add(_text!);
         UpdateInfo();
-        Dispatcher.BeginInvoke(() => _text!.Focus(), System.Windows.Threading.DispatcherPriority.Input);
+        Avalonia.Threading.Dispatcher.UIThread.Post(() => _text!.Focus(), Avalonia.Threading.DispatcherPriority.Input);
     }
 
     private async Task RevealLineAsync(int line)

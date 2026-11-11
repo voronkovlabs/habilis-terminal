@@ -1,6 +1,6 @@
 using System.IO;
 using System.Runtime.InteropServices;
-using System.Windows.Input;
+using Avalonia.Input;
 using HabilisTerminal.App.Input;
 using HabilisTerminal.App.Panels;
 using HabilisTerminal.App.Plugins;
@@ -195,14 +195,14 @@ public partial class MainWindow
     }
 
     /// <summary>A viewer or editor page takes its keys from the real keyboard, so a command there presses its key.</summary>
-    private void PressKey(string keys)
+    private static void PressKey(string keys)
     {
         if (!KeyNames.TryParse(keys, out var key, out var modifiers))
         {
             return;
         }
 
-        Dispatcher.BeginInvoke(() =>
+        Avalonia.Threading.Dispatcher.UIThread.Post(() =>
         {
             byte[] held =
             [
@@ -215,14 +215,14 @@ public partial class MainWindow
                 keybd_event(code, 0, 0, IntPtr.Zero);
             }
 
-            var virtualKey = (byte)KeyInterop.VirtualKeyFromKey(key);
+            var virtualKey = (byte)(Hosting.TerminalKeys.VirtualKey(key) ?? 0);
             keybd_event(virtualKey, 0, 0, IntPtr.Zero);
             keybd_event(virtualKey, 0, KeyEventKeyUp, IntPtr.Zero);
             foreach (var code in held.Reverse())
             {
                 keybd_event(code, 0, KeyEventKeyUp, IntPtr.Zero);
             }
-        }, System.Windows.Threading.DispatcherPriority.Background);
+        }, Avalonia.Threading.DispatcherPriority.Background);
     }
 
     private const int KeyEventKeyUp = 2;
@@ -294,7 +294,7 @@ public partial class MainWindow
 
         if (fromPage)
         {
-            (previous as System.Windows.UIElement)?.Focus();
+            (previous as Avalonia.Controls.Control)?.Focus();
         }
         else if (hadKeys is not null && result?.Item is null)
         {

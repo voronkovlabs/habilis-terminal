@@ -1,5 +1,10 @@
-using System.Windows;
-using System.Windows.Media;
+using Avalonia;
+using Avalonia.Controls;
+using Avalonia.Controls.Primitives;
+using Avalonia.Layout;
+using Avalonia.Interactivity;
+using Avalonia.Media;
+using Avalonia.Media.Immutable;
 using HabilisTerminal.Themes;
 
 namespace HabilisTerminal.App.Theming;
@@ -13,47 +18,47 @@ internal static class PanelPalette
 {
     static PanelPalette() => Apply(ThemeLoader.LoadBuiltIn(ThemeLoader.DarkModern));
 
-    public static Brush Background { get; private set; } = null!;           // sideBar.background
+    public static IBrush Background { get; private set; } = null!;           // sideBar.background
 
-    public static Brush Foreground { get; private set; } = null!;           // sideBar.foreground
+    public static IBrush Foreground { get; private set; } = null!;           // sideBar.foreground
 
-    public static Brush DescriptionForeground { get; private set; } = null!; // descriptionForeground
+    public static IBrush DescriptionForeground { get; private set; } = null!; // descriptionForeground
 
-    public static Brush Border { get; private set; } = null!;               // sideBar.border
+    public static IBrush Border { get; private set; } = null!;               // sideBar.border
 
-    public static Brush HeaderBackground { get; private set; } = null!;     // sideBarSectionHeader.background
+    public static IBrush HeaderBackground { get; private set; } = null!;     // sideBarSectionHeader.background
 
-    public static Brush ActiveSelectionBackground { get; private set; } = null!; // list.activeSelectionBackground
+    public static IBrush ActiveSelectionBackground { get; private set; } = null!; // list.activeSelectionBackground
 
-    public static Brush ActiveSelectionForeground { get; private set; } = null!; // list.activeSelectionForeground
+    public static IBrush ActiveSelectionForeground { get; private set; } = null!; // list.activeSelectionForeground
 
-    public static Brush InactiveSelectionBackground { get; private set; } = null!; // list.inactiveSelectionBackground
+    public static IBrush InactiveSelectionBackground { get; private set; } = null!; // list.inactiveSelectionBackground
 
-    public static Brush FocusOutline { get; private set; } = null!;         // list.focusOutline
+    public static IBrush FocusOutline { get; private set; } = null!;         // list.focusOutline
 
-    public static Brush HoverBackground { get; private set; } = null!;      // list.hoverBackground
+    public static IBrush HoverBackground { get; private set; } = null!;      // list.hoverBackground
 
-    public static Brush MarkedForeground { get; private set; } = null!;     // gitDecoration.modifiedResourceForeground
+    public static IBrush MarkedForeground { get; private set; } = null!;     // gitDecoration.modifiedResourceForeground
 
-    public static Brush FolderIcon { get; private set; } = null!;           // icon.foreground
+    public static IBrush FolderIcon { get; private set; } = null!;           // icon.foreground
 
-    public static Brush FileIcon { get; private set; } = null!;
+    public static IBrush FileIcon { get; private set; } = null!;
 
-    public static Brush ErrorForeground { get; private set; } = null!;      // errorForeground
+    public static IBrush ErrorForeground { get; private set; } = null!;      // errorForeground
 
-    public static Brush InputBackground { get; private set; } = null!;      // input.background
+    public static IBrush InputBackground { get; private set; } = null!;      // input.background
 
-    public static Brush WidgetBackground { get; private set; } = null!;     // quickInput.background
+    public static IBrush WidgetBackground { get; private set; } = null!;     // quickInput.background
 
-    public static Brush WidgetBorder { get; private set; } = null!;         // widget.border
+    public static IBrush WidgetBorder { get; private set; } = null!;         // widget.border
 
-    private static Brush[] s_tones = [];
+    private static IBrush[] s_tones = [];
 
     /// <summary>
     /// A plugin row tone (the SDK's RowTone: 1 Accent, 2 Good, 3 Warning, 4 Bad, 5 Dim) as a theme brush; null for
     /// normal rows (issue #49).
     /// </summary>
-    public static Brush? Tone(int tone) => tone > 0 && tone < s_tones.Length ? s_tones[tone] : null;
+    public static IBrush? Tone(int tone) => tone > 0 && tone < s_tones.Length ? s_tones[tone] : null;
 
     public static bool IsLight { get; private set; }
 
@@ -169,8 +174,8 @@ internal static class PanelPalette
     }
 
     /// <summary>Black or white, whichever reads better on the brush's colour.</summary>
-    public static Brush ReadableOn(Brush background) =>
-        background is SolidColorBrush solid && Readable(Colors.White, solid.Color) == Colors.White && Luminance(solid.Color) < 0.3 ? Brushes.White : Brushes.Black;
+    public static IBrush ReadableOn(IBrush background) =>
+        background is ISolidColorBrush solid && Readable(Colors.White, solid.Color) == Colors.White && Luminance(solid.Color) < 0.3 ? Brushes.White : Brushes.Black;
 
     private static Color Mix(Color from, Color to, double share) => Color.FromRgb(
         (byte)(from.R + ((to.R - from.R) * share)),
@@ -179,10 +184,5 @@ internal static class PanelPalette
 
     public static Color ToColor(ThemeColor color) => Color.FromArgb(color.A, color.R, color.G, color.B);
 
-    private static SolidColorBrush Freeze(Color color)
-    {
-        var brush = new SolidColorBrush(color);
-        brush.Freeze();
-        return brush;
-    }
+    private static ImmutableSolidColorBrush Freeze(Color color) => new(color);
 }

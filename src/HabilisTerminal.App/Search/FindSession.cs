@@ -26,7 +26,7 @@ internal sealed class FindSession : IDisposable
             Regex = options.Regex,
             Archives = containers is not null,
         };
-        var dispatcher = System.Windows.Threading.Dispatcher.CurrentDispatcher;
+        var dispatcher = Avalonia.Threading.Dispatcher.UIThread;
         Task = System.Threading.Tasks.Task.Run(() =>
         {
             var cache = cacheDirectory is not null && !string.IsNullOrEmpty(options.Text)
@@ -47,7 +47,7 @@ internal sealed class FindSession : IDisposable
                 cache?.Save();
                 if (containers is not null)
                 {
-                    dispatcher.BeginInvoke(containers.Dispose);
+                    dispatcher.Post(containers.Dispose);
                 }
             }
         });

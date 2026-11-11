@@ -1,10 +1,13 @@
 using System.Globalization;
 using System.IO;
-using System.Windows;
-using System.Windows.Controls;
-using System.Windows.Input;
-using System.Windows.Media;
-using System.Windows.Media.Imaging;
+using Avalonia;
+using Avalonia.Controls;
+using Avalonia.Controls.Primitives;
+using Avalonia.Layout;
+using Avalonia.Interactivity;
+using Avalonia.Input;
+using Avalonia.Media;
+using Avalonia.Media.Imaging;
 using HabilisTerminal.App.Editing;
 using HabilisTerminal.App.Theming;
 using HabilisTerminal.App.Viewing;
@@ -12,8 +15,8 @@ using HabilisTerminal.Core.Editing;
 using HabilisTerminal.Core.Settings;
 using HabilisTerminal.Core.Viewing;
 using HabilisTerminal.Themes;
-using ICSharpCode.AvalonEdit;
-using ICSharpCode.AvalonEdit.Highlighting;
+using AvaloniaEdit;
+using AvaloniaEdit.Highlighting;
 
 namespace HabilisTerminal.App.Panels;
 
@@ -29,13 +32,13 @@ public sealed class QuickView : Grid, IDisposable
     private readonly Image _image = new() { Stretch = Stretch.Uniform, StretchDirection = StretchDirection.DownOnly, Margin = new Thickness(8) };
     private readonly TextBlock _message = new() { Margin = new Thickness(12), TextWrapping = TextWrapping.Wrap, FontFamily = new FontFamily("Segoe UI"), FontSize = 13 };
     private readonly TextBlock _plain = new() { Margin = new Thickness(10, 8, 10, 8), FontFamily = new FontFamily("Cascadia Mono, Consolas"), FontSize = 13 };
-    private readonly ScrollViewer _plainScroll = new() { HorizontalScrollBarVisibility = ScrollBarVisibility.Auto, VerticalScrollBarVisibility = ScrollBarVisibility.Auto, Visibility = Visibility.Collapsed };
+    private readonly ScrollViewer _plainScroll = new() { HorizontalScrollBarVisibility = ScrollBarVisibility.Auto, VerticalScrollBarVisibility = ScrollBarVisibility.Auto, IsVisible = false };
     private readonly TextEditor _editor = new()
     {
         IsReadOnly = true,
         ShowLineNumbers = true,
         Focusable = false,
-        Visibility = Visibility.Collapsed,
+        IsVisible = false,
     };
 
     private readonly TextBlock _pdfPage = new()
@@ -45,7 +48,7 @@ public sealed class QuickView : Grid, IDisposable
         FontSize = 12,
         HorizontalAlignment = HorizontalAlignment.Right,
         VerticalAlignment = VerticalAlignment.Bottom,
-        Visibility = Visibility.Collapsed,
+        IsVisible = false,
     };
 
     private ViewerDocument? _document;
@@ -57,10 +60,11 @@ public sealed class QuickView : Grid, IDisposable
     /// <summary>The settings and colour theme of the text mode, set by the window (like <see cref="ViewerView.SetFont"/>).</summary>
     public static AppSettings? Settings { get; set; }
 
-    public static ColorTheme? Theme { get; set; }
+    public static ColorTheme? TextTheme { get; set; }
 
     public QuickView()
     {
+        AddHandler(PointerWheelChangedEvent, OnPreviewMouseWheel, Avalonia.Interactivity.RoutingStrategies.Tunnel);
         Children.Add(_text);
         _editor.TextArea.Focusable = false; // the keyboard stays in the panels
         Children.Add(_editor);
@@ -79,7 +83,7 @@ public sealed class QuickView : Grid, IDisposable
         _message.Foreground = _pdfPage.Foreground = PanelPalette.DescriptionForeground;
         _plain.Foreground = PanelPalette.Foreground;
         _text.InvalidateVisual();
-        if (Theme is { } theme)
+        if (TextTheme is { } theme)
         {
             TextEditorTheme.Apply(_editor, theme);
         }
@@ -101,7 +105,7 @@ public sealed class QuickView : Grid, IDisposable
         ClosePdf();
         _text.Document = null;
         _image.Source = null;
-        _text.Visibility = _image.Visibility = _message.Visibility = _plainScroll.Visibility = _editor.Visibility = Visibility.Collapsed;
+        _text.IsVisible = _image.IsVisible = _message.IsVisible = _plainScroll.IsVisible = _editor.IsVisible = false;
         _editor.Text = string.Empty;
         if (path is null)
         {
@@ -112,7 +116,7 @@ public sealed class QuickView : Grid, IDisposable
         if (isDirectory)
         {
             _message.Text = $"{Path.GetFileName(path.TrimEnd('\\'))}\n\n" + (folderSize is { } size ? $"Size: {PanelColumns.FormatCompactSize(size, culture)}" : "Folder (F3 computes its size)");
-            _message.Visibility = Visibility.Visible;
+            _message.IsVisible = true;
             return;
         }
 
@@ -120,19 +124,12 @@ public sealed class QuickView : Grid, IDisposable
         {
             if (ImagePage.IsImage(path))
             {
-                var image = new BitmapImage();
-                image.BeginInit();
-                image.CacheOption = BitmapCacheOption.OnLoad;
-                image.UriSource = new Uri(path);
-                image.EndInit();
-                image.Freeze();
-                _image.LayoutTransform = Transform.Identity;
-                _image.Source = image;
-                _image.Visibility = Visibility.Visible;
+                _image.Source = new Avalonia.Media.Imaging.Bitmap(path);
+                _image.IsVisible = true;
                 return;
             }
 
-            if (PdfViewerPage.IsPdf(path))
+            if (PdfImagePage.IsPdf(path))
             {
                 _ = ShowPdfAsync(path);
                 return;
@@ -146,22 +143,21 @@ public sealed class QuickView : Grid, IDisposable
 
             _document = ViewerDocument.Open(path);
             _text.Document = _document;
-            _text.Visibility = Visibility.Visible;
+            _text.IsVisible = true;
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or NotSupportedException or ArgumentException)
         {
             _message.Text = ex.Message;
-            _message.Visibility = Visibility.Visible;
+            _message.IsVisible = true;
         }
     }
 
-    protected override void OnPreviewMouseWheel(MouseWheelEventArgs e)
+    private void OnPreviewMouseWheel(object? sender, PointerWheelEventArgs e)
     {
-        base.OnPreviewMouseWheel(e);
         if (_pdf is not null)
         {
             e.Handled = true;
-            TurnPdfPage(_pdfIndex + (e.Delta < 0 ? 1 : -1));
+            TurnPdfPage(_pdfIndex + (e.Delta.Y < 0 ? 1 : -1));
         }
     }
 
@@ -192,7 +188,7 @@ public sealed class QuickView : Grid, IDisposable
                 _ => _pdfIndex,
             });
         }
-        else if (_editor.Visibility == Visibility.Visible)
+        else if (_editor.IsVisible)
         {
             switch (key)
             {
@@ -206,7 +202,7 @@ public sealed class QuickView : Grid, IDisposable
                 case Key.End: _editor.ScrollToEnd(); break;
             }
         }
-        else if (_text.Visibility == Visibility.Visible)
+        else if (_text.IsVisible)
         {
             switch (key)
             {
@@ -220,7 +216,7 @@ public sealed class QuickView : Grid, IDisposable
                 case Key.End: _text.GoToEnd(); break;
             }
         }
-        else if (_plainScroll.Visibility == Visibility.Visible)
+        else if (_plainScroll.IsVisible)
         {
             switch (key)
             {
@@ -236,9 +232,9 @@ public sealed class QuickView : Grid, IDisposable
         }
     }
 
-    protected override void OnRenderSizeChanged(SizeChangedInfo sizeInfo)
+    protected override void OnSizeChanged(SizeChangedEventArgs e)
     {
-        base.OnRenderSizeChanged(sizeInfo);
+        base.OnSizeChanged(e);
         if (_pdf is not null)
         {
             _ = RenderPdfAsync();
@@ -282,9 +278,9 @@ public sealed class QuickView : Grid, IDisposable
 
         // The newest request wins: the cursor or the wheel may have moved on while this page was rendering.
         var request = ++_pdfRequest;
-        var scale = VisualTreeHelper.GetDpi(this);
-        var width = Math.Max(1, ActualWidth - (2 * _image.Margin.Left)) * scale.DpiScaleX * Widgets.UiZoom.Factor;
-        var height = Math.Max(1, ActualHeight - (2 * _image.Margin.Top)) * scale.DpiScaleY * Widgets.UiZoom.Factor;
+        var scale = TopLevel.GetTopLevel(this)?.RenderScaling ?? 1;
+        var width = Math.Max(1, Bounds.Width - (2 * _image.Margin.Left)) * scale * Widgets.UiZoom.Factor;
+        var height = Math.Max(1, Bounds.Height - (2 * _image.Margin.Top)) * scale * Widgets.UiZoom.Factor;
         var index = _pdfIndex;
         try
         {
@@ -293,9 +289,9 @@ public sealed class QuickView : Grid, IDisposable
             {
                 Widgets.UiZoom.Unscale(_image); // drawn for the zoomed pixels (issue #237)
                 _image.Source = bitmap;
-                _image.Visibility = Visibility.Visible;
+                _image.IsVisible = true;
                 _pdfPage.Text = $"Page {index + 1} of {pdf.PageCount}";
-                _pdfPage.Visibility = Visibility.Visible;
+                _pdfPage.IsVisible = true;
             }
         }
         catch (Exception ex) when (IsPdfFailure(ex))
@@ -310,7 +306,7 @@ public sealed class QuickView : Grid, IDisposable
     private void ShowPdfFailure(Exception ex)
     {
         _message.Text = $"This PDF cannot be previewed: {ex.Message}";
-        _message.Visibility = Visibility.Visible;
+        _message.IsVisible = true;
     }
 
     private void ClosePdf()
@@ -318,7 +314,7 @@ public sealed class QuickView : Grid, IDisposable
         _pdfRequest++;
         _pdf?.Dispose();
         _pdf = null;
-        _pdfPage.Visibility = Visibility.Collapsed;
+        _pdfPage.IsVisible = false;
     }
 
     private static bool IsPdfFailure(Exception ex) =>
@@ -333,13 +329,13 @@ public sealed class QuickView : Grid, IDisposable
         SyntaxColors.Set(_editor, file.Path, settings.EditorSyntaxHighlighting && !Core.Editing.LongLines.TooLongToColor(file.Text));
         _editor.Text = file.Text;
         _editor.ScrollToHome();
-        if (Theme is { } theme)
+        if (TextTheme is { } theme)
         {
             // Recolours the syntax definition just chosen.
             TextEditorTheme.Apply(_editor, theme);
         }
 
-        _editor.Visibility = Visibility.Visible;
+        _editor.IsVisible = true;
     }
 
     /// <summary>A plugin's text for the entry under the cursor (null: empty), kept scrolled where it was on a refresh.</summary>
@@ -351,9 +347,9 @@ public sealed class QuickView : Grid, IDisposable
         ClosePdf();
         _text.Document = null;
         _image.Source = null;
-        _text.Visibility = _image.Visibility = _message.Visibility = _editor.Visibility = Visibility.Collapsed;
+        _text.IsVisible = _image.IsVisible = _message.IsVisible = _editor.IsVisible = false;
         _plain.Text = text ?? string.Empty;
-        _plainScroll.Visibility = text is null ? Visibility.Collapsed : Visibility.Visible;
+        _plainScroll.IsVisible = !(text is null);
     }
 
     public void Dispose()

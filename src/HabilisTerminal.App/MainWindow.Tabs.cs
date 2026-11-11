@@ -1,5 +1,10 @@
 using System.IO;
-using System.Windows;
+using Avalonia;
+using Avalonia.Controls;
+using Avalonia.Media;
+using Avalonia.Controls.Primitives;
+using Avalonia.Layout;
+using Avalonia.Interactivity;
 using HabilisTerminal.App.Hosting;
 using HabilisTerminal.App.Layout;
 using HabilisTerminal.App.Panels;
@@ -31,7 +36,7 @@ public partial class MainWindow
 
     private ShellConnection? _shell => _tab?.Connection;
 
-    private Microsoft.Terminal.Wpf.TerminalControl Terminal => _tab!.Terminal;
+    private TerminalView Terminal => _tab!.Terminal;
 
     private void InitTabs()
     {
@@ -55,8 +60,8 @@ public partial class MainWindow
             ExtraArguments: NullIfEmpty(_settings.ShellArgs),
             Integration: _settings.ShellIntegration));
         var tab = new ConsoleTab(host) { ColorIndex = Core.Panels.ConsoleTabRules.FreeColor(_tabs.Select(t => t.ColorIndex).ToList(), ConsoleTabStrip.ColorCount) };
-        host.Exited += _ => Dispatcher.BeginInvoke(() => OnShellExited(tab));
-        host.DirectoryChanged += path => Dispatcher.BeginInvoke(() =>
+        host.Exited += _ => Avalonia.Threading.Dispatcher.UIThread.Post(() => OnShellExited(tab));
+        host.DirectoryChanged += path => Avalonia.Threading.Dispatcher.UIThread.Post(() =>
         {
             UpdateTabStrip();
             if (tab == _tab)
@@ -64,77 +69,67 @@ public partial class MainWindow
                 OnShellDirectoryChanged(path);
             }
         });
-        host.FocusPanelRequested += () => Dispatcher.BeginInvoke(() =>
+        host.FocusPanelRequested += () => Avalonia.Threading.Dispatcher.UIThread.Post(() =>
         {
             if (tab == _tab && !IsPageOpen && ConsoleHasKeys && IsShown(_active))
             {
                 FocusActivePanel();
             }
         });
-        host.RequestCompleted += (_, op, status) => Dispatcher.BeginInvoke(() =>
+        host.RequestCompleted += (_, op, status) => Avalonia.Threading.Dispatcher.UIThread.Post(() =>
         {
             if (tab == _tab)
             {
                 OnShellRequestCompleted(op, status);
             }
         });
-        host.AddressEntered += address => Dispatcher.BeginInvoke(() =>
+        host.AddressEntered += address => Avalonia.Threading.Dispatcher.UIThread.Post(() =>
         {
             if (tab == _tab)
             {
                 OnPluginAddress(address);
             }
         });
-        host.CdEntered += path => Dispatcher.BeginInvoke(() =>
+        host.CdEntered += path => Avalonia.Threading.Dispatcher.UIThread.Post(() =>
         {
             if (tab == _tab)
             {
                 Fire(OnShellCdAsync(path));
             }
         });
-        host.GotoEntered += text => Dispatcher.BeginInvoke(() =>
+        host.GotoEntered += text => Avalonia.Threading.Dispatcher.UIThread.Post(() =>
         {
             if (tab == _tab)
             {
                 OnGoto(text, host.CurrentDirectory);
             }
         });
-        host.CommandLineAccepted += line => Dispatcher.BeginInvoke(() => tab.CommandLine = line);
-        host.CommandFinished += code => Dispatcher.BeginInvoke(() => tab.LastExitCode = code);
+        host.CommandLineAccepted += line => Avalonia.Threading.Dispatcher.UIThread.Post(() => tab.CommandLine = line);
+        host.CommandFinished += code => Avalonia.Threading.Dispatcher.UIThread.Post(() => tab.LastExitCode = code);
         host.AddressPrefixes = _plugins.Prefixes();
         host.AddressCommands = _plugins.AddressCommands();
         WireOverflow(tab);
         WireCommandLine(tab);
 
         WorkspaceLayout.SetRole(tab.Terminal, WorkspaceRole.Terminal);
-
-        // The control turns its own size into console columns and rows: it must see the real pixels (issue #237).
-        Widgets.UiZoom.Unscale(tab.Terminal);
+        WireTerminalMouse(tab);
         Workspace.Children.Insert(0, tab.Terminal);
         _tabs.Add(tab);
         return tab;
     }
 
-    /// <summary>Theme, then the connection, which starts the shell; the control must be in the window by now.</summary>
+    /// <summary>Theme, then the shell, once the view has had its layout: the shell starts at the view's grid.</summary>
     private void StartTab(ConsoleTab tab)
     {
         ApplyTerminalTheme(tab, _themes.Current);
-        tab.Terminal.Connection = tab.Connection;
-
-        // The control sizes the connection only when its own size changes later, so the shell started at the
-        // connection's default 120x30 and kept it until the layout changed (found in issue #82). Tell it the real size.
-        Dispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.Loaded, () =>
+        Avalonia.Threading.Dispatcher.UIThread.Post(() =>
         {
-            if (tab.Terminal.Rows > 0 && tab.Terminal.Columns > 0)
-            {
-                tab.Connection.Resize((uint)tab.Terminal.Rows, (uint)tab.Terminal.Columns);
-            }
-
+            tab.Connection.Start();
             if (tab == _tab && !IsPageOpen)
             {
                 PutFocusInTerminal();
             }
-        });
+        }, Avalonia.Threading.DispatcherPriority.Loaded);
     }
 
     /// <summary>Everything that belongs to one panel: its events go to the window, whichever tab it is in.</summary>
@@ -146,8 +141,8 @@ public partial class MainWindow
         panel.FileAsFolderRequested += (p, item, anyFormat) => Fire(OpenFileAsFolderAsync(p, item, anyFormat));
         panel.ShellMenuRequested += OnPanelShellMenuRequested;
         panel.Changed += OnPanelChanged;
-        panel.GotKeyboardFocus += (_, _) => OnPanelFocused(panel);
-        panel.GotKeyboardFocus += (_, _) =>
+        panel.GotFocus += (_, _) => OnPanelFocused(panel);
+        panel.GotFocus += (_, _) =>
         {
             CollapseConsole(stopGrowing: true); // issue #82
             OnPanelGotFocus(panel); // issue #90: the panel gets the keys, the console keeps the Win32 focus
@@ -261,8 +256,8 @@ public partial class MainWindow
         var activeIsRight = configuration.ActivePanel == "Right" && configuration.Right.Visible;
         var tab = CreateTab(StartPath(activeIsRight ? configuration.Right : configuration.Left, home));
         CreatePanels(tab, configuration);
-        tab.Terminal.Visibility = Visibility.Hidden;
-        void OnTerminalLoaded(object sender, RoutedEventArgs e)
+        tab.Terminal.IsVisible = false;
+        void OnTerminalLoaded(object? sender, RoutedEventArgs e)
         {
             tab.Terminal.Loaded -= OnTerminalLoaded;
             StartTab(tab);
@@ -300,10 +295,10 @@ public partial class MainWindow
 
         _tab = tab;
         LoadPanels(tab);
-        tab.Terminal.Visibility = Visibility.Visible;
+        tab.Terminal.IsVisible = true;
         if (previous is not null && previous != tab)
         {
-            previous.Terminal.Visibility = Visibility.Hidden;
+            previous.Terminal.IsVisible = false;
         }
 
         Workspace.OverlayRows = tab.OverlayRows;
@@ -331,14 +326,14 @@ public partial class MainWindow
         }
 
         // The control may not have its window yet; StartTab then gives it the focus.
-        Dispatcher.BeginInvoke(() =>
+        Avalonia.Threading.Dispatcher.UIThread.Post(() =>
         {
             if (tab == _tab && !IsPageOpen)
             {
                 PutFocusInTerminal();
                 UpdatePanelKeys();
             }
-        }, System.Windows.Threading.DispatcherPriority.Input);
+        }, Avalonia.Threading.DispatcherPriority.Input);
     }
 
     /// <summary>Ctrl+Shift+W and the tab's ×. The last console is closed by leaving the app, not from here.</summary>
@@ -379,7 +374,6 @@ public partial class MainWindow
         tab.Right.Release();
         Workspace.Children.Remove(tab.Terminal);
         tab.Dispose();
-        (FindHwndHost(tab.Terminal) as IDisposable)?.Dispose();
         UpdateTabStrip();
     }
 
@@ -426,13 +420,13 @@ public partial class MainWindow
     /// <summary>Only with a single console: then the strip is not there to show that more are possible. Not over a full-screen program.</summary>
     private void UpdateHintButton()
     {
-        if (_tabs.Count != 1 || _tab is not { } tab || IsPageOpen || !IsLoaded || tab.OverflowPosted.Alternate || tab.Terminal.ActualWidth <= 0)
+        if (_tabs.Count != 1 || _tab is not { } tab || IsPageOpen || !IsLoaded || tab.OverflowPosted.Alternate || tab.Terminal.Bounds.Width <= 0)
         {
             _hintButton?.Update(null);
             return;
         }
 
-        var corner = tab.Terminal.TranslatePoint(new Point(tab.Terminal.ActualWidth, tab.Terminal.ActualHeight), Workspace);
+        var corner = tab.Terminal.TranslatePoint(new Point(tab.Terminal.Bounds.Width, tab.Terminal.Bounds.Height), Workspace) ?? default;
         _hintButton?.Update(new Rect(0, 0, corner.X, corner.Y));
     }
 

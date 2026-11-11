@@ -1,5 +1,10 @@
 using System.IO;
-using System.Windows;
+using Avalonia;
+using Avalonia.Controls;
+using Avalonia.Media;
+using Avalonia.Controls.Primitives;
+using Avalonia.Layout;
+using Avalonia.Interactivity;
 using HabilisTerminal.App.Panels;
 using HabilisTerminal.App.Viewing;
 using HabilisTerminal.Core.Panels;
@@ -12,17 +17,16 @@ public partial class MainWindow
 {
     private bool IsPageOpen => PageHost.Content is not null;
 
-    private void ShowPage(FrameworkElement page)
+    private void ShowPage(Control page)
     {
         using var measure = Core.Diagnostics.Perf.Measure("page.show", page.GetType().Name);
         ClosePage(refocus: false);
         Workspace.Visibility = Visibility.Hidden;
         PageHost.Content = page;
-        PageHost.Visibility = Visibility.Visible;
+        PageHost.IsVisible = true;
         UpdateHintButton();
-        Dispatcher.BeginInvoke(() =>
+        Avalonia.Threading.Dispatcher.UIThread.Post(() =>
         {
-            SetFocus(new System.Windows.Interop.WindowInteropHelper(this).Handle);
             if (page is IPage content)
             {
                 content.FocusContent();
@@ -33,7 +37,7 @@ public partial class MainWindow
             }
 
             UpdatePanelKeys();
-        }, System.Windows.Threading.DispatcherPriority.Input);
+        }, Avalonia.Threading.DispatcherPriority.Input);
     }
 
     private void ClosePage(bool refocus = true)
@@ -44,8 +48,8 @@ public partial class MainWindow
         }
 
         PageHost.Content = null;
-        PageHost.Visibility = Visibility.Collapsed;
-        Workspace.Visibility = Visibility.Visible;
+        PageHost.IsVisible = false;
+        Workspace.IsVisible = true;
         UpdateHintButton();
         if (refocus)
         {
@@ -93,16 +97,12 @@ public partial class MainWindow
     private void OpenViewer(string path, FilePanel returnTo) => OpenPlainViewer(path, returnTo);
 
     /// <summary>
-    /// Alt+F3 inside the program: Markdown rendered, PDF pages, pictures. False for any other file, which goes to its
-    /// associated program.
+    /// Alt+F3 inside the program: PDF pages, pictures. False for any other file, which goes to its associated program.
+    /// Markdown went to a WebView2 page, which the Avalonia version has not yet (issue #253): it opens in its program.
     /// </summary>
     private bool OpenRich(string path, FilePanel returnTo)
     {
-        if (MarkdownPage.IsMarkdown(path))
-        {
-            OpenMarkdown(path, returnTo);
-        }
-        else if (PdfViewerPage.IsPdf(path))
+        if (PdfImagePage.IsPdf(path))
         {
             OpenPdf(path, returnTo);
         }
@@ -160,14 +160,8 @@ public partial class MainWindow
         var pages = new PdfImagePage(path);
         pages.CloseRequested += Close;
         pages.ViewRequested += () => OpenViewer(path, returnTo);
-        pages.SearchRequested += index =>
-        {
-            ClosePage(refocus: false);
-            var viewer = new PdfViewerPage(path, _themes.Current, index);
-            viewer.CloseRequested += Close;
-            viewer.ViewRequested += () => OpenViewer(path, returnTo);
-            ShowPage(viewer);
-        };
+        // Searching went to the Edge PDF viewer in a WebView2 page; for now the PDF opens in its program (issue #253).
+        pages.SearchRequested += _ => OpenWithAssociation(returnTo, path, Path.GetDirectoryName(path) ?? returnTo.CurrentPath);
         ShowPage(pages);
     }
 
@@ -201,21 +195,6 @@ public partial class MainWindow
         {
             OpenWithAssociation(panel, item.Name);
         }
-    }
-
-    private void OpenMarkdown(string path, FilePanel returnTo)
-    {
-        var page = new MarkdownPage(path, _themes.Current);
-        RememberFile(path, edited: false);
-        page.CloseRequested += () =>
-        {
-            ClosePage();
-            returnTo.State.TrySetCursor(Path.GetFileName(path));
-            returnTo.Refresh();
-        };
-        page.ViewRequested += file => OpenViewer(file, returnTo);
-        page.EditRequested += file => Edit(file, returnTo);
-        ShowPage(page);
     }
 
     /// <summary>Ctrl+Q: quick view of the active panel's current file in the other panel.</summary>
@@ -315,13 +294,13 @@ public partial class MainWindow
             var hugeLine = !large && Core.Editing.LongLines.HasHugeLine(path);
             if (large || hugeLine)
             {
-                var body = new System.Windows.Controls.TextBlock
+                var body = new Avalonia.Controls.TextBlock
                 {
                     Text = large
                         ? $"'{Path.GetFileName(path)}' is large ({Panels.PanelColumns.FormatCompactSize(new FileInfo(path).Length, System.Globalization.CultureInfo.CurrentCulture)}). Editing loads it into memory."
                         : $"'{Path.GetFileName(path)}' has a line of over two million characters. The editor may stop responding for minutes.",
                 };
-                body.SetResourceReference(StyleProperty, "Habi.LabelStyle");
+                body.Classes.Add("label");
                 var choice = Widgets.ThemedDialog.Show(this, large ? "Large file" : "Very long line", body,
                     [new Widgets.DialogButton<int>("Open in _editor", 1), new Widgets.DialogButton<int>("Open in _viewer", 2, IsDefault: true), new Widgets.DialogButton<int>("Cancel", 0, IsCancel: true)], 0);
                 if (choice == 2)
@@ -368,7 +347,7 @@ public partial class MainWindow
         page.ShowInPanelRequested += saved => ReturnToPanel(returnTo, saved);
         page.ViewRequested += saved => OpenViewer(saved, returnTo);
         ShowPage(page);
-        Dispatcher.BeginInvoke(page.FocusContent, System.Windows.Threading.DispatcherPriority.Input);
+        Avalonia.Threading.Dispatcher.UIThread.Post(page.FocusContent, Avalonia.Threading.DispatcherPriority.Input);
     }
 
     private void ReturnToPanel(FilePanel panel, string file)

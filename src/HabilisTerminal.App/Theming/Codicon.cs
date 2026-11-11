@@ -1,11 +1,11 @@
-using System.Windows.Media;
+using Avalonia.Media;
 
 namespace HabilisTerminal.App.Theming;
 
 /// <summary>Codicons (VS Code UI icons, CC BY 4.0) used by the UI, as characters of the bundled codicon font.</summary>
 internal static class Codicon
 {
-    private static readonly Lazy<GlyphTypeface> Typeface = new(() => new GlyphTypeface(new Uri("pack://application:,,,/habi;component/Assets/codicon.ttf")));
+    private static readonly Typeface Font = new(new FontFamily("avares://habi/Assets#codicon"));
     private static readonly Dictionary<string, Geometry?> Geometries = [];
 
     /// <summary>The glyph of a codicon character as geometry (no font lookup involved), or null.</summary>
@@ -18,8 +18,8 @@ internal static class Codicon
 
         if (!Geometries.TryGetValue(icon, out var geometry))
         {
-            geometry = Typeface.Value.CharacterToGlyphMap.TryGetValue(icon[0], out var glyph) ? Typeface.Value.GetGlyphOutline(glyph, 16, 16) : null;
-            geometry?.Freeze();
+            geometry = new FormattedText(icon[..1], System.Globalization.CultureInfo.InvariantCulture, FlowDirection.LeftToRight, Font, 16, null)
+                .BuildGeometry(default);
             Geometries[icon] = geometry;
         }
 

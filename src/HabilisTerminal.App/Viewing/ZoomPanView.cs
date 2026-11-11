@@ -1,8 +1,11 @@
 using System.Globalization;
-using System.Windows;
-using System.Windows.Controls;
-using System.Windows.Input;
-using System.Windows.Media;
+using Avalonia;
+using Avalonia.Controls;
+using Avalonia.Controls.Primitives;
+using Avalonia.Layout;
+using Avalonia.Interactivity;
+using Avalonia.Input;
+using Avalonia.Media;
 using HabilisTerminal.App.Widgets;
 
 namespace HabilisTerminal.App.Viewing;
@@ -26,11 +29,12 @@ public sealed class ZoomPanView : Canvas
 
     public ZoomPanView(bool enlargeToFit)
     {
+        AddHandler(PointerWheelChangedEvent, OnPreviewMouseWheel, Avalonia.Interactivity.RoutingStrategies.Tunnel);
         EnlargeToFit = enlargeToFit;
         ClipToBounds = true;
         Background = Brushes.Transparent;
         Focusable = false;
-        RenderOptions.SetBitmapScalingMode(_image, BitmapScalingMode.HighQuality);
+        RenderOptions.SetBitmapInterpolationMode(_image, Avalonia.Media.Imaging.BitmapInterpolationMode.HighQuality);
         Children.Add(_image);
         Loaded += (_, _) => UiZoom.Changed += Relayout;
         Unloaded += (_, _) => UiZoom.Changed -= Relayout;
@@ -76,9 +80,9 @@ public sealed class ZoomPanView : Canvas
     }
 
     /// <summary>Screen pixels per local unit: the monitor's scale and the interface zoom.</summary>
-    private double PixelsPerUnit => VisualTreeHelper.GetDpi(this).DpiScaleX * UiZoom.Factor;
+    private double PixelsPerUnit => (TopLevel.GetTopLevel(this)?.RenderScaling ?? 1) * UiZoom.Factor;
 
-    private Size ViewPixels => new(ActualWidth * PixelsPerUnit, ActualHeight * PixelsPerUnit);
+    private Size ViewPixels => new(Bounds.Width * PixelsPerUnit, Bounds.Height * PixelsPerUnit);
 
     /// <summary>What content of <paramref name="pixels"/> size would take on screen when fitted, in screen pixels.</summary>
     public Size FittedPixels(Size pixels)
@@ -95,7 +99,7 @@ public sealed class ZoomPanView : Canvas
     }
 
     /// <summary>New content of <paramref name="pixels"/> size, fitted.</summary>
-    public void Show(ImageSource? source, Size pixels)
+    public void Show(IImage? source, Size pixels)
     {
         _image.Source = source;
         _pixels = pixels;
@@ -104,7 +108,7 @@ public sealed class ZoomPanView : Canvas
     }
 
     /// <summary>The same content drawn at another resolution (a PDF page for the zoom); the view stays.</summary>
-    public void Replace(ImageSource source) => _image.Source = source;
+    public void Replace(IImage source) => _image.Source = source;
 
     public void Fit()
     {
@@ -138,17 +142,17 @@ public sealed class ZoomPanView : Canvas
     }
 
     /// <summary>Ctrl+Alt+= / − from the keyboard: around the middle.</summary>
-    public void ZoomCenter(int direction) => ZoomAt(new Point(ActualWidth / 2, ActualHeight / 2), direction);
+    public void ZoomCenter(int direction) => ZoomAt(new Point(Bounds.Width / 2, Bounds.Height / 2), direction);
 
-    protected override void OnRenderSizeChanged(SizeChangedInfo sizeInfo)
+    protected override void OnSizeChanged(SizeChangedEventArgs e)
     {
-        base.OnRenderSizeChanged(sizeInfo);
+        base.OnSizeChanged(e);
         Relayout();
     }
 
-    protected override void OnMouseLeftButtonDown(MouseButtonEventArgs e)
+    protected override void OnPointerPressed(PointerPressedEventArgs e)
     {
-        base.OnMouseLeftButtonDown(e);
+        base.OnPointerPressed(e);
         if (e.ClickCount == 2)
         {
             // Fitted: to 100% at the pointer; zoomed: fitted again.
@@ -174,16 +178,16 @@ public sealed class ZoomPanView : Canvas
         if (!_fit)
         {
             _dragFrom = e.GetPosition(this);
-            CaptureMouse();
-            Cursor = Cursors.SizeAll;
+            e.Pointer.Capture(this);
+            Cursor = Cursors.Hand;
             e.Handled = true;
         }
     }
 
-    protected override void OnMouseMove(MouseEventArgs e)
+    protected override void OnPointerMoved(PointerEventArgs e)
     {
-        base.OnMouseMove(e);
-        if (_dragFrom is { } from && IsMouseCaptured)
+        base.OnPointerMoved(e);
+        if (_dragFrom is { } from && IsPointerOver)
         {
             var now = e.GetPosition(this);
             _offset += now - from;
@@ -192,28 +196,27 @@ public sealed class ZoomPanView : Canvas
         }
     }
 
-    protected override void OnMouseLeftButtonUp(MouseButtonEventArgs e)
+    protected override void OnPointerReleased(PointerReleasedEventArgs e)
     {
-        base.OnMouseLeftButtonUp(e);
+        base.OnPointerReleased(e);
         if (_dragFrom is not null)
         {
             _dragFrom = null;
-            ReleaseMouseCapture();
+            e.Pointer.Capture(null);
             Cursor = null;
         }
     }
 
     /// <summary>Zoomed, the wheel scrolls (Shift+wheel sideways); fitted, it is left to the page.</summary>
-    protected override void OnPreviewMouseWheel(MouseWheelEventArgs e)
+    private void OnPreviewMouseWheel(object? sender, PointerWheelEventArgs e)
     {
-        base.OnPreviewMouseWheel(e);
-        if (_fit || Keyboard.Modifiers.HasFlag(ModifierKeys.Control))
+        if (_fit || Keyboard.Modifiers.HasFlag(KeyModifiers.Control))
         {
             return;
         }
 
-        var step = Math.Sign(e.Delta) * ActualHeight / 4;
-        _offset = Keyboard.Modifiers.HasFlag(ModifierKeys.Shift) ? new Point(_offset.X + step, _offset.Y) : new Point(_offset.X, _offset.Y + step);
+        var step = Math.Sign(e.Delta.Y) * Bounds.Height / 4;
+        _offset = Keyboard.Modifiers.HasFlag(KeyModifiers.Shift) ? new Point(_offset.X + step, _offset.Y) : new Point(_offset.X, _offset.Y + step);
         Relayout();
         e.Handled = true;
     }
@@ -221,7 +224,7 @@ public sealed class ZoomPanView : Canvas
     private Point CenteredOffset(double scale)
     {
         var size = ContentSize(scale);
-        return new Point((ActualWidth - size.Width) / 2, (ActualHeight - size.Height) / 2);
+        return new Point((Bounds.Width - size.Width) / 2, (Bounds.Height - size.Height) / 2);
     }
 
     private Size ContentSize(double scale)
@@ -232,7 +235,7 @@ public sealed class ZoomPanView : Canvas
 
     private void Relayout()
     {
-        if (_pixels.Width < 1 || ActualWidth < 1)
+        if (_pixels.Width < 1 || Bounds.Width < 1)
         {
             _image.Width = _image.Height = 0;
             ViewChanged?.Invoke();
@@ -250,18 +253,16 @@ public sealed class ZoomPanView : Canvas
 
         if (_fit)
         {
-            _offset = new Point((ActualWidth - size.Width) / 2, (ActualHeight - size.Height) / 2);
+            _offset = new Point((Bounds.Width - size.Width) / 2, (Bounds.Height - size.Height) / 2);
         }
 
-        _offset = new Point(Place(_offset.X, size.Width, ActualWidth), Place(_offset.Y, size.Height, ActualHeight));
+        _offset = new Point(Place(_offset.X, size.Width, Bounds.Width), Place(_offset.Y, size.Height, Bounds.Height));
         _image.Width = size.Width;
         _image.Height = size.Height;
 
         // The canvas itself may sit between pixels under the interface zoom.
-        var origin = PresentationSource.FromVisual(this)?.RootVisual is { } root && IsDescendantOf(root)
-            ? TransformToAncestor(root).Transform(default)
-            : default;
-        var dpi = VisualTreeHelper.GetDpi(this).DpiScaleX;
+        var origin = TopLevel.GetTopLevel(this) is { } root ? this.TranslatePoint(default, root) ?? default : default;
+        var dpi = (TopLevel.GetTopLevel(this)?.RenderScaling ?? 1);
         double Snap(double local, double originUnits) => (Math.Round((originUnits * dpi) + (local * unit)) - (originUnits * dpi)) / unit;
         SetLeft(_image, Snap(_offset.X, origin.X));
         SetTop(_image, Snap(_offset.Y, origin.Y));

@@ -1,5 +1,9 @@
-using System.Windows;
-using System.Windows.Media;
+using Avalonia;
+using Avalonia.Controls;
+using Avalonia.Controls.Primitives;
+using Avalonia.Layout;
+using Avalonia.Interactivity;
+using Avalonia.Media;
 using HabilisTerminal.App.Theming;
 
 namespace HabilisTerminal.App.Panels;
@@ -72,12 +76,9 @@ internal static class NamedIcons
             transform.Children.Add(new TranslateTransform(x + (16 * scale - bounds.Width * fit) / 2, y + (16 * scale - bounds.Height * fit) / 2));
             var shape = outline.Clone();
             shape.Transform = transform;
-            var brush = new SolidColorBrush((Color)ColorConverter.ConvertFromString(color));
-            brush.Freeze();
-            group.Children.Add(new GeometryDrawing(brush, null, shape));
+            var brush = new SolidColorBrush((Color)Color.Parse(color));
+            group.Children.Add(new GeometryDrawing { Brush = brush, Geometry = shape });
         }
-
-        group.Freeze();
         return group;
     }
 
@@ -86,12 +87,9 @@ internal static class NamedIcons
         var group = new DrawingGroup();
         foreach (var (color, data) in shapes)
         {
-            var brush = new SolidColorBrush((Color)ColorConverter.ConvertFromString(color));
-            brush.Freeze();
-            group.Children.Add(new GeometryDrawing(brush, null, Geometry.Parse(data)));
+            var brush = new SolidColorBrush((Color)Color.Parse(color));
+            group.Children.Add(new GeometryDrawing { Brush = brush, Geometry = Geometry.Parse(data) });
         }
-
-        group.Freeze();
         return group;
     }
 }

@@ -1,7 +1,11 @@
 using System.Runtime.InteropServices;
-using System.Windows;
-using System.Windows.Input;
-using System.Windows.Interop;
+using Avalonia;
+using Avalonia.Controls;
+using Avalonia.Media;
+using Avalonia.Controls.Primitives;
+using Avalonia.Layout;
+using Avalonia.Interactivity;
+using Avalonia.Input;
 
 namespace HabilisTerminal.App.Panels;
 
@@ -15,17 +19,16 @@ public static class ShellContextMenu
     /// <summary>Shows the menu at <paramref name="screen"/> (physical pixels) and runs the chosen command.</summary>
     /// <param name="intercept">Gets the chosen command's verb first (e.g. "rename"); returns true when it handled it.</param>
     /// <returns>True when a command was chosen.</returns>
-    public static bool Show(Window owner, string folder, IReadOnlyList<string> names, Point screen, Func<string, bool>? intercept = null)
+    public static bool Show(Window owner, string folder, IReadOnlyList<string> names, PixelPoint screen, Func<string, bool>? intercept = null)
     {
-        var hwnd = new WindowInteropHelper(owner).Handle;
+        var hwnd = owner.TryGetPlatformHandle()?.Handle ?? IntPtr.Zero;
         var absolute = IntPtr.Zero;
         var children = new List<IntPtr>();
         IShellFolder? desktop = null;
         IShellFolder? parent = null;
         IContextMenu? menu = null;
         var hMenu = IntPtr.Zero;
-        HwndSource? source = null;
-        HwndSourceHook? hook = null;
+        Win32Properties.CustomWndProcHookCallback? hook = null;
         try
         {
             Check(SHGetDesktopFolder(out desktop));
@@ -61,7 +64,7 @@ public static class ShellContextMenu
 
             hMenu = CreatePopupMenu();
             var flags = CMF_NORMAL | CMF_EXPLORE | CMF_CANRENAME;
-            if (Keyboard.Modifiers.HasFlag(ModifierKeys.Shift))
+            if (Keyboard.Modifiers.HasFlag(KeyModifiers.Shift))
             {
                 flags |= CMF_EXTENDEDVERBS;
             }
@@ -70,30 +73,29 @@ public static class ShellContextMenu
 
             var menu2 = menu as IContextMenu2;
             var menu3 = menu as IContextMenu3;
-            source = HwndSource.FromHwnd(hwnd);
-            if (source is not null && menu2 is not null)
+            if (menu2 is not null)
             {
-                hook = (IntPtr _, int msg, IntPtr wParam, IntPtr lParam, ref bool handled) =>
+                hook = (IntPtr _, uint msg, IntPtr wParam, IntPtr lParam, ref bool handled) =>
                 {
                     if (msg is not (WM_INITMENUPOPUP or WM_DRAWITEM or WM_MEASUREITEM or WM_MENUCHAR))
                     {
                         return IntPtr.Zero;
                     }
 
-                    if (menu3 is not null && menu3.HandleMenuMsg2((uint)msg, wParam, lParam, out var result) == 0)
+                    if (menu3 is not null && menu3.HandleMenuMsg2(msg, wParam, lParam, out var result) == 0)
                     {
                         handled = true;
                         return result;
                     }
 
-                    if (menu2.HandleMenuMsg((uint)msg, wParam, lParam) == 0)
+                    if (menu2.HandleMenuMsg(msg, wParam, lParam) == 0)
                     {
                         handled = true;
                     }
 
                     return IntPtr.Zero;
                 };
-                source.AddHook(hook);
+                Win32Properties.AddWndProcHookCallback(owner, hook);
             }
 
             var command = TrackPopupMenuEx(hMenu, TPM_RETURNCMD | TPM_RIGHTBUTTON, (int)screen.X, (int)screen.Y, hwnd, IntPtr.Zero);
@@ -122,12 +124,12 @@ public static class ShellContextMenu
                     nShow = SW_SHOWNORMAL,
                     ptInvoke = new POINT { X = (int)screen.X, Y = (int)screen.Y },
                 };
-                if (Keyboard.Modifiers.HasFlag(ModifierKeys.Control))
+                if (Keyboard.Modifiers.HasFlag(KeyModifiers.Control))
                 {
                     info.fMask |= CMIC_MASK_CONTROL_DOWN;
                 }
 
-                if (Keyboard.Modifiers.HasFlag(ModifierKeys.Shift))
+                if (Keyboard.Modifiers.HasFlag(KeyModifiers.Shift))
                 {
                     info.fMask |= CMIC_MASK_SHIFT_DOWN;
                 }
@@ -148,9 +150,9 @@ public static class ShellContextMenu
         }
         finally
         {
-            if (source is not null && hook is not null)
+            if (hook is not null)
             {
-                source.RemoveHook(hook);
+                Win32Properties.RemoveWndProcHookCallback(owner, hook);
             }
 
             if (hMenu != IntPtr.Zero)

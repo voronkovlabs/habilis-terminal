@@ -1,7 +1,12 @@
 using System.Diagnostics;
 using System.IO;
-using System.Windows;
-using System.Windows.Controls;
+using Avalonia;
+using Avalonia.Controls;
+using Avalonia.Controls.Primitives;
+using Avalonia.Controls.ApplicationLifetimes;
+using Avalonia.Markup.Xaml;
+using Avalonia.Media;
+using Avalonia.Threading;
 using HabilisTerminal.App.Theming;
 using HabilisTerminal.App.Updates;
 using HabilisTerminal.App.Widgets;
@@ -34,9 +39,18 @@ public partial class App : Application
         return !string.IsNullOrWhiteSpace(configured) && File.Exists(configured) ? configured : PwshLocator.Find();
     }
 
-    protected override void OnStartup(StartupEventArgs e)
+    public override void Initialize() => AvaloniaXamlLoader.Load(this);
+
+    public override void OnFrameworkInitializationCompleted()
     {
-        base.OnStartup(e);
+        base.OnFrameworkInitializationCompleted();
+        if (ApplicationLifetime is not IClassicDesktopStyleApplicationLifetime desktop)
+        {
+            return;
+        }
+
+        desktop.ShutdownMode = ShutdownMode.OnMainWindowClose;
+        desktop.ShutdownRequested += (_, _) => OnExit();
         Reporting.CrashCapture.Install(this);
         Paths = AppPaths.Resolve(AppContext.BaseDirectory);
         AppPaths.MigrateLegacyData(Paths);
@@ -48,22 +62,22 @@ public partial class App : Application
 
         if (!EnsurePowerShell())
         {
-            Shutdown();
+            desktop.Shutdown();
             return;
         }
 
-        MainWindow = new MainWindow();
-        MainWindow.Show();
-        Updates.Start(MainWindow.Dispatcher);
-        OfferCrashReport(MainWindow);
-        Reporting.CrashCapture.StartTestTrigger(MainWindow.Dispatcher);
+        var window = new MainWindow();
+        desktop.MainWindow = window;
+        window.Show();
+        Updates.Start(Dispatcher.UIThread);
+        OfferCrashReport(window);
+        Reporting.CrashCapture.StartTestTrigger(Dispatcher.UIThread);
     }
 
-    protected override void OnExit(ExitEventArgs e)
+    private static void OnExit()
     {
         Updates.ApplyPendingOnExit();
         Settings?.Dispose();
-        base.OnExit(e);
     }
 
     /// <summary>
@@ -77,7 +91,7 @@ public partial class App : Application
             return true;
         }
 
-        PanelPalette.Apply(ThemeLoader.LoadBuiltIn(WindowsAppearance.BuiltInThemeFor(SystemParameters.HighContrast)));
+        PanelPalette.Apply(ThemeLoader.LoadBuiltIn(WindowsAppearance.BuiltInThemeFor(WindowsAppearance.IsHighContrast())));
         while (true)
         {
             var body = new StackPanel { MaxWidth = 480 };
@@ -87,8 +101,8 @@ public partial class App : Application
                        "Install it with winget, or download it from Microsoft, then choose Check again.",
                 TextWrapping = TextWrapping.Wrap,
             };
-            text.SetResourceReference(FrameworkElement.StyleProperty, "Habi.LabelStyle");
-            var command = new TextBox { Text = "winget install Microsoft.PowerShell", IsReadOnly = true, Margin = new Thickness(0, 12, 0, 0), FontFamily = new System.Windows.Media.FontFamily("Cascadia Mono, Consolas") };
+            text.Classes.Add("label");
+            var command = new TextBox { Text = "winget install Microsoft.PowerShell", IsReadOnly = true, Margin = new Thickness(0, 12, 0, 0), FontFamily = new FontFamily("Cascadia Mono, Consolas") };
             body.Children.Add(text);
             body.Children.Add(command);
 
@@ -107,7 +121,7 @@ public partial class App : Application
                 case 2:
                     try
                     {
-                        Clipboard.SetText(command.Text);
+                        Widgets.Clipboard.SetText(command.Text ?? string.Empty);
                     }
                     catch (System.Runtime.InteropServices.ExternalException)
                     {
@@ -132,7 +146,7 @@ public partial class App : Application
         var pending = Core.Reporting.CrashReport.LoadPending(Paths.CrashDirectory);
         if (pending.Count > 0)
         {
-            window.Dispatcher.BeginInvoke(() => Reporting.ReportDialog.OfferCrash(window, pending), System.Windows.Threading.DispatcherPriority.ApplicationIdle);
+            Avalonia.Threading.Dispatcher.UIThread.Post(() => Reporting.ReportDialog.OfferCrash(window, pending), DispatcherPriority.ApplicationIdle);
         }
     }
 

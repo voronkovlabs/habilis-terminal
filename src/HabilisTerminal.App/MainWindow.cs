@@ -1,26 +1,30 @@
 using System.IO;
-using System.Globalization;
 using System.Runtime.InteropServices;
-using System.Windows;
-using System.Windows.Controls;
-using System.Windows.Input;
-using System.Windows.Interop;
-using System.Windows.Media;
+using Avalonia;
+using Avalonia.Controls;
+using Avalonia.Controls.Primitives;
+using Avalonia.Input;
+using Avalonia.Interactivity;
+using Avalonia.Layout;
+using Avalonia.Media;
+using Avalonia.Threading;
 using HabilisTerminal.App.Hosting;
-using HabilisTerminal.App.Input;
 using HabilisTerminal.App.Layout;
 using HabilisTerminal.App.Panels;
 using HabilisTerminal.App.Theming;
 using HabilisTerminal.Core.Panels;
-using HabilisTerminal.Shell;
-using HabilisTerminal.Shell.Integration;
 
 namespace HabilisTerminal.App;
 
 /// <summary>
-/// The window: two file panels and the terminal (SPEC §3), focus and visibility (SPEC §4), shell synchronisation
+/// The window: two file panels and the console (SPEC §3), focus and visibility (SPEC §4), shell synchronisation
 /// (SPEC §7). Panel commands live in MainWindow.Commands.cs.
 /// </summary>
+/// <remarks>
+/// On Avalonia (issue #253) the console is a control of the window, not a native child window: it holds the focus while
+/// a panel "has the keys" (issue #90), and the window's tunnelling key handler routes the keys, as the WPF window's
+/// message hook did.
+/// </remarks>
 [System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1001", Justification = "Disposed when the window closes.")]
 public partial class MainWindow : Window
 {
@@ -34,13 +38,31 @@ public partial class MainWindow : Window
     private (bool Left, bool Right) _restoreVisibility = (true, true);
     private HiddenPanelReveal _reveal = new();
     private bool _revealFromTerminal;
-    private GlobalKeyHook? _keyHook;
-    private System.Windows.Threading.DispatcherTimer? _themeReloadTimer;
+    private DispatcherTimer? _themeReloadTimer;
     private readonly Widgets.TitleBar _titleBar;
+
+    // The window's tree (was MainWindow.xaml): the title bar and, under it, the workspace with a page host over it.
+    private readonly DockPanel Root = new() { LastChildFill = true };
+    private readonly WorkspaceLayout Workspace = new();
+
+    /// <summary>
+    /// Full-window pages (viewer, editor, settings). The workspace is hidden, not collapsed, while a page is shown, so the
+    /// console keeps its size and the shell is not resized.
+    /// </summary>
+    private readonly ContentControl PageHost = new() { IsVisible = false, Focusable = false };
 
     public MainWindow()
     {
-        InitializeComponent();
+        Title = "Habilis Terminal";
+        Width = 1200;
+        Height = 800;
+        UseLayoutRounding = true;
+        var grid = new Grid();
+        grid.Children.Add(Workspace);
+        grid.Children.Add(PageHost);
+        Root.Children.Add(grid);
+        Content = Root;
+
         Widgets.TitleBar.Install(this);
         _titleBar = new Widgets.TitleBar(this, MenuTitles);
         _titleBar.MenuRequested += group =>
@@ -54,11 +76,6 @@ public partial class MainWindow : Window
         _titleBar.CommandBoxRequested += () => Fire(ShowCommandLineAsync());
         DockPanel.SetDock(_titleBar, Dock.Top);
         Root.Children.Insert(0, _titleBar);
-
-        // Maximized, a WindowChrome window reaches past the screen by its resize frame; keep the content on screen.
-        void ApplyInset() => Root.Margin = WindowState == WindowState.Maximized ? Widgets.TitleBar.MaximizedInset(this) : default;
-        StateChanged += (_, _) => ApplyInset();
-        Loaded += (_, _) => ApplyInset(); // a restored maximized placement raises no StateChanged
 
         var state = App.State?.Load() ?? new Core.Settings.AppState();
         InstallZoom(state);
@@ -106,10 +123,19 @@ public partial class MainWindow : Window
             await _left.NavigateAsync(leftStart, state.Left.CurrentName);
             await _right.NavigateAsync(rightStart, state.Right.CurrentName);
         };
-        ContentRendered += (_, _) => Reporting.PerfDiagnostics.RecordStartupMilestone("startup.first-render");
-        DpiChanged += (_, _) => UpdateCellSize();
-        PreviewTextInput += OnPreviewTextInput;
-        PreviewKeyDown += OnPreviewArrowKey;
+        Opened += (_, _) =>
+        {
+            Reporting.PerfDiagnostics.RecordStartupMilestone("startup.first-render");
+            UpdateTitleBar();
+
+            // Windows mode, high contrast and accent changes repaint everything live (SPEC §10).
+            Win32Properties.AddWndProcHookCallback(this, OnWindowMessage);
+        };
+
+        // Every key of the window passes here first, as the console's keys passed the WPF window's message hook: the
+        // panels, pages and window commands take theirs, the rest goes on to the focused element, the console mostly.
+        AddHandler(KeyDownEvent, OnWindowKeyDown, RoutingStrategies.Tunnel);
+        AddHandler(TextInputEvent, OnWindowTextInput, RoutingStrategies.Tunnel);
         Closing += (_, e) =>
         {
             // Unsaved edits are never lost silently, whatever closes the window (F10, Alt+F4, the close button).
@@ -137,7 +163,6 @@ public partial class MainWindow : Window
             }
 
             Reporting.PerfDiagnostics.Stop();
-            _keyHook?.Dispose();
             foreach (var tab in _tabs)
             {
                 tab.Dispose();
@@ -155,16 +180,7 @@ public partial class MainWindow : Window
 
     private FilePanel Other(FilePanel panel) => panel == _left ? _right : _left;
 
-    protected override void OnSourceInitialized(EventArgs e)
-    {
-        base.OnSourceInitialized(e);
-        UpdateTitleBar();
-
-        // Windows mode, high contrast and accent changes repaint everything live (SPEC §10).
-        HwndSource.FromHwnd(new WindowInteropHelper(this).Handle)?.AddHook(OnWindowMessage);
-    }
-
-    private IntPtr OnWindowMessage(IntPtr hwnd, int message, IntPtr wParam, IntPtr lParam, ref bool handled)
+    private IntPtr OnWindowMessage(IntPtr hwnd, uint message, IntPtr wParam, IntPtr lParam, ref bool handled)
     {
         const int WM_SETTINGCHANGE = 0x001A;
         const int WM_DWMCOLORIZATIONCOLORCHANGED = 0x0320;
@@ -172,23 +188,23 @@ public partial class MainWindow : Window
             (message == WM_SETTINGCHANGE && (lParam == IntPtr.Zero || Marshal.PtrToStringUni(lParam) is "ImmersiveColorSet" or "WindowsThemeElement"));
         if (themeRelated)
         {
-            _themeReloadTimer ??= new System.Windows.Threading.DispatcherTimer(TimeSpan.FromMilliseconds(300), System.Windows.Threading.DispatcherPriority.Background, (_, _) =>
+            _themeReloadTimer ??= new DispatcherTimer(TimeSpan.FromMilliseconds(300), DispatcherPriority.Background, (_, _) =>
             {
                 _themeReloadTimer!.Stop();
                 _themes.Reload();
-            }, Dispatcher);
+            });
             _themeReloadTimer.Stop();
             _themeReloadTimer.Start();
         }
 
-        return IntPtr.Zero;
+        return Widgets.TitleBar.OnWindowMessage(this, hwnd, message, wParam, lParam, ref handled);
     }
 
     private void OnThemeChanged(Themes.ColorTheme theme)
     {
         using var measure = Core.Diagnostics.Perf.Measure("theme.apply");
         Background = PanelPalette.Background;
-        QuickView.Theme = theme;
+        QuickView.TextTheme = theme;
         IconProvider.OnColorThemeChanged();
         foreach (var panel in AllPanels())
         {
@@ -220,65 +236,44 @@ public partial class MainWindow : Window
         }
     }
 
-    private void ApplyTerminalTheme(ConsoleTab tab, Themes.ColorTheme theme)
-    {
-        var background = theme.GetOpaque("terminal.background");
-        tab.Terminal.SetTheme(ThemeService.ToTerminalTheme(theme), TerminalFontFamily, (short)TerminalFontSize, Color.FromRgb(background.R, background.G, background.B));
-    }
+    private void ApplyTerminalTheme(ConsoleTab tab, Themes.ColorTheme theme) =>
+        tab.Terminal.SetTheme(ThemeService.ToTerminalPalette(theme), TerminalFontFamily, TerminalEmSize);
 
     private void UpdateTitleBar()
     {
-        var useDarkMode = _themes.Current.IsLight ? 0 : 1;
-        _ = DwmSetWindowAttribute(new WindowInteropHelper(this).Handle, DWMWA_USE_IMMERSIVE_DARK_MODE, ref useDarkMode, sizeof(int));
+        RequestedThemeVariant = _themes.Current.IsLight ? Avalonia.Styling.ThemeVariant.Light : Avalonia.Styling.ThemeVariant.Dark;
+        if (TryGetPlatformHandle()?.Handle is { } handle)
+        {
+            var useDarkMode = _themes.Current.IsLight ? 0 : 1;
+            _ = DwmSetWindowAttribute(handle, DWMWA_USE_IMMERSIVE_DARK_MODE, ref useDarkMode, sizeof(int));
+        }
     }
 
     private void OnLoaded()
     {
-        _keyHook = new GlobalKeyHook(OnGlobalKey, OnTerminalMouse, window => TerminalHandle is var terminal && terminal != IntPtr.Zero && IsChildOrSelf(terminal, window), CaptureQuickSearchText);
         UpdateCellSize();
-
         StartTab(_tab!);
         FocusActivePanel();
     }
 
-    /// <summary>
-    /// Arrow keys in a panel. WPF dispatches a key before the global hook sees it, and an arrow nobody handled moves
-    /// focus to the neighbouring element (Left in the right panel jumped to the left panel), so arrows are taken here.
-    /// </summary>
-    private void OnPreviewArrowKey(object sender, KeyEventArgs e)
+    /// <summary>The window's key handler, ahead of the focused element (see the constructor).</summary>
+    private void OnWindowKeyDown(object? sender, KeyEventArgs e)
     {
-        var key = e.Key == Key.System ? e.SystemKey : e.Key;
-
-        // With the Win32 focus in the console the window's key hook routes every key (issue #90).
-        if (key is not (Key.Left or Key.Right or Key.Up or Key.Down) || TerminalHasFocus || FocusedPanel() is null)
+        if (e.Key is Key.LeftShift or Key.RightShift or Key.LeftCtrl or Key.RightCtrl or Key.LeftAlt or Key.RightAlt or Key.LWin or Key.RWin)
         {
             return;
         }
 
-        var modifiers = KeyModifiers.None;
-        if (Keyboard.Modifiers.HasFlag(ModifierKeys.Alt))
+        if (OnGlobalKey(e.Key, e.KeyModifiers & (KeyModifiers.Alt | KeyModifiers.Control | KeyModifiers.Shift)))
         {
-            modifiers |= KeyModifiers.Alt;
+            e.Handled = true;
         }
-
-        if (Keyboard.Modifiers.HasFlag(ModifierKeys.Control))
-        {
-            modifiers |= KeyModifiers.Control;
-        }
-
-        if (Keyboard.Modifiers.HasFlag(ModifierKeys.Shift))
-        {
-            modifiers |= KeyModifiers.Shift;
-        }
-
-        OnGlobalKey(key, modifiers);
-        e.Handled = true;
     }
 
     /// <summary>Printable characters typed in a panel go to the command line, or to quick search while it is open (SPEC §4).</summary>
-    private void OnPreviewTextInput(object sender, TextCompositionEventArgs e)
+    private void OnWindowTextInput(object? sender, TextInputEventArgs e)
     {
-        if (TerminalHasFocus || FocusedPanel() is not { } panel || string.IsNullOrEmpty(e.Text) || e.Text.Any(char.IsControl))
+        if (!TerminalHasFocus || FocusedPanel() is not { } panel || string.IsNullOrEmpty(e.Text) || e.Text.Any(char.IsControl))
         {
             return;
         }
@@ -290,7 +285,7 @@ public partial class MainWindow : Window
             return;
         }
 
-        // As in Far, the focus stays on the panel (issue #85).
+        // As in Far, the keys stay with the panel (issue #85).
         _shell?.WriteInput(e.Text);
     }
 
@@ -362,9 +357,9 @@ public partial class MainWindow : Window
     }
 
     /// <summary>
-    /// The panel that has the keys (issue #90): the active panel while the console holds the Win32 focus, outside
-    /// console mode and while no command runs. Otherwise a panel that holds the WPF focus for a moment (a click,
-    /// before the focus goes back to the console).
+    /// The panel that has the keys (issue #90): the active panel while the console holds the focus, outside console
+    /// mode and while no command runs. Otherwise a panel that holds the focus for a moment (a click, before the focus
+    /// goes back to the console).
     /// </summary>
     private FilePanel? FocusedPanel()
     {
@@ -373,20 +368,7 @@ public partial class MainWindow : Window
             return !_consoleMode && !_commandRunning && IsShown(_active) ? _active : null;
         }
 
-        return _left.IsKeyboardFocused ? _left : _right.IsKeyboardFocused ? _right : null;
-    }
-
-    private static bool IsChildOrSelf(IntPtr parent, IntPtr window)
-    {
-        for (var current = window; current != IntPtr.Zero; current = GetParent(current))
-        {
-            if (current == parent)
-            {
-                return true;
-            }
-        }
-
-        return false;
+        return _left.IsKeyboardFocusWithin ? _left : _right.IsKeyboardFocusWithin ? _right : null;
     }
 
     private bool IsShown(FilePanel? panel) =>
@@ -409,13 +391,13 @@ public partial class MainWindow : Window
         }
     }
 
-    /// <summary>The active panel gets the keys (issue #90); the Win32 focus goes to the console, as always.</summary>
+    /// <summary>The active panel gets the keys (issue #90); the focus goes to the console, as always.</summary>
     private void FocusActivePanel()
     {
         _consoleMode = false;
 
         // The panel may only become visible after the next layout pass.
-        Dispatcher.BeginInvoke(() =>
+        Avalonia.Threading.Dispatcher.UIThread.Post(() =>
         {
             if (!IsPageOpen)
             {
@@ -423,21 +405,12 @@ public partial class MainWindow : Window
             }
 
             UpdatePanelKeys();
-            Trace($"keys to panel {_active.Side}, win32={GetFocus():X}");
-        }, System.Windows.Threading.DispatcherPriority.Input);
+            Trace($"keys to panel {_active.Side}");
+        }, DispatcherPriority.Input);
     }
 
-    /// <summary>
-    /// Moves Win32 focus from the terminal back to the window, e.g. before a popup opens from the command line.
-    /// A plain SetFocus is not enough: WPF hands focus straight back to the child window it remembers, so the window
-    /// itself takes the WPF focus (a panel would hand it straight back to the console, issue #90).
-    /// </summary>
-    private void TakeFocusFromTerminal()
-    {
-        SetFocus(new WindowInteropHelper(this).Handle);
-        FocusManager.SetFocusedElement(this, this);
-        Keyboard.Focus(this);
-    }
+    /// <summary>Takes the focus from the console, e.g. before a popup opens from the command line.</summary>
+    private void TakeFocusFromTerminal() => Focus();
 
     /// <summary>Console mode: the console has the keys until a panel is chosen again (a click, Esc on an empty line).</summary>
     private void FocusTerminal()
@@ -448,38 +421,16 @@ public partial class MainWindow : Window
     }
 
     /// <summary>
-    /// The Win32 focus to the console, whichever has the keys. WPF keeps no focused element (issue #90): a remembered
-    /// panel would get the focus back, and with it the keys, when the window is activated again. The console's keys
-    /// bypass WPF (<see cref="GlobalKeyHook"/>).
+    /// The focus to the console, whichever has the keys (issue #90): a panel "has the keys" as window state while the
+    /// console keeps the focus, and the window's key handler routes the keys.
     /// </summary>
     private void PutFocusInTerminal()
     {
-        var host = FindHwndHost(Terminal);
-        if (host is not null && host.Handle != IntPtr.Zero)
+        if (_tab is { } tab)
         {
-            Keyboard.ClearFocus();
-            FocusManager.SetFocusedElement(this, null);
-            SetFocus(host.Handle);
-            Trace($"focus terminal {host.Handle:X}");
+            tab.Terminal.Focus();
+            Trace("focus terminal");
         }
-    }
-
-    private static HwndHost? FindHwndHost(DependencyObject root)
-    {
-        if (root is HwndHost host)
-        {
-            return host;
-        }
-
-        for (var i = 0; i < VisualTreeHelper.GetChildrenCount(root); i++)
-        {
-            if (FindHwndHost(VisualTreeHelper.GetChild(root, i)) is { } found)
-            {
-                return found;
-            }
-        }
-
-        return null;
     }
 
     // ----- Shell synchronisation (SPEC §7) -----
@@ -644,7 +595,7 @@ public partial class MainWindow : Window
     /// The shell context menu (issue #41). "Rename" goes to the panel's own Shift+F6 when it covers the same items:
     /// the shell's rename verb needs an Explorer view to edit the name in place.
     /// </summary>
-    private void OnPanelShellMenuRequested(FilePanel panel, IReadOnlyList<string> names, Point screen)
+    private void OnPanelShellMenuRequested(FilePanel panel, IReadOnlyList<string> names, PixelPoint screen)
     {
         if (panel != _active)
         {
@@ -667,34 +618,10 @@ public partial class MainWindow : Window
         });
     }
 
-    /// <summary>
-    /// Estimates the terminal cell size so the layout can snap to whole rows and columns. The console draws its zoomed
-    /// font in device pixels, while the layout is scaled by the zoom, so the cell is given in unzoomed units.
-    /// </summary>
-    private void UpdateCellSize()
-    {
-        var dpi = VisualTreeHelper.GetDpi(this);
-        var emSize = TerminalFontSize * 96.0 / 72.0;
-        var typeface = new Typeface(TerminalFontFamily);
-        var text = new FormattedText("0", CultureInfo.InvariantCulture, FlowDirection.LeftToRight, typeface, emSize, Brushes.White, dpi.PixelsPerDip);
-        var lineHeight = new FontFamily(TerminalFontFamily).LineSpacing * emSize;
-
-        var zoom = Widgets.UiZoom.Factor;
-        Workspace.CellSize = new Size(
-            Math.Round(text.WidthIncludingTrailingWhitespace * dpi.DpiScaleX) / (dpi.DpiScaleX * zoom),
-            Math.Round(lineHeight * dpi.DpiScaleY) / (dpi.DpiScaleY * zoom));
-    }
+    /// <summary>The console's cell size, so the layout can snap to whole rows and columns. The zoom scales it with the rest.</summary>
+    private void UpdateCellSize() => Workspace.CellSize = TerminalView.MeasureCell(TerminalFontFamily, TerminalEmSize);
 
     private const int DWMWA_USE_IMMERSIVE_DARK_MODE = 20;
-
-    [DllImport("user32.dll")]
-    private static extern IntPtr SetFocus(IntPtr hWnd);
-
-    [DllImport("user32.dll")]
-    private static extern IntPtr GetFocus();
-
-    [DllImport("user32.dll")]
-    private static extern IntPtr GetParent(IntPtr hWnd);
 
     [DllImport("dwmapi.dll")]
     private static extern int DwmSetWindowAttribute(IntPtr hwnd, int attribute, ref int value, int size);

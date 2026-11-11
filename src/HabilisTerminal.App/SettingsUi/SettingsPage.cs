@@ -1,9 +1,12 @@
 using System.Globalization;
-using System.Windows;
-using System.Windows.Controls;
-using System.Windows.Input;
-using System.Windows.Media;
-using System.Windows.Shapes;
+using Avalonia;
+using Avalonia.Controls;
+using Avalonia.Controls.Primitives;
+using Avalonia.Layout;
+using Avalonia.Interactivity;
+using Avalonia.Input;
+using Avalonia.Media;
+using Avalonia.Controls.Shapes;
 using HabilisTerminal.App.Theming;
 using HabilisTerminal.App.Widgets;
 using HabilisTerminal.Core.Settings;
@@ -25,14 +28,14 @@ public sealed class SettingsPage : DockPanel, IPage
     private readonly StackPanel _list = new() { Margin = new Thickness(24, 12, 32, 32) };
     private readonly ScrollViewer _scroll;
     private readonly List<Row> _rows = [];
-    private readonly Dictionary<string, FrameworkElement> _headings = [];
+    private readonly Dictionary<string, Control> _headings = [];
 
     public SettingsPage(SettingsStore store, IReadOnlyList<string> themes)
     {
         _store = store;
         _themes = themes;
         LastChildFill = true;
-        SetResourceReference(BackgroundProperty, "Habi.Background");
+        this.SetResourceReference(BackgroundProperty, "Habi.Background");
 
         // Header: search and "Open settings.json".
         var searchHost = new Grid();
@@ -66,11 +69,11 @@ public sealed class SettingsPage : DockPanel, IPage
         {
             var label = Text(category, 13, "Habi.Foreground");
             var item = new Border { Child = label, Padding = new Thickness(20, 4, 8, 4), Background = Brushes.Transparent, Cursor = Cursors.Hand };
-            item.MouseLeftButtonUp += (_, _) => ScrollTo(category);
+            item.PointerReleased += (_, _) => ScrollTo(category);
             _categories.Children.Add(item);
 
             var heading = Text(category, 22, "Habi.Foreground");
-            heading.FontWeight = FontWeights.SemiBold;
+            heading.FontWeight = FontWeight.SemiBold;
             heading.Margin = new Thickness(0, _headings.Count == 0 ? 0 : 24, 0, 8);
             _headings[category] = heading;
             _list.Children.Add(heading);
@@ -88,7 +91,7 @@ public sealed class SettingsPage : DockPanel, IPage
 
         // The window turns WPF keyboard navigation off; on this page Tab moves between the controls.
         KeyboardNavigation.SetTabNavigation(this, KeyboardNavigationMode.Cycle);
-        PreviewKeyDown += OnKeyDown;
+        AddHandler(Avalonia.Input.InputElement.KeyDownEvent, OnKeyDown, Avalonia.Interactivity.RoutingStrategies.Tunnel);
         Refresh();
     }
 
@@ -102,7 +105,7 @@ public sealed class SettingsPage : DockPanel, IPage
     public void FocusContent()
     {
         _search.Focus();
-        Keyboard.Focus(_search);
+        _search.Focus();
     }
 
     /// <summary>Re-reads values from the store: after a change here or an edit of settings.json elsewhere.</summary>
@@ -114,12 +117,12 @@ public sealed class SettingsPage : DockPanel, IPage
         }
     }
 
-    private void OnKeyDown(object sender, KeyEventArgs e)
+    private void OnKeyDown(object? sender, KeyEventArgs e)
     {
-        if (e.Key == Key.Escape && Keyboard.Modifiers == ModifierKeys.None)
+        if (e.Key == Key.Escape && Keyboard.Modifiers == KeyModifiers.None)
         {
             e.Handled = true;
-            if (_search.IsKeyboardFocused && _search.Text.Length > 0)
+            if (_search.IsKeyboardFocused && !string.IsNullOrEmpty(_search.Text))
             {
                 _search.Clear();
                 return;
@@ -127,7 +130,7 @@ public sealed class SettingsPage : DockPanel, IPage
 
             CloseRequested?.Invoke();
         }
-        else if (e.Key == Key.F && Keyboard.Modifiers == ModifierKeys.Control)
+        else if (e.Key == Key.F && Keyboard.Modifiers == KeyModifiers.Control)
         {
             e.Handled = true;
             FocusContent();
@@ -137,8 +140,8 @@ public sealed class SettingsPage : DockPanel, IPage
 
     private void ApplyFilter()
     {
-        var text = _search.Text.Trim();
-        _searchPlaceholder.Visibility = _search.Text.Length == 0 ? Visibility.Visible : Visibility.Collapsed;
+        var text = (_search.Text ?? string.Empty).Trim();
+        _searchPlaceholder.IsVisible = string.IsNullOrEmpty(_search.Text);
         foreach (var row in _rows)
         {
             var d = row.Definition;
@@ -147,12 +150,12 @@ public sealed class SettingsPage : DockPanel, IPage
                 d.Title.Contains(text, StringComparison.CurrentCultureIgnoreCase) ||
                 d.Description.Contains(text, StringComparison.CurrentCultureIgnoreCase) ||
                 d.Category.Contains(text, StringComparison.CurrentCultureIgnoreCase);
-            row.Root.Visibility = match ? Visibility.Visible : Visibility.Collapsed;
+            row.Root.IsVisible = match;
         }
 
         foreach (var (category, heading) in _headings)
         {
-            heading.Visibility = _rows.Any(r => r.Definition.Category == category && r.Root.Visibility == Visibility.Visible) ? Visibility.Visible : Visibility.Collapsed;
+            heading.IsVisible = _rows.Any(r => r.Definition.Category == category && r.Root.IsVisible);
         }
     }
 
@@ -160,8 +163,8 @@ public sealed class SettingsPage : DockPanel, IPage
     {
         if (_headings.TryGetValue(category, out var heading) && heading.IsVisible)
         {
-            var offset = heading.TransformToAncestor(_list).Transform(new Point(0, 0)).Y;
-            _scroll.ScrollToVerticalOffset(offset);
+            var offset = heading.TranslatePoint(default, _list)?.Y ?? 0;
+            _scroll.Offset = _scroll.Offset.WithY(offset);
         }
     }
 
@@ -170,7 +173,7 @@ public sealed class SettingsPage : DockPanel, IPage
         string? current = null;
         foreach (var (category, heading) in _headings)
         {
-            if (heading.IsVisible && heading.TransformToAncestor(_list).Transform(new Point(0, 0)).Y <= _scroll.VerticalOffset + 8)
+            if (heading.IsVisible && (heading.TranslatePoint(default, _list)?.Y ?? 0) <= _scroll.Offset.Y + 8)
             {
                 current = category;
             }
@@ -180,8 +183,8 @@ public sealed class SettingsPage : DockPanel, IPage
         for (var i = 0; i < _categories.Children.Count; i++)
         {
             var item = (Border)_categories.Children[i];
-            var label = (TextBlock)item.Child;
-            label.FontWeight = SettingsCatalog.Categories[i] == current ? FontWeights.SemiBold : FontWeights.Normal;
+            var label = (TextBlock)item.Child!;
+            label.FontWeight = SettingsCatalog.Categories[i] == current ? FontWeight.SemiBold : FontWeight.Normal;
             label.SetResourceReference(TextBlock.ForegroundProperty, SettingsCatalog.Categories[i] == current ? "Habi.Foreground" : "Habi.Description");
         }
     }
@@ -214,8 +217,8 @@ public sealed class SettingsPage : DockPanel, IPage
             _modifiedBar.SetResourceReference(Shape.FillProperty, "Habi.Accent");
 
             var title = new TextBlock { FontFamily = new FontFamily("Segoe UI"), FontSize = 13, TextWrapping = TextWrapping.Wrap };
-            title.Inlines.Add(new System.Windows.Documents.Run(definition.Category + ": "));
-            title.Inlines.Add(new System.Windows.Documents.Run(definition.Title) { FontWeight = FontWeights.SemiBold });
+            title.Inlines!.Add(new Avalonia.Controls.Documents.Run(definition.Category + ": "));
+            title.Inlines.Add(new Avalonia.Controls.Documents.Run(definition.Title) { FontWeight = FontWeight.SemiBold });
             title.SetResourceReference(TextBlock.ForegroundProperty, "Habi.Foreground");
             title.ToolTip = definition.Key;
 
@@ -241,7 +244,7 @@ public sealed class SettingsPage : DockPanel, IPage
                 default:
                     content.Children.Add(description);
                     _textBox = new TextBox { Width = definition.Kind == SettingKind.Number ? 120 : 360, HorizontalAlignment = HorizontalAlignment.Left };
-                    _textBox.LostKeyboardFocus += (_, _) => CommitText();
+                    _textBox.LostFocus += (_, _) => CommitText();
                     _textBox.KeyDown += (_, e) =>
                     {
                         if (e.Key == Key.Enter)
@@ -269,7 +272,7 @@ public sealed class SettingsPage : DockPanel, IPage
             }
 
             _error.Margin = new Thickness(0, 4, 0, 0);
-            _error.Visibility = Visibility.Collapsed;
+            _error.IsVisible = false;
             content.Children.Add(_error);
             _reset.Click += (_, _) => _page.Commit(Definition, null);
             content.Children.Add(_reset);
@@ -291,7 +294,7 @@ public sealed class SettingsPage : DockPanel, IPage
             var value = settings.GetValue(Definition.Key);
             var modified = settings.IsModified(Definition.Key);
             _modifiedBar.Visibility = modified ? Visibility.Visible : Visibility.Hidden;
-            _reset.Visibility = modified ? Visibility.Visible : Visibility.Collapsed;
+            _reset.IsVisible = modified;
             if (_check is not null)
             {
                 _check.IsChecked = (bool)value;
@@ -300,7 +303,7 @@ public sealed class SettingsPage : DockPanel, IPage
             if (_textBox is not null && !_textBox.IsKeyboardFocused)
             {
                 _textBox.Text = Convert.ToString(value, CultureInfo.InvariantCulture);
-                _error.Visibility = Visibility.Collapsed;
+                _error.IsVisible = false;
             }
 
             if (_choice is not null)
@@ -318,14 +321,14 @@ public sealed class SettingsPage : DockPanel, IPage
                 return;
             }
 
-            var text = _textBox.Text.Trim();
+            var text = (_textBox.Text ?? string.Empty).Trim();
             object value;
             if (Definition.Kind == SettingKind.Number)
             {
                 if (!int.TryParse(text, NumberStyles.Integer, CultureInfo.InvariantCulture, out var number) || number < Definition.Minimum || number > Definition.Maximum)
                 {
                     _error.Text = $"Enter a whole number from {Definition.Minimum} to {Definition.Maximum}.";
-                    _error.Visibility = Visibility.Visible;
+                    _error.IsVisible = true;
                     return;
                 }
 
@@ -336,7 +339,7 @@ public sealed class SettingsPage : DockPanel, IPage
                 value = text;
             }
 
-            _error.Visibility = Visibility.Collapsed;
+            _error.IsVisible = false;
             if (!Equals(value, _page._store.Current.GetValue(Definition.Key)))
             {
                 _page.Commit(Definition, value);
@@ -352,9 +355,9 @@ public sealed class SettingsPage : DockPanel, IPage
                 button.Content = fixedLabel;
             }
 
-            button.SetResourceReference(Control.BackgroundProperty, "Habi.InputBackground");
-            button.SetResourceReference(Control.ForegroundProperty, "Habi.Foreground");
-            button.SetResourceReference(Control.BorderBrushProperty, "Habi.InputBorder");
+            button.SetResourceReference(TemplatedControl.BackgroundProperty, "Habi.InputBackground");
+            button.SetResourceReference(TemplatedControl.ForegroundProperty, "Habi.Foreground");
+            button.SetResourceReference(TemplatedControl.BorderBrushProperty, "Habi.InputBorder");
             button.Click += async (_, _) =>
             {
                 var current = Convert.ToString(_page._store.Current.GetValue(Definition.Key), CultureInfo.InvariantCulture);
@@ -372,7 +375,7 @@ public sealed class SettingsPage : DockPanel, IPage
         private static DockPanel ChoiceContent(string value)
         {
             var panel = new DockPanel { LastChildFill = true, MinWidth = 180 };
-            var chevron = new System.Windows.Shapes.Path { Data = Codicon.GeometryOf(Codicon.ArrowDown), Width = 10, Height = 10, Stretch = Stretch.Uniform, Margin = new Thickness(12, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center };
+            var chevron = new Avalonia.Controls.Shapes.Path { Data = Codicon.GeometryOf(Codicon.ArrowDown), Width = 10, Height = 10, Stretch = Stretch.Uniform, Margin = new Thickness(12, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center };
             chevron.SetResourceReference(Shape.FillProperty, "Habi.Foreground");
             DockPanel.SetDock(chevron, Dock.Right);
             panel.Children.Add(chevron);

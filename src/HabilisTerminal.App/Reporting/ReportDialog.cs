@@ -1,10 +1,12 @@
 using System.IO;
-using System.Windows;
-using System.Windows.Controls;
-using System.Windows.Documents;
-using System.Windows.Input;
-using System.Windows.Media;
-using System.Windows.Media.Effects;
+using Avalonia;
+using Avalonia.Controls;
+using Avalonia.Controls.Primitives;
+using Avalonia.Layout;
+using Avalonia.Interactivity;
+using Avalonia.Controls.Documents;
+using Avalonia.Input;
+using Avalonia.Media;
 using HabilisTerminal.App.Widgets;
 using HabilisTerminal.Core.Reporting;
 
@@ -15,11 +17,11 @@ namespace HabilisTerminal.App.Reporting;
 /// line, Ctrl+Enter or Send sends, Esc asks before dropping text). Sending happens in the dialog: the created issue's
 /// link is shown on success, the text stays on failure with the browser page as a way out.
 /// </summary>
-internal sealed class ReportDialog : Window
+internal sealed class ReportDialog : Widgets.ModalWindow
 {
     private readonly TextBox? _title;
     private readonly TextBox _text;
-    private readonly TextBlock _status = new() { TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 10, 0, 0), Visibility = Visibility.Collapsed };
+    private readonly TextBlock _status = new() { TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 10, 0, 0), IsVisible = false };
     private readonly StackPanel _buttons = new() { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right, Margin = new Thickness(0, 16, 0, 0) };
     private readonly Func<Task<SendResult>> _send;
     private readonly Func<IssueDraft> _draft;
@@ -32,10 +34,10 @@ internal sealed class ReportDialog : Window
         _isFeedback = isFeedback;
         _draft = draft;
         _send = send;
-        WindowStyle = WindowStyle.None;
-        AllowsTransparency = true;
+        WindowDecorations = WindowDecorations.None;
+        TransparencyLevelHint = [WindowTransparencyLevel.Transparent];
         Background = Brushes.Transparent;
-        ResizeMode = ResizeMode.NoResize;
+        CanResize = false;
         SizeToContent = SizeToContent.WidthAndHeight;
         ShowInTaskbar = false;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
@@ -44,22 +46,22 @@ internal sealed class ReportDialog : Window
         Title = heading;
 
         var layout = new StackPanel { Width = 640 };
-        layout.Children.Add(Label(heading, "Habi.LabelStyle", FontWeights.SemiBold, new Thickness(0, 0, 0, 8)));
-        layout.Children.Add(Label(intro, "Habi.DescriptionStyle", FontWeights.Normal, new Thickness(0, 0, 0, 10)));
+        layout.Children.Add(Label(heading, "Habi.LabelStyle", FontWeight.SemiBold, new Thickness(0, 0, 0, 8)));
+        layout.Children.Add(Label(intro, "Habi.DescriptionStyle", FontWeight.Normal, new Thickness(0, 0, 0, 10)));
 
         if (isFeedback)
         {
-            layout.Children.Add(Label("Title (optional; the first line is used when empty)", "Habi.LabelStyle", FontWeights.Normal, new Thickness(0, 0, 0, 4)));
+            layout.Children.Add(Label("Title (optional; the first line is used when empty)", "Habi.LabelStyle", FontWeight.Normal, new Thickness(0, 0, 0, 4)));
             _title = new TextBox { Margin = new Thickness(0, 0, 0, 10) };
-            _title.PreviewKeyDown += (_, e) =>
+            _title.AddHandler(KeyDownEvent, (_, e) =>
             {
                 // Enter in the title goes on to the text instead of sending.
-                if (e.Key == Key.Enter && Keyboard.Modifiers == ModifierKeys.None)
+                if (e.Key == Key.Enter && e.KeyModifiers == KeyModifiers.None)
                 {
                     e.Handled = true;
                     _text?.Focus();
                 }
-            };
+            }, Avalonia.Interactivity.RoutingStrategies.Tunnel);
             layout.Children.Add(_title);
         }
 
@@ -70,8 +72,6 @@ internal sealed class ReportDialog : Window
             AcceptsTab = false,
             IsReadOnly = !isFeedback,
             TextWrapping = isFeedback ? TextWrapping.Wrap : TextWrapping.NoWrap,
-            VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
-            HorizontalScrollBarVisibility = isFeedback ? ScrollBarVisibility.Disabled : ScrollBarVisibility.Auto,
             VerticalContentAlignment = VerticalAlignment.Top,
             Height = isFeedback ? 260 : 340,
         };
@@ -84,7 +84,7 @@ internal sealed class ReportDialog : Window
         layout.Children.Add(_text);
         if (isFeedback)
         {
-            layout.Children.Add(Label("Enter starts a new line. Ctrl+Enter sends.", "Habi.DescriptionStyle", FontWeights.Normal, new Thickness(0, 4, 0, 0)));
+            layout.Children.Add(Label("Enter starts a new line. Ctrl+Enter sends.", "Habi.DescriptionStyle", FontWeight.Normal, new Thickness(0, 4, 0, 0)));
         }
 
         layout.Children.Add(_status);
@@ -97,21 +97,21 @@ internal sealed class ReportDialog : Window
             Padding = new Thickness(20, 16, 20, 16),
             Margin = new Thickness(16),
             Child = layout,
-            Effect = new DropShadowEffect { BlurRadius = 18, ShadowDepth = 4, Opacity = 0.45, Color = Colors.Black },
+            BoxShadow = BoxShadows.Parse("0 4 16 0 #73000000"),
         };
         frame.SetResourceReference(Border.BackgroundProperty, "Habi.WidgetBackground");
         frame.SetResourceReference(Border.BorderBrushProperty, "Habi.WidgetBorder");
-        frame.MouseLeftButtonDown += (_, e) =>
+        frame.PointerPressed += (_, e) =>
         {
-            if (e.OriginalSource is Border or TextBlock && e.ButtonState == MouseButtonState.Pressed)
+            if (e.Source is Border or TextBlock && e.GetCurrentPoint(this).Properties.IsLeftButtonPressed)
             {
-                DragMove();
+                BeginMoveDrag(e);
             }
         };
         Content = frame;
         Widgets.UiZoom.Attach(this);
 
-        PreviewKeyDown += OnPreviewKeyDown;
+        AddHandler(Avalonia.Input.InputElement.KeyDownEvent, OnPreviewKeyDown, Avalonia.Interactivity.RoutingStrategies.Tunnel);
         ShowEditing();
         Loaded += (_, _) =>
         {
@@ -136,8 +136,8 @@ internal sealed class ReportDialog : Window
         var dialog = new ReportDialog("Send crash report?", intro, isFeedback: false,
             IssueText.CrashPreview(report, ReportMasking.Current),
             () => IssueText.Crash(report, ReportMasking.Current),
-            () => ReportSender.SendCrashAsync(report)) { Owner = owner };
-        dialog.ShowDialog();
+            () => ReportSender.SendCrashAsync(report)) { ModalOwner = owner };
+        dialog.ShowModal();
         foreach (var (path, _) in pending)
         {
             try
@@ -153,14 +153,14 @@ internal sealed class ReportDialog : Window
     public static void ShowFeedback(Window owner)
     {
         ReportDialog? dialog = null;
-        IssueDraft Draft() => IssueText.Feedback(dialog!._title!.Text, dialog._text.Text, ReportSender.Version, ReportEnvironment.Windows(), ReportMasking.Current);
+        IssueDraft Draft() => IssueText.Feedback(dialog!._title!.Text, dialog._text.Text ?? string.Empty, ReportSender.Version, ReportEnvironment.Windows(), ReportMasking.Current);
         var intro = "Tell us about problems and wishes. It becomes a public issue on GitHub (voronkovlabs/habilis-terminal) " +
                     "with the Habilis Terminal and Windows versions; your profile folder, user name and computer name are hidden.";
-        dialog = new ReportDialog("Send feedback", intro, isFeedback: true, string.Empty, Draft, () => ReportSender.SendFeedbackAsync(Draft())) { Owner = owner };
-        dialog.ShowDialog();
+        dialog = new ReportDialog("Send feedback", intro, isFeedback: true, string.Empty, Draft, () => ReportSender.SendFeedbackAsync(Draft())) { ModalOwner = owner };
+        dialog.ShowModal();
     }
 
-    private void OnPreviewKeyDown(object sender, KeyEventArgs e)
+    private void OnPreviewKeyDown(object? sender, KeyEventArgs e)
     {
         if (e.Key == Key.Escape)
         {
@@ -169,7 +169,7 @@ internal sealed class ReportDialog : Window
             return;
         }
 
-        if (e.Key == Key.Enter && Keyboard.Modifiers == ModifierKeys.Control)
+        if (e.Key == Key.Enter && Keyboard.Modifiers == KeyModifiers.Control)
         {
             e.Handled = true;
             if (_sent is null)
@@ -181,7 +181,7 @@ internal sealed class ReportDialog : Window
         }
 
         // Access keys without Alt, as in the other dialogs, unless typing in an editable text box.
-        if (Keyboard.FocusedElement is TextBox { IsReadOnly: false } || Keyboard.Modifiers != ModifierKeys.None)
+        if (Keyboard.FocusedElement is TextBox { IsReadOnly: false } || Keyboard.Modifiers != KeyModifiers.None)
         {
             return;
         }
@@ -189,7 +189,7 @@ internal sealed class ReportDialog : Window
         var letter = e.Key.ToString();
         foreach (var button in _buttons.Children.OfType<Button>().Where(button => button.IsEnabled))
         {
-            var label = (string)button.Content;
+            var label = (string)button.Content!;
             var marker = label.IndexOf('_', StringComparison.Ordinal);
             if (marker >= 0 && marker + 1 < label.Length && letter.Length == 1 && char.ToUpperInvariant(label[marker + 1]) == letter[0])
             {
@@ -207,10 +207,10 @@ internal sealed class ReportDialog : Window
             return;
         }
 
-        var hasText = _isFeedback && _sent is null && (_text.Text.Trim().Length > 0 || _title?.Text.Trim().Length > 0);
+        var hasText = _isFeedback && _sent is null && (!string.IsNullOrWhiteSpace(_text.Text) || !string.IsNullOrWhiteSpace(_title?.Text));
         if (hasText)
         {
-            var body = Label("The text you wrote will be lost.", "Habi.LabelStyle", FontWeights.Normal, default);
+            var body = Label("The text you wrote will be lost.", "Habi.LabelStyle", FontWeight.Normal, default);
             var discard = ThemedDialog.Show(this, "Discard feedback?", body,
                 [new DialogButton<bool>("_Discard", true), new DialogButton<bool>("_Keep writing", false, IsDefault: true, IsCancel: true)], false);
             if (!discard)
@@ -230,7 +230,7 @@ internal sealed class ReportDialog : Window
             return;
         }
 
-        if (_isFeedback && _text.Text.Trim().Length == 0)
+        if (_isFeedback && string.IsNullOrWhiteSpace(_text.Text))
         {
             ShowStatus("Write something first.", error: true);
             _text.Focus();
@@ -286,14 +286,10 @@ internal sealed class ReportDialog : Window
     private void ShowSent(IssueLink link)
     {
         _sent = link;
-        _status.Inlines.Clear();
+        _status.Inlines?.Clear();
         _status.SetResourceReference(TextBlock.ForegroundProperty, "Habi.Foreground");
-        _status.Inlines.Add(new Run(link.IsComment ? $"Thank you. This crash was already reported; added to issue #{link.Number}: " : $"Thank you. Created issue #{link.Number}: "));
-        var hyperlink = new Hyperlink(new Run(link.Url)) { NavigateUri = new Uri(link.Url) };
-        hyperlink.SetResourceReference(TextElement.ForegroundProperty, "Habi.Accent");
-        hyperlink.RequestNavigate += (_, e) => App.OpenInBrowser(e.Uri.AbsoluteUri);
-        _status.Inlines.Add(hyperlink);
-        _status.Visibility = Visibility.Visible;
+        _status.Text = (link.IsComment ? $"Thank you. This crash was already reported; added to issue #{link.Number}: " : $"Thank you. Created issue #{link.Number}: ") + link.Url;
+        _status.IsVisible = true;
 
         _buttons.Children.Clear();
         AddButton("_Close", Close, isDefault: true);
@@ -303,10 +299,10 @@ internal sealed class ReportDialog : Window
 
     private void ShowStatus(string text, bool error)
     {
-        _status.Inlines.Clear();
+        _status.Inlines?.Clear();
         _status.Text = text;
         _status.SetResourceReference(TextBlock.ForegroundProperty, error ? "Habi.Error" : "Habi.Foreground");
-        _status.Visibility = Visibility.Visible;
+        _status.IsVisible = true;
     }
 
     private void AddButton(string label, Action click, bool isDefault = false)
@@ -319,7 +315,7 @@ internal sealed class ReportDialog : Window
     private static TextBlock Label(string text, string style, FontWeight weight, Thickness margin)
     {
         var block = new TextBlock { Text = text, TextWrapping = TextWrapping.Wrap, FontWeight = weight, Margin = margin };
-        block.SetResourceReference(StyleProperty, style);
+        block.Classes.Add(style == "Habi.DescriptionStyle" ? "description" : "label");
         return block;
     }
 }

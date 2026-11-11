@@ -1,10 +1,13 @@
-using System.Windows;
-using System.Windows.Controls;
-using System.Windows.Documents;
-using System.Windows.Input;
-using System.Windows.Media;
-using System.Windows.Media.Animation;
-using System.Windows.Threading;
+using Avalonia;
+using Avalonia.Controls;
+using Avalonia.Controls.Primitives;
+using Avalonia.Layout;
+using Avalonia.Interactivity;
+using Avalonia.Controls.Documents;
+using Avalonia.Input;
+using Avalonia.Media;
+using Avalonia.Animation;
+using Avalonia.Threading;
 using HabilisTerminal.App.Hosting;
 using HabilisTerminal.App.Theming;
 using HabilisTerminal.Core.Panels;
@@ -40,7 +43,7 @@ internal sealed class ConsoleTabStrip : Border
 
     private readonly StackPanel _row = new() { Orientation = Orientation.Horizontal };
     private readonly ScrollViewer _scroll;
-    private readonly StackPanel _arrows = new() { Orientation = Orientation.Horizontal, Visibility = Visibility.Collapsed };
+    private readonly StackPanel _arrows = new() { Orientation = Orientation.Horizontal, IsVisible = false };
     private readonly List<TabView> _views = [];
     private readonly DispatcherTimer _clock = new() { Interval = TimeSpan.FromSeconds(1) };
 
@@ -48,14 +51,13 @@ internal sealed class ConsoleTabStrip : Border
     {
         Focusable = false;
         BorderThickness = new Thickness(0, 1, 0, 0);
-        SetResourceReference(BackgroundProperty, "Habi.Background");
-        SetResourceReference(BorderBrushProperty, "Habi.Border");
+        this.SetResourceReference(BackgroundProperty, "Habi.Background");
+        this.SetResourceReference(BorderBrushProperty, "Habi.Border");
 
         _scroll = new ScrollViewer
         {
             Content = _row,
             Focusable = false,
-            CanContentScroll = false,
             HorizontalScrollBarVisibility = ScrollBarVisibility.Hidden,
             VerticalScrollBarVisibility = ScrollBarVisibility.Disabled,
         };
@@ -77,11 +79,11 @@ internal sealed class ConsoleTabStrip : Border
         Child = layout;
 
         SizeChanged += (_, _) => ApplyWidths();
-        PreviewMouseWheel += (_, e) =>
+        AddHandler(PointerWheelChangedEvent, (_, e) =>
         {
             e.Handled = true;
-            ScrollBy(e.Delta < 0 ? ArrowStep : -ArrowStep);
-        };
+            ScrollBy(e.Delta.Y < 0 ? ArrowStep : -ArrowStep);
+        }, Avalonia.Interactivity.RoutingStrategies.Tunnel);
         _clock.Tick += (_, _) => RefreshTexts();
     }
 
@@ -95,7 +97,7 @@ internal sealed class ConsoleTabStrip : Border
     public static int ColorCount => TabColors.Length + 1;
 
     /// <summary>A tab's colour; index 0 follows the theme, so one console looks as it always did.</summary>
-    public static Brush ColorOf(int index)
+    public static IBrush ColorOf(int index)
     {
         if (index == 0)
         {
@@ -103,7 +105,6 @@ internal sealed class ConsoleTabStrip : Border
         }
 
         var brush = new SolidColorBrush(TabColors[(index - 1) % TabColors.Length]);
-        brush.Freeze();
         return brush;
     }
 
@@ -138,7 +139,7 @@ internal sealed class ConsoleTabStrip : Border
 
         if (front is { } item)
         {
-            Dispatcher.BeginInvoke(item.BringIntoView, DispatcherPriority.Loaded);
+            Avalonia.Threading.Dispatcher.UIThread.Post(item.BringIntoView, DispatcherPriority.Loaded);
         }
     }
 
@@ -163,19 +164,19 @@ internal sealed class ConsoleTabStrip : Border
 
     private void ApplyWidths()
     {
-        if (ActualWidth <= 0 || _views.Count == 0)
+        if (Bounds.Width <= 0 || _views.Count == 0)
         {
             return;
         }
 
-        var available = Math.Max(0, ActualWidth - ReservedForAdd);
+        var available = Math.Max(0, Bounds.Width - ReservedForAdd);
         var scrolls = ConsoleTabRules.Scrolls(available, _views.Count);
         if (scrolls)
         {
             available = Math.Max(0, available - ReservedForArrows);
         }
 
-        _arrows.Visibility = scrolls ? Visibility.Visible : Visibility.Collapsed;
+        _arrows.IsVisible = scrolls;
         _scroll.MaxWidth = available;
         var (min, max) = ConsoleTabRules.TabWidths(available, _views.Count);
         foreach (var view in _views)
@@ -187,22 +188,19 @@ internal sealed class ConsoleTabStrip : Border
         }
     }
 
-    private void ScrollBy(double delta) => _scroll.ScrollToHorizontalOffset(_scroll.HorizontalOffset + delta);
+    private void ScrollBy(double delta) => _scroll.Offset = _scroll.Offset.WithX(Math.Max(0, _scroll.Offset.X + delta));
 
     private TabView TabItem(ConsoleTab tab, bool current)
     {
         var color = ColorOf(tab.ColorIndex);
-        Brush? text = current ? PanelPalette.ReadableOn(color) : null;
+        IBrush? text = current ? PanelPalette.ReadableOn(color) : null;
 
-        var titleRun = new Run { FontWeight = current ? FontWeights.SemiBold : FontWeights.Normal };
+        var titleRun = new Run { FontWeight = current ? FontWeight.SemiBold : FontWeight.Normal };
         var detailRun = new Run();
         if (text is not null)
         {
             titleRun.Foreground = text;
-            var dim = text.Clone();
-            dim.Opacity = 0.75;
-            dim.Freeze();
-            detailRun.Foreground = dim;
+            detailRun.Foreground = new SolidColorBrush(((ISolidColorBrush)text).Color, 0.75);
         }
         else
         {
@@ -211,7 +209,7 @@ internal sealed class ConsoleTabStrip : Border
         }
 
         var label = Label(string.Empty, 12);
-        label.Inlines.Add(titleRun);
+        label.Inlines!.Add(titleRun);
         label.Inlines.Add(detailRun);
         label.TextTrimming = TextTrimming.CharacterEllipsis;
 
@@ -254,7 +252,7 @@ internal sealed class ConsoleTabStrip : Border
         var tip = Tip(string.Empty);
         item.ToolTip = tip;
         var view = new TabView(tab, item, tip, titleRun, detailRun, closeButton, current);
-        item.MouseEnter += (_, _) =>
+        item.PointerEntered += (_, _) =>
         {
             view.ShowClose(hovered: true);
             if (!current)
@@ -262,7 +260,7 @@ internal sealed class ConsoleTabStrip : Border
                 item.SetResourceReference(BackgroundProperty, "Habi.Hover");
             }
         };
-        item.MouseLeave += (_, _) =>
+        item.PointerExited += (_, _) =>
         {
             view.ShowClose(hovered: false);
             if (!current)
@@ -275,7 +273,7 @@ internal sealed class ConsoleTabStrip : Border
     }
 
     /// <summary>On the current tab the mark takes the text's colour, which is readable on the tab's fill.</summary>
-    private static TextBlock? Mark(ConsoleTabMark mark, Brush? text)
+    private static TextBlock? Mark(ConsoleTabMark mark, IBrush? text)
     {
         if (mark == ConsoleTabMark.None)
         {
@@ -306,11 +304,7 @@ internal sealed class ConsoleTabStrip : Border
 
         if (mark == ConsoleTabMark.Running)
         {
-            block.BeginAnimation(OpacityProperty, new DoubleAnimation(1, 0.25, TimeSpan.FromMilliseconds(700))
-            {
-                AutoReverse = true,
-                RepeatBehavior = RepeatBehavior.Forever,
-            });
+            block.Classes.Add("pulsing"); // Theming/Controls.axaml
         }
 
         return block;
@@ -322,8 +316,8 @@ internal sealed class ConsoleTabStrip : Border
         label.SetResourceReference(TextBlock.ForegroundProperty, "Habi.Description");
         label.Margin = new Thickness(9, -2, 9, 0);
         var button = new Border { Child = label, Background = Brushes.Transparent, Focusable = false, Cursor = Cursors.Hand, CornerRadius = new CornerRadius(4), Margin = new Thickness(2, 3, 0, 3), ToolTip = Tip(tip) };
-        button.MouseEnter += (_, _) => button.SetResourceReference(BackgroundProperty, "Habi.Hover");
-        button.MouseLeave += (_, _) => button.Background = Brushes.Transparent;
+        button.PointerEntered += (_, _) => button.SetResourceReference(BackgroundProperty, "Habi.Hover");
+        button.PointerExited += (_, _) => button.Background = Brushes.Transparent;
         OnClick(button, click);
         return button;
     }
@@ -332,9 +326,9 @@ internal sealed class ConsoleTabStrip : Border
     internal static ToolTip Tip(string text)
     {
         var tip = new ToolTip { Content = text, FontFamily = new FontFamily("Segoe UI"), FontSize = 12, Padding = new Thickness(8, 5, 8, 5) };
-        tip.SetResourceReference(Control.ForegroundProperty, "Habi.Foreground");
-        tip.SetResourceReference(Control.BackgroundProperty, "Habi.WidgetBackground");
-        tip.SetResourceReference(Control.BorderBrushProperty, "Habi.WidgetBorder");
+        tip.SetResourceReference(TemplatedControl.ForegroundProperty, "Habi.Foreground");
+        tip.SetResourceReference(TemplatedControl.BackgroundProperty, "Habi.WidgetBackground");
+        tip.SetResourceReference(TemplatedControl.BorderBrushProperty, "Habi.WidgetBorder");
         return tip;
     }
 
@@ -349,8 +343,8 @@ internal sealed class ConsoleTabStrip : Border
 
     private static void OnClick(Border border, Action click)
     {
-        border.MouseLeftButtonDown += (_, e) => e.Handled = true;
-        border.MouseLeftButtonUp += (_, e) =>
+        border.PointerPressed += (_, e) => e.Handled = true;
+        border.PointerReleased += (_, e) =>
         {
             e.Handled = true;
             click();
@@ -374,7 +368,7 @@ internal sealed class ConsoleTabStrip : Border
 
         public void ShowClose(bool hovered)
         {
-            close.Visibility = Narrow && !hovered ? Visibility.Collapsed : Visibility.Visible;
+            close.IsVisible = !(Narrow && !hovered);
             close.Opacity = hovered ? 1 : current ? 0.8 : 0;
         }
     }

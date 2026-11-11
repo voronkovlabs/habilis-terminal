@@ -1,7 +1,10 @@
-using System.Windows;
-using System.Windows.Media;
-using System.Windows.Controls;
-using System.Windows.Input;
+using Avalonia;
+using Avalonia.Controls;
+using Avalonia.Controls.Primitives;
+using Avalonia.Layout;
+using Avalonia.Interactivity;
+using Avalonia.Media;
+using Avalonia.Input;
 
 namespace HabilisTerminal.App.Layout;
 
@@ -23,57 +26,59 @@ public sealed class WorkspaceLayout : Panel
     public const int MinTerminalRows = 2;
     public const int MinPanelRows = 4;
 
-    public static readonly DependencyProperty RoleProperty = DependencyProperty.RegisterAttached(
-        "Role", typeof(WorkspaceRole), typeof(WorkspaceLayout),
-        new FrameworkPropertyMetadata(WorkspaceRole.Terminal, FrameworkPropertyMetadataOptions.AffectsParentMeasure));
+    public static readonly AttachedProperty<WorkspaceRole> RoleProperty =
+        AvaloniaProperty.RegisterAttached<WorkspaceLayout, Control, WorkspaceRole>("Role", WorkspaceRole.Terminal);
 
-    public static readonly DependencyProperty LeftVisibleProperty = DependencyProperty.Register(
-        nameof(LeftVisible), typeof(bool), typeof(WorkspaceLayout),
-        new FrameworkPropertyMetadata(true, FrameworkPropertyMetadataOptions.AffectsMeasure));
+    public static readonly StyledProperty<bool> LeftVisibleProperty = AvaloniaProperty.Register<WorkspaceLayout, bool>(nameof(LeftVisible), true);
 
-    public static readonly DependencyProperty RightVisibleProperty = DependencyProperty.Register(
-        nameof(RightVisible), typeof(bool), typeof(WorkspaceLayout),
-        new FrameworkPropertyMetadata(true, FrameworkPropertyMetadataOptions.AffectsMeasure));
+    public static readonly StyledProperty<bool> RightVisibleProperty = AvaloniaProperty.Register<WorkspaceLayout, bool>(nameof(RightVisible), true);
 
-    public static readonly DependencyProperty TerminalRowsProperty = DependencyProperty.Register(
-        nameof(TerminalRows), typeof(int), typeof(WorkspaceLayout),
-        new FrameworkPropertyMetadata(10, FrameworkPropertyMetadataOptions.AffectsMeasure));
+    public static readonly StyledProperty<int> TerminalRowsProperty = AvaloniaProperty.Register<WorkspaceLayout, int>(nameof(TerminalRows), 10);
 
-    public static readonly DependencyProperty OverlayRowsProperty = DependencyProperty.Register(
-        nameof(OverlayRows), typeof(int), typeof(WorkspaceLayout),
-        new FrameworkPropertyMetadata(0, FrameworkPropertyMetadataOptions.AffectsMeasure));
+    public static readonly StyledProperty<int> OverlayRowsProperty = AvaloniaProperty.Register<WorkspaceLayout, int>(nameof(OverlayRows));
 
-    public static readonly DependencyProperty SinglePanelRatioProperty = DependencyProperty.Register(
-        nameof(SinglePanelRatio), typeof(double), typeof(WorkspaceLayout),
-        new FrameworkPropertyMetadata(0.5, FrameworkPropertyMetadataOptions.AffectsMeasure));
+    public static readonly StyledProperty<double> SinglePanelRatioProperty = AvaloniaProperty.Register<WorkspaceLayout, double>(nameof(SinglePanelRatio), 0.5);
 
-    public static readonly DependencyProperty SplitRatioProperty = DependencyProperty.Register(
-        nameof(SplitRatio), typeof(double), typeof(WorkspaceLayout),
-        new FrameworkPropertyMetadata(0.5, FrameworkPropertyMetadataOptions.AffectsMeasure));
+    public static readonly StyledProperty<double> SplitRatioProperty = AvaloniaProperty.Register<WorkspaceLayout, double>(nameof(SplitRatio), 0.5);
 
-    public static readonly DependencyProperty CellSizeProperty = DependencyProperty.Register(
-        nameof(CellSize), typeof(Size), typeof(WorkspaceLayout),
-        new FrameworkPropertyMetadata(new Size(8, 16), FrameworkPropertyMetadataOptions.AffectsMeasure));
+    public static readonly StyledProperty<Size> CellSizeProperty = AvaloniaProperty.Register<WorkspaceLayout, Size>(nameof(CellSize), new Size(8, 16));
 
-    public static WorkspaceRole GetRole(UIElement element) => (WorkspaceRole)element.GetValue(RoleProperty);
+    public static readonly StyledProperty<bool> ShowsTabStripProperty = AvaloniaProperty.Register<WorkspaceLayout, bool>(nameof(ShowsTabStrip));
 
-    public static void SetRole(UIElement element, WorkspaceRole value) => element.SetValue(RoleProperty, value);
+    static WorkspaceLayout()
+    {
+        AffectsParentMeasure<WorkspaceLayout>(RoleProperty);
+        AffectsMeasure<WorkspaceLayout>(LeftVisibleProperty, RightVisibleProperty, TerminalRowsProperty, OverlayRowsProperty,
+            SinglePanelRatioProperty, SplitRatioProperty, CellSizeProperty, ShowsTabStripProperty);
+    }
+
+    public WorkspaceLayout()
+    {
+        // Tunnelling: the splitters win over the children under them.
+        AddHandler(PointerMovedEvent, OnPreviewPointerMoved, RoutingStrategies.Tunnel);
+        AddHandler(PointerPressedEvent, OnPreviewPointerPressed, RoutingStrategies.Tunnel);
+        AddHandler(PointerReleasedEvent, OnPreviewPointerReleased, RoutingStrategies.Tunnel);
+    }
+
+    public static WorkspaceRole GetRole(Control element) => element.GetValue(RoleProperty);
+
+    public static void SetRole(Control element, WorkspaceRole value) => element.SetValue(RoleProperty, value);
 
     public bool LeftVisible
     {
-        get => (bool)GetValue(LeftVisibleProperty);
+        get => GetValue(LeftVisibleProperty);
         set => SetValue(LeftVisibleProperty, value);
     }
 
     public bool RightVisible
     {
-        get => (bool)GetValue(RightVisibleProperty);
+        get => GetValue(RightVisibleProperty);
         set => SetValue(RightVisibleProperty, value);
     }
 
     public int TerminalRows
     {
-        get => (int)GetValue(TerminalRowsProperty);
+        get => GetValue(TerminalRowsProperty);
         set => SetValue(TerminalRowsProperty, value);
     }
 
@@ -83,7 +88,7 @@ public sealed class WorkspaceLayout : Panel
     /// </summary>
     public int OverlayRows
     {
-        get => (int)GetValue(OverlayRowsProperty);
+        get => GetValue(OverlayRowsProperty);
         set => SetValue(OverlayRowsProperty, value);
     }
 
@@ -92,54 +97,52 @@ public sealed class WorkspaceLayout : Panel
     {
         get
         {
-            var (left, _, _) = ComputeRects(RenderSize, overlay: false);
+            var (left, _, _) = ComputeRects(Bounds.Size, overlay: false);
             return LeftVisible && RightVisible && CellSize.Height > 0 ? (int)Math.Floor(left.Height / CellSize.Height) : 0;
         }
     }
 
     public double SinglePanelRatio
     {
-        get => (double)GetValue(SinglePanelRatioProperty);
+        get => GetValue(SinglePanelRatioProperty);
         set => SetValue(SinglePanelRatioProperty, value);
     }
 
     /// <summary>Width share of the left panel when both panels are visible (Ctrl+Left / Ctrl+Right, splitter).</summary>
     public double SplitRatio
     {
-        get => (double)GetValue(SplitRatioProperty);
+        get => GetValue(SplitRatioProperty);
         set => SetValue(SplitRatioProperty, value);
     }
 
     /// <summary>Terminal character cell size in device-independent pixels.</summary>
     public Size CellSize
     {
-        get => (Size)GetValue(CellSizeProperty);
+        get => GetValue(CellSizeProperty);
         set => SetValue(CellSizeProperty, value);
     }
 
     /// <summary>The tabs below the console, while there are several consoles: it grows upwards, they stay (issue #119).</summary>
     public bool ShowsTabStrip
     {
-        get => (bool)GetValue(ShowsTabStripProperty);
+        get => GetValue(ShowsTabStripProperty);
         set => SetValue(ShowsTabStripProperty, value);
     }
 
-    public static readonly DependencyProperty ShowsTabStripProperty = DependencyProperty.Register(
-        nameof(ShowsTabStrip), typeof(bool), typeof(WorkspaceLayout),
-        new FrameworkPropertyMetadata(false, FrameworkPropertyMetadataOptions.AffectsMeasure));
-
     private double StripHeight => ShowsTabStrip ? Widgets.ConsoleTabStrip.StripHeight : 0;
 
-    private Rect SlotOf(UIElement child, Rect left, Rect right, Rect terminal) => GetRole(child) switch
+    private static bool IsEmpty(Rect rect) => rect.Width <= 0 && rect.Height <= 0;
+
+    private Rect SlotOf(Control child, Rect left, Rect right, Rect terminal) => GetRole(child) switch
     {
         WorkspaceRole.LeftPanel => left,
         WorkspaceRole.RightPanel => right,
-        WorkspaceRole.ConsoleTabs => ShowsTabStrip ? new Rect(terminal.Left, terminal.Bottom, terminal.Width, StripHeight) : Rect.Empty,
+        WorkspaceRole.ConsoleTabs => ShowsTabStrip ? new Rect(terminal.Left, terminal.Bottom, terminal.Width, StripHeight) : default,
         _ => terminal,
     };
 
     /// <summary>A console not in front keeps its last size, so its shell gets no resize until it is shown.</summary>
-    private static bool IsHiddenConsole(UIElement child) => GetRole(child) == WorkspaceRole.Terminal && child.Visibility != Visibility.Visible;
+    private static bool IsHiddenConsole(Control child) => GetRole(child) == WorkspaceRole.Terminal && child.IsVisible == false;
 
     protected override Size MeasureOverride(Size availableSize)
     {
@@ -152,12 +155,12 @@ public sealed class WorkspaceLayout : Panel
         // long file name wanted more than its slot, WPF arranged it at that width and clipped it, and the list columns
         // jumped as the cursor moved.
         var (left, right, terminal) = ComputeRects(size);
-        foreach (UIElement child in InternalChildren)
+        foreach (var child in Children)
         {
             if (!IsHiddenConsole(child))
             {
                 var rect = SlotOf(child, left, right, terminal);
-                child.Measure(rect.IsEmpty ? new Size(0, 0) : rect.Size);
+                child.Measure(IsEmpty(rect) ? new Size(0, 0) : rect.Size);
             }
         }
 
@@ -169,7 +172,7 @@ public sealed class WorkspaceLayout : Panel
         using var measure = Core.Diagnostics.Perf.Measure("layout.arrange");
         var (left, right, terminal) = ComputeRects(finalSize);
 
-        foreach (UIElement child in InternalChildren)
+        foreach (var child in Children)
         {
             if (IsHiddenConsole(child))
             {
@@ -181,14 +184,14 @@ public sealed class WorkspaceLayout : Panel
             // A console is never empty, and those of tabs not in front stay hidden (issue #119).
             if (GetRole(child) != WorkspaceRole.Terminal)
             {
-                child.Visibility = rect.IsEmpty ? Visibility.Collapsed : Visibility.Visible;
+                child.IsVisible = !(IsEmpty(rect));
             }
 
-            child.Arrange(rect.IsEmpty ? new Rect(0, 0, 0, 0) : rect);
+            child.Arrange(IsEmpty(rect) ? new Rect(0, 0, 0, 0) : rect);
 
             // Under the console grown over the panels (issue #82), the panels' covered part is clipped away: the
             // terminal is snapped to whole cells and would leave the panels showing in the few pixels beside it.
-            child.Clip = GetRole(child) is WorkspaceRole.LeftPanel or WorkspaceRole.RightPanel && !rect.IsEmpty && OverlayRows > 0 && LeftVisible && RightVisible
+            child.Clip = GetRole(child) is WorkspaceRole.LeftPanel or WorkspaceRole.RightPanel && !IsEmpty(rect) && OverlayRows > 0 && LeftVisible && RightVisible
                 ? new RectangleGeometry(new Rect(0, 0, rect.Width, Math.Max(0, terminal.Top - rect.Top)))
                 : null;
         }
@@ -213,9 +216,8 @@ public sealed class WorkspaceLayout : Panel
         TerminalSide,
     }
 
-    protected override void OnPreviewMouseMove(MouseEventArgs e)
+    private void OnPreviewPointerMoved(object? sender, PointerEventArgs e)
     {
-        base.OnPreviewMouseMove(e);
         var point = e.GetPosition(this);
         if (_dragging != Splitter.None)
         {
@@ -226,38 +228,44 @@ public sealed class WorkspaceLayout : Panel
 
         Cursor = SplitterAt(point) switch
         {
-            Splitter.TerminalTop => Cursors.SizeNS,
-            Splitter.Panels or Splitter.TerminalSide => Cursors.SizeWE,
+            Splitter.TerminalTop => SizeNorthSouth,
+            Splitter.Panels or Splitter.TerminalSide => SizeWestEast,
             _ => null,
         };
     }
 
-    protected override void OnPreviewMouseLeftButtonDown(MouseButtonEventArgs e)
+    private static readonly Cursor SizeNorthSouth = new(StandardCursorType.SizeNorthSouth);
+    private static readonly Cursor SizeWestEast = new(StandardCursorType.SizeWestEast);
+
+    private void OnPreviewPointerPressed(object? sender, PointerPressedEventArgs e)
     {
-        base.OnPreviewMouseLeftButtonDown(e);
+        if (!e.GetCurrentPoint(this).Properties.IsLeftButtonPressed)
+        {
+            return;
+        }
+
         var splitter = SplitterAt(e.GetPosition(this));
         if (splitter != Splitter.None)
         {
             _dragging = splitter;
-            CaptureMouse();
+            e.Pointer.Capture(this);
             e.Handled = true;
         }
     }
 
-    protected override void OnPreviewMouseLeftButtonUp(MouseButtonEventArgs e)
+    private void OnPreviewPointerReleased(object? sender, PointerReleasedEventArgs e)
     {
-        base.OnPreviewMouseLeftButtonUp(e);
         if (_dragging != Splitter.None)
         {
             _dragging = Splitter.None;
-            ReleaseMouseCapture();
+            e.Pointer.Capture(null);
             e.Handled = true;
         }
     }
 
     private Splitter SplitterAt(Point point)
     {
-        var (left, right, terminal) = ComputeRects(RenderSize);
+        var (left, right, terminal) = ComputeRects(Bounds.Size);
         if (LeftVisible && RightVisible)
         {
             if (Math.Abs(point.Y - terminal.Top) <= Grip)
@@ -279,7 +287,7 @@ public sealed class WorkspaceLayout : Panel
 
     private void Drag(Point point)
     {
-        var size = RenderSize;
+        var size = Bounds.Size;
         switch (_dragging)
         {
             case Splitter.Panels:
@@ -302,7 +310,7 @@ public sealed class WorkspaceLayout : Panel
 
         if (!LeftVisible && !RightVisible)
         {
-            return (Rect.Empty, Rect.Empty, new Rect(0, 0, size.Width, Math.Max(0, size.Height - strip)));
+            return (default, default, new Rect(0, 0, size.Width, Math.Max(0, size.Height - strip)));
         }
 
         if (LeftVisible && RightVisible)
@@ -334,7 +342,7 @@ public sealed class WorkspaceLayout : Panel
         panelWidth = size.Width - terminalWidth;
 
         return LeftVisible
-            ? (new Rect(0, 0, panelWidth, size.Height), Rect.Empty, new Rect(panelWidth, 0, terminalWidth, Math.Max(0, size.Height - strip)))
-            : (Rect.Empty, new Rect(terminalWidth, 0, panelWidth, size.Height), new Rect(0, 0, terminalWidth, Math.Max(0, size.Height - strip)));
+            ? (new Rect(0, 0, panelWidth, size.Height), default, new Rect(panelWidth, 0, terminalWidth, Math.Max(0, size.Height - strip)))
+            : (default, new Rect(terminalWidth, 0, panelWidth, size.Height), new Rect(0, 0, terminalWidth, Math.Max(0, size.Height - strip)));
     }
 }

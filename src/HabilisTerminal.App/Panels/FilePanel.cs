@@ -2,11 +2,14 @@ using System.IO;
 using System.Globalization;
 using HabilisTerminal.App.Reporting;
 using HabilisTerminal.Core.Diagnostics;
-using System.Windows;
-using System.Windows.Controls;
-using System.Windows.Input;
-using System.Windows.Media;
-using System.Windows.Threading;
+using Avalonia;
+using Avalonia.Controls;
+using Avalonia.Controls.Primitives;
+using Avalonia.Layout;
+using Avalonia.Interactivity;
+using Avalonia.Input;
+using Avalonia.Media;
+using Avalonia.Threading;
 using HabilisTerminal.App.Input;
 using HabilisTerminal.App.Plugins;
 using HabilisTerminal.App.Theming;
@@ -26,8 +29,8 @@ public sealed partial class FilePanel : Border
 {
     private readonly FileListView _list = new();
     private readonly InfoPanelView _info = new();
-    private readonly QuickView _quickView = new() { Visibility = Visibility.Collapsed };
-    private readonly ContentControl _pluginViewHost = new() { Focusable = false, Visibility = Visibility.Collapsed, IsTabStop = false };
+    private readonly QuickView _quickView = new() { IsVisible = false };
+    private readonly ContentControl _pluginViewHost = new() { Focusable = false, IsVisible = false, IsTabStop = false };
     private int _quickViewVersion;
     private FilePanel? _quickViewSource;
     private readonly TextBlock _title = new();
@@ -66,7 +69,7 @@ public sealed partial class FilePanel : Border
         SizeWorker.Updated += OnFolderSizesUpdated;
 
         // Another panel's Ctrl+R or a file operation may have dropped sizes this panel shows (an ancestor, say).
-        FolderSizes.Invalidated += _ => Dispatcher.BeginInvoke(RequestFolderSizes, DispatcherPriority.Background);
+        FolderSizes.Invalidated += _ => Avalonia.Threading.Dispatcher.UIThread.Post(RequestFolderSizes, DispatcherPriority.Background);
         _list.VisibleRangeChanged += (_, _) =>
         {
             UpdateVisibleFolders();
@@ -74,7 +77,7 @@ public sealed partial class FilePanel : Border
         };
         _list.HardLinks = _hardLinks;
         Focusable = true;
-        FocusVisualStyle = null;
+        ;
         Background = PanelPalette.Background;
         BorderThickness = new Thickness(1);
         BorderBrush = PanelPalette.Border;
@@ -92,11 +95,11 @@ public sealed partial class FilePanel : Border
             State.ApplySortKey(mode);
             Refresh();
         };
-        _info.Visibility = Visibility.Collapsed;
+        _info.IsVisible = false;
 
         _title.FontFamily = _path.FontFamily = _status.FontFamily = _statusRight.FontFamily = _message.FontFamily = new FontFamily("Segoe UI");
         _title.FontSize = 11;
-        _title.FontWeight = FontWeights.SemiBold;
+        _title.FontWeight = FontWeight.SemiBold;
         _title.Foreground = PanelPalette.Foreground;
         _title.Margin = new Thickness(0, 0, 8, 0);
         _path.FontSize = 12;
@@ -106,7 +109,7 @@ public sealed partial class FilePanel : Border
         _message.Foreground = PanelPalette.ErrorForeground;
         _message.TextWrapping = TextWrapping.Wrap;
         _message.Margin = new Thickness(10, 0, 10, 4);
-        _message.Visibility = Visibility.Collapsed;
+        _message.IsVisible = false;
         _status.FontSize = _statusRight.FontSize = 12;
         _status.Foreground = _statusRight.Foreground = PanelPalette.DescriptionForeground;
         _status.TextTrimming = TextTrimming.CharacterEllipsis;
@@ -144,14 +147,14 @@ public sealed partial class FilePanel : Border
             Background = Brushes.Transparent,
             Padding = new Thickness(6, 0, 2, 0),
             Margin = new Thickness(4, 0, 0, 0),
-            Cursor = System.Windows.Input.Cursors.Hand,
-            Visibility = Visibility.Collapsed,
+            Cursor = Cursors.Hand,
+            IsVisible = false,
         };
-        _filterClearTarget.PreviewMouseLeftButtonDown += (_, e) =>
+        _filterClearTarget.AddHandler(PointerPressedEvent, (_, e) =>
         {
             ClearQuickFilter();
             e.Handled = true;
-        };
+        }, Avalonia.Interactivity.RoutingStrategies.Tunnel);
         var boxRow = new StackPanel { Orientation = Orientation.Horizontal };
         boxRow.Children.Add(_quickSearchText);
         boxRow.Children.Add(_filterClearTarget);
@@ -163,7 +166,7 @@ public sealed partial class FilePanel : Border
         _quickSearch.Margin = new Thickness(8);
         _quickSearch.HorizontalAlignment = HorizontalAlignment.Left;
         _quickSearch.VerticalAlignment = VerticalAlignment.Bottom;
-        _quickSearch.Visibility = Visibility.Collapsed;
+        _quickSearch.IsVisible = false;
 
         _body.Children.Add(_list);
         _body.Children.Add(_pluginViewHost);
@@ -206,7 +209,7 @@ public sealed partial class FilePanel : Border
     /// Right click, Shift+F10 or the Menu key (issue #41): show the shell context menu for these names in the current
     /// folder (empty: the folder's background) at this point in physical screen pixels.
     /// </summary>
-    public event Action<FilePanel, IReadOnlyList<string>, Point>? ShellMenuRequested;
+    public event Action<FilePanel, IReadOnlyList<string>, PixelPoint>? ShellMenuRequested;
 
     public string Side { get; }
 
@@ -278,10 +281,10 @@ public sealed partial class FilePanel : Border
     private void UpdateBody()
     {
         var otherContent = InfoSource is not null || _quickViewSource is not null;
-        _info.Visibility = InfoSource is null ? Visibility.Collapsed : Visibility.Visible;
-        _quickView.Visibility = _quickViewSource is null ? Visibility.Collapsed : Visibility.Visible;
-        _pluginViewHost.Visibility = !otherContent && _pluginViewHost.Content is not null ? Visibility.Visible : Visibility.Collapsed;
-        _list.Visibility = !otherContent && _pluginViewHost.Content is null ? Visibility.Visible : Visibility.Collapsed;
+        _info.IsVisible = !(InfoSource is null);
+        _quickView.IsVisible = !(_quickViewSource is null);
+        _pluginViewHost.IsVisible = !otherContent && _pluginViewHost.Content is not null;
+        _list.IsVisible = !otherContent && _pluginViewHost.Content is null;
         UpdateStatus();
     }
 
@@ -351,11 +354,11 @@ public sealed partial class FilePanel : Border
 
     public string? Message
     {
-        get => _message.Visibility == Visibility.Visible ? _message.Text : null;
+        get => _message.IsVisible ? _message.Text : null;
         set
         {
             _message.Text = value ?? string.Empty;
-            _message.Visibility = string.IsNullOrEmpty(value) ? Visibility.Collapsed : Visibility.Visible;
+            _message.IsVisible = !(string.IsNullOrEmpty(value));
         }
     }
 
@@ -695,7 +698,7 @@ public sealed partial class FilePanel : Border
     {
         if (Interlocked.Exchange(ref _sizesRepaintQueued, 1) == 0)
         {
-            Dispatcher.BeginInvoke(() =>
+            Avalonia.Threading.Dispatcher.UIThread.Post(() =>
             {
                 _sizesRepaintQueued = 0;
                 var shown = _list.VisibleFolderSizes();
@@ -952,7 +955,7 @@ public sealed partial class FilePanel : Border
         QuickSearchText = text;
         State.SetNameFilter(text);
         _quickSearchText.Text = "Filter: " + text;
-        _quickSearch.Visibility = Visibility.Visible;
+        _quickSearch.IsVisible = true;
         Refresh();
     }
 
@@ -964,19 +967,19 @@ public sealed partial class FilePanel : Border
     {
         if (QuickSearchText is not null)
         {
-            _filterClearTarget.Visibility = _quickFilter ? Visibility.Visible : Visibility.Collapsed;
-            _quickSearch.Visibility = Visibility.Visible;
+            _filterClearTarget.IsVisible = _quickFilter;
+            _quickSearch.IsVisible = true;
         }
         else if (State.NameFilter is { } filter)
         {
             _quickSearchText.Text = "Filter: " + filter;
-            _filterClearTarget.Visibility = Visibility.Visible;
-            _quickSearch.Visibility = Visibility.Visible;
+            _filterClearTarget.IsVisible = true;
+            _quickSearch.IsVisible = true;
         }
         else
         {
-            _filterClearTarget.Visibility = Visibility.Collapsed;
-            _quickSearch.Visibility = Visibility.Collapsed;
+            _filterClearTarget.IsVisible = false;
+            _quickSearch.IsVisible = false;
         }
     }
 
@@ -1005,7 +1008,7 @@ public sealed partial class FilePanel : Border
         }
 
         _quickSearchText.Text = "Search: " + QuickSearchText;
-        _quickSearch.Visibility = Visibility.Visible;
+        _quickSearch.IsVisible = true;
         Refresh();
     }
 
@@ -1059,7 +1062,7 @@ public sealed partial class FilePanel : Border
     private bool _holdsFrame;
 
     /// <summary>The frame's colour while the panel has the keys: the console tab's (issue #120); null is the theme's.</summary>
-    public System.Windows.Media.Brush? FrameBrush
+    public Avalonia.Media.IBrush? FrameBrush
     {
         get => _frameBrush;
         set
@@ -1069,17 +1072,17 @@ public sealed partial class FilePanel : Border
         }
     }
 
-    private System.Windows.Media.Brush? _frameBrush;
+    private Avalonia.Media.IBrush? _frameBrush;
 
-    protected override void OnGotKeyboardFocus(KeyboardFocusChangedEventArgs e)
+    protected override void OnGotFocus(FocusChangedEventArgs e)
     {
-        base.OnGotKeyboardFocus(e);
+        base.OnGotFocus(e);
         UpdateFocusVisuals();
     }
 
-    protected override void OnLostKeyboardFocus(KeyboardFocusChangedEventArgs e)
+    protected override void OnLostFocus(FocusChangedEventArgs e)
     {
-        base.OnLostKeyboardFocus(e);
+        base.OnLostFocus(e);
         if (!HasKeys)
         {
             CloseQuickSearch();
@@ -1088,9 +1091,9 @@ public sealed partial class FilePanel : Border
         UpdateFocusVisuals();
     }
 
-    protected override void OnMouseDown(MouseButtonEventArgs e)
+    protected override void OnPointerPressed(PointerPressedEventArgs e)
     {
-        base.OnMouseDown(e);
+        base.OnPointerPressed(e);
         Focus();
     }
 
@@ -1216,7 +1219,7 @@ public sealed partial class FilePanel : Border
         Focus();
         RevealPluginCursor(index);
         State.SetCursor(index);
-        if (Keyboard.Modifiers == ModifierKeys.Control)
+        if (Keyboard.Modifiers == KeyModifiers.Control)
         {
             // Ctrl+click marks, as in Explorer: the right button opens the context menu (issue #41).
             if (!State.Current.IsParent)
@@ -1236,7 +1239,7 @@ public sealed partial class FilePanel : Border
     /// Right click (issue #41): on a marked item the menu covers the whole selection, on another item only that item
     /// (the cursor moves to it), on empty space or ".." the folder's background.
     /// </summary>
-    private void OnContextMenuRequested(int index, Point screen)
+    private void OnContextMenuRequested(int index, PixelPoint screen)
     {
         Focus();
         IReadOnlyList<string> names = [];
@@ -1254,7 +1257,7 @@ public sealed partial class FilePanel : Border
         RequestShellMenu(names, screen);
     }
 
-    private void RequestShellMenu(IReadOnlyList<string> names, Point screen)
+    private void RequestShellMenu(IReadOnlyList<string> names, PixelPoint screen)
     {
         if (IsPlugin)
         {
@@ -1347,7 +1350,7 @@ public sealed partial class FilePanel : Border
         try
         {
             var watcher = new DirectoryWatcher(path);
-            watcher.Changed += changes => Dispatcher.BeginInvoke(() => ApplyChanges(path, changes), DispatcherPriority.Background);
+            watcher.Changed += changes => Avalonia.Threading.Dispatcher.UIThread.Post(() => ApplyChanges(path, changes), DispatcherPriority.Background);
             watcher.Start();
             _watcher = watcher;
         }
@@ -1572,7 +1575,7 @@ public sealed partial class FilePanel : Border
 
     private void UpdateFocusVisuals()
     {
-        var focused = IsKeyboardFocused || HasKeys || HoldsFrame;
+        var focused = IsFocused || HasKeys || HoldsFrame;
         BorderBrush = focused ? FrameBrush ?? PanelPalette.FocusOutline : PanelPalette.Border;
         _title.Opacity = _isActive ? 1.0 : 0.6;
         _list.IsActivePanel = _isActive;

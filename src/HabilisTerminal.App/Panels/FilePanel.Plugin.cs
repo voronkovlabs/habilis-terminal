@@ -380,31 +380,19 @@ public sealed partial class FilePanel
     }
 
 
-    /// <summary>A provider with its own WPF view (issue #78) shows it in place of the list; a failing view leaves the list.</summary>
+    /// <summary>
+    /// A provider with its own WPF view (issue #78) showed it in place of the list. WPF views cannot be shown in the
+    /// Avalonia window (issue #253): such a panel shows its list, if it has one, and says why its view is missing.
+    /// </summary>
     private void ShowPluginView(LoadedPlugin plugin, IPanelProvider provider)
     {
         _pluginViewHost.Content = null;
-        if (provider is HabilisTerminal.Plugins.Wpf.IPanelView view)
+        if (provider.GetType().GetInterfaces().Any(i => i.FullName == "HabilisTerminal.Plugins.Wpf.IPanelView"))
         {
-            try
-            {
-                _pluginViewHost.Content = view.CreateView(new PluginViewHost(this));
-            }
-            catch (Exception ex) when (ex is not OutOfMemoryException)
-            {
-                Message = PluginManager.Describe(plugin, ex);
-            }
+            Message = $"{plugin.Manifest?.Name ?? "The plugin"}: its own view needs the Windows (WPF) version of Habilis Terminal.";
         }
 
         UpdateBody();
-    }
-
-    /// <summary>The host side of a plugin view: refresh and keyboard back to the panel.</summary>
-    private sealed class PluginViewHost(FilePanel panel) : HabilisTerminal.Plugins.Wpf.IPanelViewHost
-    {
-        public void Refresh() => panel.Dispatcher.BeginInvoke(() => _ = panel.ListPluginAsync(quiet: true));
-
-        public void FocusPanel() => panel.Dispatcher.BeginInvoke(() => panel.Focus());
     }
 
     /// <summary>The provider's choice of a ".." row (issue #77); a provider that fails to answer keeps it.</summary>

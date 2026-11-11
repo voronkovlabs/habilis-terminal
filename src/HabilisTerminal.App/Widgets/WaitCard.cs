@@ -1,4 +1,4 @@
-using System.Windows.Threading;
+using Avalonia.Threading;
 using HabilisTerminal.Core.Operations;
 
 namespace HabilisTerminal.App.Widgets;

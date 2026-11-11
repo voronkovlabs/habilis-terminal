@@ -1,6 +1,11 @@
 using System.IO;
-using System.Windows;
-using System.Windows.Input;
+using Avalonia;
+using Avalonia.Controls;
+using Avalonia.Media;
+using Avalonia.Controls.Primitives;
+using Avalonia.Layout;
+using Avalonia.Interactivity;
+using Avalonia.Input;
 using HabilisTerminal.App.Input;
 using HabilisTerminal.App.Panels;
 using HabilisTerminal.App.Theming;
@@ -126,13 +131,13 @@ public partial class MainWindow
         Activate(panel);
         SyncShellDirectory();
         FocusActivePanel();
-        Dispatcher.BeginInvoke(() =>
+        Avalonia.Threading.Dispatcher.UIThread.Post(() =>
         {
             if (!HandlePluginKey(panel, key, modifiers) && !HandleWindowKey(panel, key, modifiers))
             {
                 panel.HandleKey(key, modifiers);
             }
-        }, System.Windows.Threading.DispatcherPriority.Input);
+        }, Avalonia.Threading.DispatcherPriority.Input);
     }
 
     private async Task PickThemeAsync()
@@ -216,8 +221,8 @@ public partial class MainWindow
     {
         if (_settings.ConfirmExit)
         {
-            var body = new System.Windows.Controls.TextBlock { Text = "Do you want to quit Habilis Terminal?" };
-            body.SetResourceReference(StyleProperty, "Habi.LabelStyle");
+            var body = new Avalonia.Controls.TextBlock { Text = "Do you want to quit Habilis Terminal?" };
+            body.Classes.Add("label");
             var quit = ThemedDialog.Show(this, "Exit", body, [new DialogButton<bool>("_Yes", true, IsDefault: true), new DialogButton<bool>("_No", false, IsCancel: true)], false);
             if (!quit)
             {
@@ -295,21 +300,21 @@ public partial class MainWindow
             .OfType<System.Reflection.AssemblyInformationalVersionAttribute>().FirstOrDefault()?.InformationalVersion.Split('+')[0] ?? "?";
         var mode = App.Updates.InstalledVersion is not null ? "installed, updates from GitHub Releases"
             : App.Paths.IsPortable ? "portable" : "development build";
-        var body = new System.Windows.Controls.StackPanel { MaxWidth = 520 };
-        void Line(string text, string style = "Habi.LabelStyle")
+        var body = new Avalonia.Controls.StackPanel { MaxWidth = 520 };
+        void Line(string text, string style = "label")
         {
-            var block = new System.Windows.Controls.TextBlock { Text = text, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 0, 0, 4) };
-            block.SetResourceReference(StyleProperty, style);
+            var block = new Avalonia.Controls.TextBlock { Text = text, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 0, 0, 4) };
+            block.Classes.Add(style);
             body.Children.Add(block);
         }
 
         Line($"Version {version} ({mode})");
         Line("© 2026 Sergei Voronkov, Voronkov Labs");
-        Line($".NET {Environment.Version}, {System.Runtime.InteropServices.RuntimeInformation.ProcessArchitecture.ToString().ToLowerInvariant()}", "Habi.DescriptionStyle");
-        Line($"Shell: {App.FindPwsh()}", "Habi.DescriptionStyle");
-        Line($"Settings: {App.Paths.SettingsFile}", "Habi.DescriptionStyle");
+        Line($".NET {Environment.Version}, {System.Runtime.InteropServices.RuntimeInformation.ProcessArchitecture.ToString().ToLowerInvariant()}", "description");
+        Line($"Shell: {App.FindPwsh()}", "description");
+        Line($"Settings: {App.Paths.SettingsFile}", "description");
         Line("MIT License. Includes VS Code themes and Seti icons (MIT), Material Icon Theme (MIT), Codicons (CC BY 4.0), " +
-             "the Windows Terminal control and ConPTY (MIT), AvalonEdit (MIT), Velopack (MIT), Markdig (BSD-2-Clause) and the WebView2 SDK (BSD-3-Clause).", "Habi.DescriptionStyle");
+             "Avalonia and AvaloniaEdit (MIT), ConPTY (MIT), Velopack (MIT) and Markdig (BSD-2-Clause).", "description");
 
         var choice = ThemedDialog.Show(this, "Habilis Terminal", body,
         [

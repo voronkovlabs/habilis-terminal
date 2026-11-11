@@ -1,7 +1,12 @@
 using System.IO;
 using System.Globalization;
-using System.Windows;
-using System.Windows.Input;
+using Avalonia;
+using Avalonia.Controls;
+using Avalonia.Media;
+using Avalonia.Controls.Primitives;
+using Avalonia.Layout;
+using Avalonia.Interactivity;
+using Avalonia.Input;
 using HabilisTerminal.App.Hosting;
 using HabilisTerminal.App.Input;
 using HabilisTerminal.App.Layout;
@@ -22,7 +27,7 @@ public partial class MainWindow
     private bool OnGlobalKey(Key key, KeyModifiers modifiers)
     {
         using var measure = Core.Diagnostics.Perf.Measure("key");
-        Trace($"key {modifiers}+{key} focusedPanel={FocusedPanel()?.Side ?? "-"} wpfLeft={_left.IsKeyboardFocused} wpfRight={_right.IsKeyboardFocused} win32={GetFocus():X}");
+        Trace($"key {modifiers}+{key} focusedPanel={FocusedPanel()?.Side ?? "-"} left={_left.IsKeyboardFocusWithin} right={_right.IsKeyboardFocusWithin} terminal={TerminalHasFocus}");
         if (HandleZoomKey(key, modifiers))
         {
             return true;
@@ -483,7 +488,7 @@ public partial class MainWindow
 
         try
         {
-            Clipboard.SetText(string.Join(Environment.NewLine, names));
+            Widgets.Clipboard.SetText(string.Join(Environment.NewLine, names));
         }
         catch (System.Runtime.InteropServices.ExternalException ex)
         {
@@ -750,10 +755,10 @@ public partial class MainWindow
         var current = _pluginHotkeys.Get(id, title);
         while (true)
         {
-            var box = new System.Windows.Controls.TextBox { Text = current?.ToString() ?? string.Empty, MaxLength = 1, Width = 60, HorizontalAlignment = HorizontalAlignment.Left };
-            var body = new System.Windows.Controls.StackPanel();
-            var label = new System.Windows.Controls.TextBlock { Text = $"Hotkey for '{title}' (a letter or digit; empty: the automatic one):", Margin = new Thickness(0, 0, 0, 6) };
-            label.SetResourceReference(StyleProperty, "Habi.LabelStyle");
+            var box = new Avalonia.Controls.TextBox { Text = current?.ToString() ?? string.Empty, MaxLength = 1, Width = 60, HorizontalAlignment = HorizontalAlignment.Left };
+            var body = new Avalonia.Controls.StackPanel();
+            var label = new Avalonia.Controls.TextBlock { Text = $"Hotkey for '{title}' (a letter or digit; empty: the automatic one):", Margin = new Thickness(0, 0, 0, 6) };
+            label.Classes.Add("label");
             body.Children.Add(label);
             body.Children.Add(box);
             var accepted = ThemedDialog.Show(this, "Hotkey", body,
@@ -986,7 +991,8 @@ public partial class MainWindow
         }
 
         var action = drive.Type == DriveType.Network ? "Disconnect network drive" : "Eject";
-        if (MessageBox.Show(this, $"{action} {drive.Root.TrimEnd('\\')}?", "Habilis Terminal", MessageBoxButton.OKCancel, MessageBoxImage.Question) != MessageBoxResult.OK)
+        if (!ThemedDialog.Show(this, $"{action} {drive.Root.TrimEnd('\\')}?", LabelBlock("The panels on it close."),
+            [new DialogButton<bool>("_OK", true, IsDefault: true), new DialogButton<bool>("Cancel", false, IsCancel: true)], false))
         {
             return;
         }

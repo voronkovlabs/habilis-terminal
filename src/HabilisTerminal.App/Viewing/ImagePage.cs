@@ -1,10 +1,13 @@
 using System.Globalization;
 using System.IO;
-using System.Windows;
-using System.Windows.Controls;
-using System.Windows.Input;
-using System.Windows.Media;
-using System.Windows.Media.Imaging;
+using Avalonia;
+using Avalonia.Controls;
+using Avalonia.Controls.Primitives;
+using Avalonia.Layout;
+using Avalonia.Interactivity;
+using Avalonia.Input;
+using Avalonia.Media;
+using Avalonia.Media.Imaging;
 using HabilisTerminal.App.Panels;
 using HabilisTerminal.App.Theming;
 
@@ -25,7 +28,7 @@ public sealed class ImagePage : DockPanel, IPage, IContentZoom
 
     private readonly IReadOnlyList<string> _files;
     private readonly ZoomPanView _view = new(enlargeToFit: false);
-    private readonly TextBlock _title = new() { FontWeight = FontWeights.SemiBold };
+    private readonly TextBlock _title = new() { FontWeight = FontWeight.SemiBold };
     private readonly TextBlock _info = new();
     private readonly TextBlock _zoom = new();
     private readonly Border _previous;
@@ -36,9 +39,10 @@ public sealed class ImagePage : DockPanel, IPage, IContentZoom
     /// <param name="files">The pictures to step through, in order; <paramref name="index"/> is the one to show.</param>
     public ImagePage(IReadOnlyList<string> files, int index)
     {
+        AddHandler(KeyDownEvent, OnPreviewKeyDown, Avalonia.Interactivity.RoutingStrategies.Tunnel);
         _files = files.Count > 0 ? files : throw new ArgumentException("No picture.", nameof(files));
         Focusable = true;
-        FocusVisualStyle = null;
+        ;
         Background = PanelPalette.Background;
         LastChildFill = true;
 
@@ -89,31 +93,30 @@ public sealed class ImagePage : DockPanel, IPage, IContentZoom
 
     public void FocusContent() => Focus();
 
-    protected override void OnPreviewKeyDown(KeyEventArgs e)
+    private void OnPreviewKeyDown(object? sender, KeyEventArgs e)
     {
-        base.OnPreviewKeyDown(e);
-        var key = e.Key == Key.System ? e.SystemKey : e.Key;
+        var key = e.Key;
         var modifiers = Keyboard.Modifiers;
         e.Handled = true;
         switch (key)
         {
-            case Key.Escape or Key.F10 when modifiers == ModifierKeys.None:
-            case Key.F3 when modifiers == ModifierKeys.Alt:
+            case Key.Escape or Key.F10 when modifiers == KeyModifiers.None:
+            case Key.F3 when modifiers == KeyModifiers.Alt:
                 CloseRequested?.Invoke();
                 break;
-            case Key.F3 when modifiers == ModifierKeys.None:
+            case Key.F3 when modifiers == KeyModifiers.None:
                 ViewRequested?.Invoke(FilePath);
                 break;
-            case Key.Left or Key.PageUp when modifiers == ModifierKeys.None:
+            case Key.Left or Key.PageUp when modifiers == KeyModifiers.None:
                 Show(_index - 1);
                 break;
-            case Key.Right or Key.PageDown or Key.Space when modifiers == ModifierKeys.None:
+            case Key.Right or Key.PageDown or Key.Space when modifiers == KeyModifiers.None:
                 Show(_index + 1);
                 break;
-            case Key.Home when modifiers == ModifierKeys.None:
+            case Key.Home when modifiers == KeyModifiers.None:
                 Show(0);
                 break;
-            case Key.End when modifiers == ModifierKeys.None:
+            case Key.End when modifiers == KeyModifiers.None:
                 Show(_files.Count - 1);
                 break;
             default:
@@ -123,20 +126,20 @@ public sealed class ImagePage : DockPanel, IPage, IContentZoom
     }
 
     /// <summary>Fitted, the wheel steps through the pictures; zoomed, the view has scrolled with it already.</summary>
-    protected override void OnMouseWheel(MouseWheelEventArgs e)
+    protected override void OnPointerWheelChanged(PointerWheelEventArgs e)
     {
-        base.OnMouseWheel(e);
-        if (!e.Handled && Keyboard.Modifiers == ModifierKeys.None)
+        base.OnPointerWheelChanged(e);
+        if (!e.Handled && Keyboard.Modifiers == KeyModifiers.None)
         {
             e.Handled = true;
-            Show(_index + (e.Delta < 0 ? 1 : -1));
+            Show(_index + (e.Delta.Y < 0 ? 1 : -1));
         }
     }
 
     private void Show(int index)
     {
         index = Math.Clamp(index, 0, _files.Count - 1);
-        var first = _title.Text.Length == 0;
+        var first = string.IsNullOrEmpty(_title.Text);
         if (index == _index && !first)
         {
             return;
@@ -147,13 +150,7 @@ public sealed class ImagePage : DockPanel, IPage, IContentZoom
         _title.Text = _files.Count > 1 ? $"{path}  ({index + 1} of {_files.Count})" : path;
         try
         {
-            var image = new BitmapImage();
-            image.BeginInit();
-            image.CacheOption = BitmapCacheOption.OnLoad;
-            image.CreateOptions = BitmapCreateOptions.IgnoreColorProfile;
-            image.UriSource = new Uri(path);
-            image.EndInit();
-            image.Freeze();
+            var image = new Avalonia.Media.Imaging.Bitmap(path);
             _details = $"{image.PixelWidth} × {image.PixelHeight}  ·  {PanelColumns.FormatCompactSize(new FileInfo(path).Length, CultureInfo.CurrentCulture)}";
             _info.Text = _details;
             _view.Show(image, new Size(image.PixelWidth, image.PixelHeight));
@@ -164,7 +161,7 @@ public sealed class ImagePage : DockPanel, IPage, IContentZoom
             _view.Show(null, default);
         }
 
-        _previous.Visibility = _files.Count > 1 ? Visibility.Visible : Visibility.Collapsed;
+        _previous.IsVisible = _files.Count > 1;
         _next.Visibility = _previous.Visibility;
         _previous.Opacity = index > 0 ? 1 : 0.3;
         _next.Opacity = index < _files.Count - 1 ? 1 : 0.3;
@@ -196,10 +193,10 @@ public sealed class ImagePage : DockPanel, IPage, IContentZoom
             Margin = new Thickness(12),
             Cursor = Cursors.Hand,
         };
-        button.MouseEnter += (_, _) => button.Background = hover;
-        button.MouseLeave += (_, _) => button.Background = idle;
-        button.MouseLeftButtonDown += (_, e) => e.Handled = true; // not a drag or a double click of the picture
-        button.MouseLeftButtonUp += (_, e) =>
+        button.PointerEntered += (_, _) => button.Background = hover;
+        button.PointerExited += (_, _) => button.Background = idle;
+        button.PointerPressed += (_, e) => e.Handled = true; // not a drag or a double click of the picture
+        button.PointerReleased += (_, e) =>
         {
             e.Handled = true;
             click();

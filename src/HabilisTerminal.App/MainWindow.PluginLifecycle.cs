@@ -25,7 +25,7 @@ public partial class MainWindow : IPluginApiHandler
 
     private static string PluginShadowRoot => Path.Combine(Path.GetTempPath(), Core.Settings.AppPaths.ProductFolder, "plugin-shadow");
 
-    private Task<T> OnUiAsync<T>(Func<Task<T>> work) => Dispatcher.InvokeAsync(work).Task.Unwrap();
+    private static Task<T> OnUiAsync<T>(Func<Task<T>> work) => Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(work);
 
     Task<IReadOnlyList<PluginApiEntry>> IPluginApiHandler.ListAsync() =>
         OnUiAsync<IReadOnlyList<PluginApiEntry>>(() =>

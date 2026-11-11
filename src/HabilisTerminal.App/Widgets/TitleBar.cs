@@ -1,18 +1,21 @@
-using System.IO;
-using System.Windows;
-using System.Windows.Controls;
-using System.Windows.Input;
-using System.Windows.Interop;
-using System.Windows.Media;
-using System.Windows.Media.Imaging;
-using System.Windows.Shell;
+using Avalonia;
+using Avalonia.Controls;
+using Avalonia.Controls.Primitives;
+using Avalonia.Controls.Chrome;
+using Avalonia.Controls.Shapes;
+using Avalonia.Input;
+using Avalonia.Layout;
+using Avalonia.Media;
+using Avalonia.Platform;
+using HabilisTerminal.App.Theming;
 
 namespace HabilisTerminal.App.Widgets;
 
 /// <summary>
 /// The window's own title bar, VS Code style: icon and the F9 menu headers on the left, the caption buttons on the right;
-/// the empty rest drags the window like a normal caption. The maximize button answers WM_NCHITTEST with HTMAXBUTTON so
-/// Windows 11 shows Snap Layouts over it.
+/// the empty rest drags the window like a normal caption. On Avalonia (issue #253) the caption and the buttons carry
+/// window decoration roles, so Windows treats them as its own: the caption drags and maximizes on a double click, and
+/// the maximize button shows Snap Layouts.
 /// </summary>
 public sealed class TitleBar : DockPanel
 {
@@ -25,13 +28,6 @@ public sealed class TitleBar : DockPanel
     private const double CommandBoxMinWidth = 200;
     private const double CommandBoxHeight = 22;
     private const double ButtonWidth = 46;
-
-    private const int WM_NCHITTEST = 0x0084;
-    private const int WM_NCMOUSELEAVE = 0x02A2;
-    private const int WM_NCLBUTTONDOWN = 0x00A1;
-    private const int WM_NCLBUTTONUP = 0x00A2;
-    private const int WM_NCMOUSEMOVE = 0x00A0;
-    private const int HTMAXBUTTON = 9;
 
     // Segoe Fluent Icons (Windows 11) / Segoe MDL2 Assets (Windows 10) caption glyphs.
     private const string MinimizeGlyph = "";
@@ -49,7 +45,7 @@ public sealed class TitleBar : DockPanel
         _window = window;
         Height = BarHeight;
         LastChildFill = true;
-        SetResourceReference(BackgroundProperty, "Habi.TitleBarBackground");
+        this.SetResourceReference(BackgroundProperty, "Habi.TitleBarBackground");
 
         var icon = new Image
         {
@@ -67,14 +63,13 @@ public sealed class TitleBar : DockPanel
         {
             var header = TopMenu.CreateHeader(title, BarHeight);
             var index = _headers.Count;
-            header.MouseLeftButtonDown += (_, e) =>
+            header.PointerPressed += (_, e) =>
             {
                 e.Handled = true;
                 MenuRequested?.Invoke(index);
             };
-            header.MouseEnter += (_, _) => header.SetResourceReference(Border.BackgroundProperty, "Habi.TitleBarHover");
-            header.MouseLeave += (_, _) => header.Background = Brushes.Transparent;
-            WindowChrome.SetIsHitTestVisibleInChrome(header, true);
+            header.PointerEntered += (_, _) => header.SetResourceReference(Border.BackgroundProperty, "Habi.TitleBarHover");
+            header.PointerExited += (_, _) => header.Background = Brushes.Transparent;
             _headers.Add(header);
             MenuStrip.Children.Add(header);
         }
@@ -82,10 +77,10 @@ public sealed class TitleBar : DockPanel
         SetDock(MenuStrip, Dock.Left);
         Children.Add(MenuStrip);
 
-        var close = CaptionButton(CloseGlyph, () => _window.Close(), isClose: true);
-        _maximize = CaptionButton(MaximizeGlyph, ToggleMaximize, isClose: false);
-        _maximizeGlyph = (TextBlock)_maximize.Child;
-        var minimize = CaptionButton(MinimizeGlyph, () => _window.WindowState = WindowState.Minimized, isClose: false);
+        var close = CaptionButton(CloseGlyph, WindowDecorationsElementRole.CloseButton, isClose: true);
+        _maximize = CaptionButton(MaximizeGlyph, WindowDecorationsElementRole.MaximizeButton, isClose: false);
+        _maximizeGlyph = (TextBlock)_maximize.Child!;
+        var minimize = CaptionButton(MinimizeGlyph, WindowDecorationsElementRole.MinimizeButton, isClose: false);
         var feedback = FeedbackButton();
         foreach (var button in new[] { close, _maximize, minimize, feedback, ZoomButton() })
         {
@@ -96,15 +91,21 @@ public sealed class TitleBar : DockPanel
         // The draggable caption, with the command line's box in the middle of the window.
         CommandBox = MakeCommandBox();
         var caption = new Grid { Background = Brushes.Transparent };
+        WindowDecorationProperties.SetElementRole(caption, WindowDecorationsElementRole.TitleBar);
         caption.Children.Add(CommandBox);
         Children.Add(caption);
         caption.SizeChanged += (_, _) => PlaceCommandBox(caption);
         SizeChanged += (_, _) => PlaceCommandBox(caption);
 
-        _window.StateChanged += (_, _) => UpdateMaximizeGlyph();
+        _window.PropertyChanged += (_, e) =>
+        {
+            if (e.Property == Window.WindowStateProperty)
+            {
+                UpdateMaximizeGlyph();
+            }
+        };
         _window.Activated += (_, _) => Opacity = 1;
         _window.Deactivated += (_, _) => Opacity = 0.75;
-        _window.SourceInitialized += (_, _) => HwndSource.FromHwnd(new WindowInteropHelper(_window).Handle)?.AddHook(WndProc);
     }
 
     /// <summary>The menu headers; the F9 drop-down is laid over them.</summary>
@@ -134,12 +135,12 @@ public sealed class TitleBar : DockPanel
             BorderThickness = new Thickness(1),
             CornerRadius = new CornerRadius(3),
             Child = text,
-            Cursor = Cursors.IBeam,
+            Cursor = new Cursor(StandardCursorType.Ibeam),
         };
         box.SetResourceReference(Border.BackgroundProperty, "Habi.InputBackground");
         box.SetResourceReference(Border.BorderBrushProperty, "Habi.InputBorder");
-        WindowChrome.SetIsHitTestVisibleInChrome(box, true);
-        box.MouseLeftButtonDown += (_, e) =>
+        WindowDecorationProperties.SetElementRole(box, WindowDecorationsElementRole.User);
+        box.PointerPressed += (_, e) =>
         {
             e.Handled = true;
             CommandBoxRequested?.Invoke();
@@ -148,54 +149,37 @@ public sealed class TitleBar : DockPanel
     }
 
     /// <summary>In the middle of the window where it fits; else moved aside; hidden when the window is too narrow for it.</summary>
-    private void PlaceCommandBox(FrameworkElement caption)
+    private void PlaceCommandBox(Control caption)
     {
         const double Margin = 8;
-        var available = caption.ActualWidth - (2 * Margin);
+        var available = caption.Bounds.Width - (2 * Margin);
         if (available < CommandBoxMinWidth)
         {
-            CommandBox.Visibility = Visibility.Collapsed;
+            CommandBox.IsVisible = false;
             return;
         }
 
         var width = Math.Min(CommandBoxMaxWidth, available);
-        var captionLeft = caption.TranslatePoint(default, this).X;
-        var left = ((ActualWidth - width) / 2) - captionLeft;
+        var captionLeft = caption.TranslatePoint(default, this)?.X ?? 0;
+        var left = ((Bounds.Width - width) / 2) - captionLeft;
         CommandBox.Width = width;
-        CommandBox.Margin = new Thickness(Math.Clamp(left, Margin, caption.ActualWidth - width - Margin), 0, 0, 0);
-        CommandBox.Visibility = Visibility.Visible;
+        CommandBox.Margin = new Thickness(Math.Clamp(left, Margin, Math.Max(Margin, caption.Bounds.Width - width - Margin)), 0, 0, 0);
+        CommandBox.IsVisible = true;
     }
 
-    /// <summary>Installs the chrome: no system caption, resizable edges, DWM shadow and rounded corners kept.</summary>
-    public static void Install(Window window) =>
-        WindowChrome.SetWindowChrome(window, new WindowChrome
-        {
-            CaptionHeight = BarHeight,
-            ResizeBorderThickness = SystemParameters.WindowResizeBorderThickness,
-            GlassFrameThickness = new Thickness(0, 0, 0, 1),
-            UseAeroCaptionButtons = false,
-            CornerRadius = default,
-        });
-
-    /// <summary>
-    /// Maximized, a WindowChrome window reaches past the screen by its sizing frame plus the padded border; the content
-    /// is inset by that much so nothing is cut off.
-    /// </summary>
-    public static Thickness MaximizedInset(Window window)
+    /// <summary>The window draws its own caption: the client area takes the title bar's place, the frame stays Windows'.</summary>
+    public static void Install(Window window)
     {
-        var dpi = VisualTreeHelper.GetDpi(window);
-        var padding = GetSystemMetrics(SM_CXPADDEDBORDER);
-        var x = (GetSystemMetrics(SM_CXSIZEFRAME) + padding) / dpi.DpiScaleX;
-        var y = (GetSystemMetrics(SM_CYSIZEFRAME) + padding) / dpi.DpiScaleY;
-        return new Thickness(x, y, x, y);
+        window.ExtendClientAreaToDecorationsHint = true;
+        window.ExtendClientAreaTitleBarHeightHint = BarHeight;
+        window.WindowDecorations = WindowDecorations.Full;
     }
 
-    private const int SM_CXSIZEFRAME = 32;
-    private const int SM_CYSIZEFRAME = 33;
-    private const int SM_CXPADDEDBORDER = 92;
+    /// <summary>The window's messages, for the title bar: nothing to do any more (the roles do it), kept for later needs.</summary>
+    public static IntPtr OnWindowMessage(Window window, IntPtr hwnd, uint message, IntPtr wParam, IntPtr lParam, ref bool handled) => IntPtr.Zero;
 
-    [System.Runtime.InteropServices.DllImport("user32.dll")]
-    private static extern int GetSystemMetrics(int index);
+    /// <summary>Maximized, the content keeps clear of the screen edge the frame would cover.</summary>
+    public static Thickness MaximizedInset(Window window) => window.OffScreenMargin;
 
     public void ToggleMaximize() =>
         _window.WindowState = _window.WindowState == WindowState.Maximized ? WindowState.Normal : WindowState.Maximized;
@@ -203,7 +187,7 @@ public sealed class TitleBar : DockPanel
     private void UpdateMaximizeGlyph() =>
         _maximizeGlyph.Text = _window.WindowState == WindowState.Maximized ? RestoreGlyph : MaximizeGlyph;
 
-    private static Border CaptionButton(string glyph, Action click, bool isClose)
+    private static Border CaptionButton(string glyph, WindowDecorationsElementRole role, bool isClose)
     {
         var text = new TextBlock
         {
@@ -215,35 +199,31 @@ public sealed class TitleBar : DockPanel
         };
         text.SetResourceReference(TextBlock.ForegroundProperty, "Habi.TitleBarForeground");
         var button = new Border { Width = ButtonWidth, Background = Brushes.Transparent, Child = text };
-        WindowChrome.SetIsHitTestVisibleInChrome(button, true);
-        button.MouseEnter += (_, _) => SetHover(button, true, isClose);
-        button.MouseLeave += (_, _) => SetHover(button, false, isClose);
-        button.MouseLeftButtonUp += (_, e) =>
-        {
-            e.Handled = true;
-            click();
-        };
+        WindowDecorationProperties.SetElementRole(button, role);
+        button.PointerEntered += (_, _) => SetHover(button, true, isClose);
+        button.PointerExited += (_, _) => SetHover(button, false, isClose);
         return button;
     }
 
     /// <summary>The feedback icon (codicon), with the caption buttons' hover.</summary>
     private Border FeedbackButton()
     {
-        var icon = new System.Windows.Shapes.Path
+        var icon = new Avalonia.Controls.Shapes.Path
         {
-            Data = Theming.Codicon.GeometryOf(Theming.Codicon.Feedback),
+            Data = Codicon.GeometryOf(Codicon.Feedback),
             Width = 14,
             Height = 14,
             Stretch = Stretch.Uniform,
             HorizontalAlignment = HorizontalAlignment.Center,
             VerticalAlignment = VerticalAlignment.Center,
         };
-        icon.SetResourceReference(System.Windows.Shapes.Shape.FillProperty, "Habi.TitleBarForeground");
-        var button = new Border { Width = 40, Background = Brushes.Transparent, Child = icon, ToolTip = "Send feedback" };
-        WindowChrome.SetIsHitTestVisibleInChrome(button, true);
-        button.MouseEnter += (_, _) => button.SetResourceReference(Border.BackgroundProperty, "Habi.TitleBarHover");
-        button.MouseLeave += (_, _) => button.Background = Brushes.Transparent;
-        button.MouseLeftButtonUp += (_, e) =>
+        icon.SetResourceReference(Shape.FillProperty, "Habi.TitleBarForeground");
+        var button = new Border { Width = 40, Background = Brushes.Transparent, Child = icon };
+        ToolTip.SetTip(button, "Send feedback");
+        WindowDecorationProperties.SetElementRole(button, WindowDecorationsElementRole.User);
+        button.PointerEntered += (_, _) => button.SetResourceReference(Border.BackgroundProperty, "Habi.TitleBarHover");
+        button.PointerExited += (_, _) => button.Background = Brushes.Transparent;
+        button.PointerReleased += (_, e) =>
         {
             e.Handled = true;
             FeedbackRequested?.Invoke();
@@ -268,10 +248,10 @@ public sealed class TitleBar : DockPanel
             BorderThickness = new Thickness(1),
         };
         pill.SetResourceReference(Border.BorderBrushProperty, "Habi.TitleBarHover");
-        WindowChrome.SetIsHitTestVisibleInChrome(pill, true);
-        pill.MouseEnter += (_, _) => pill.SetResourceReference(Border.BackgroundProperty, "Habi.TitleBarHover");
-        pill.MouseLeave += (_, _) => pill.Background = Brushes.Transparent;
-        pill.MouseLeftButtonUp += (_, e) =>
+        WindowDecorationProperties.SetElementRole(pill, WindowDecorationsElementRole.User);
+        pill.PointerEntered += (_, _) => pill.SetResourceReference(Border.BackgroundProperty, "Habi.TitleBarHover");
+        pill.PointerExited += (_, _) => pill.Background = Brushes.Transparent;
+        pill.PointerReleased += (_, e) =>
         {
             e.Handled = true;
             UiZoom.Reset();
@@ -281,8 +261,8 @@ public sealed class TitleBar : DockPanel
         {
             var percent = Core.Settings.ZoomSteps.Percent(UiZoom.Factor);
             text.Text = percent;
-            pill.ToolTip = $"Zoom {percent}. Click for 100% (Ctrl+Alt+0)";
-            pill.Visibility = Math.Abs(UiZoom.Factor - 1) < 0.0005 ? Visibility.Collapsed : Visibility.Visible;
+            ToolTip.SetTip(pill, $"Zoom {percent}. Click for 100% (Ctrl+Alt+0)");
+            pill.IsVisible = !(Math.Abs(UiZoom.Factor - 1) < 0.0005);
         }
 
         pill.Background = Brushes.Transparent;
@@ -293,7 +273,7 @@ public sealed class TitleBar : DockPanel
 
     private static void SetHover(Border button, bool hover, bool isClose)
     {
-        var text = (TextBlock)button.Child;
+        var text = (TextBlock)button.Child!;
         if (!hover)
         {
             button.Background = Brushes.Transparent;
@@ -310,54 +290,25 @@ public sealed class TitleBar : DockPanel
         }
     }
 
-    /// <summary>Snap Layouts: the maximize button must be HTMAXBUTTON to Windows, so its clicks arrive as NC messages.</summary>
-    private IntPtr WndProc(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled)
-    {
-        switch (msg)
-        {
-            case WM_NCHITTEST when IsOverMaximize(lParam):
-                handled = true;
-                SetHover(_maximize, true, isClose: false);
-                return HTMAXBUTTON;
-            case WM_NCMOUSEMOVE when wParam != HTMAXBUTTON:
-            case WM_NCMOUSELEAVE:
-                SetHover(_maximize, false, isClose: false);
-                break;
-            case WM_NCLBUTTONDOWN when wParam == HTMAXBUTTON:
-                handled = true;
-                break;
-            case WM_NCLBUTTONUP when wParam == HTMAXBUTTON:
-                handled = true;
-                ToggleMaximize();
-                break;
-        }
-
-        return IntPtr.Zero;
-    }
-
-    private bool IsOverMaximize(IntPtr lParam)
-    {
-        if (!_maximize.IsVisible)
-        {
-            return false;
-        }
-
-        var x = unchecked((short)(long)lParam);
-        var y = unchecked((short)((long)lParam >> 16));
-        var point = _maximize.PointFromScreen(new Point(x, y));
-        return point.X >= 0 && point.Y >= 0 && point.X < _maximize.ActualWidth && point.Y < _maximize.ActualHeight;
-    }
-
-    private static BitmapFrame? LoadIcon()
+    private static Avalonia.Media.Imaging.Bitmap? LoadIcon()
     {
         try
         {
-            var decoder = new IconBitmapDecoder(new Uri("pack://application:,,,/habi;component/Assets/habi.ico"), BitmapCreateOptions.None, BitmapCacheOption.OnLoad);
-            return decoder.Frames.OrderBy(frame => Math.Abs(frame.PixelWidth - 32)).First();
+            using var stream = AssetLoader.Open(new Uri("avares://habi/Assets/habi.ico"));
+            return new WindowIcon(stream) is var windowIcon ? IconBitmap(windowIcon) : null;
         }
-        catch (Exception ex) when (ex is IOException or NotSupportedException or FileFormatException)
+        catch (Exception ex) when (ex is IOException or NotSupportedException or ArgumentException)
         {
             return null;
         }
+    }
+
+    /// <summary>The icon file's 32 px frame as a bitmap for the 16 px image (crisp at 200%).</summary>
+    private static Avalonia.Media.Imaging.Bitmap? IconBitmap(WindowIcon icon)
+    {
+        using var stream = new MemoryStream();
+        icon.Save(stream);
+        stream.Position = 0;
+        return Avalonia.Media.Imaging.Bitmap.DecodeToWidth(stream, 32);
     }
 }

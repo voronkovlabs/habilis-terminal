@@ -1,8 +1,12 @@
 using System.Globalization;
 using System.Text;
-using System.Windows;
-using System.Windows.Input;
-using System.Windows.Media;
+using Avalonia;
+using Avalonia.Controls;
+using Avalonia.Controls.Primitives;
+using Avalonia.Layout;
+using Avalonia.Interactivity;
+using Avalonia.Input;
+using Avalonia.Media;
 using HabilisTerminal.App.Theming;
 using HabilisTerminal.Core.Viewing;
 
@@ -12,7 +16,7 @@ namespace HabilisTerminal.App.Viewing;
 /// Draws a <see cref="ViewerDocument"/> as text (optionally wrapped) or hex, from a byte offset (SPEC §9).
 /// Used by the F3 page and by quick view; only the visible rows are decoded.
 /// </summary>
-public sealed class ViewerView : FrameworkElement
+public sealed class ViewerView : Control
 {
     public const int HexBytesPerRow = 16;
     private static double FontSize = 13;
@@ -20,7 +24,7 @@ public sealed class ViewerView : FrameworkElement
     private const double Padding = 8;
     private const int TabSize = 8;
 
-    private static Typeface Mono = new(new FontFamily("Cascadia Mono, Consolas"), FontStyles.Normal, FontWeights.Normal, FontStretches.Normal);
+    private static Typeface Mono = new(new FontFamily("Cascadia Mono, Consolas"), FontStyle.Normal, FontWeight.Normal, FontStretch.Normal);
     private int _cellFontVersion;
     private ViewerDocument? _document;
     private Size _cell;
@@ -55,7 +59,7 @@ public sealed class ViewerView : FrameworkElement
     /// <summary>The <c>viewer.fontFamily</c> / <c>viewer.fontSize</c> settings (also used by quick view).</summary>
     public static void SetFont(string family, double size)
     {
-        Mono = new Typeface(new FontFamily(string.IsNullOrWhiteSpace(family) ? "Cascadia Mono, Consolas" : family + ", Consolas"), FontStyles.Normal, FontWeights.Normal, FontStretches.Normal);
+        Mono = new Typeface(new FontFamily(string.IsNullOrWhiteSpace(family) ? "Cascadia Mono, Consolas" : family + ", Consolas"), FontStyle.Normal, FontWeight.Normal, FontStretch.Normal);
         FontSize = size;
         FontVersion++;
     }
@@ -67,9 +71,9 @@ public sealed class ViewerView : FrameworkElement
     /// <summary>A search hit to highlight: byte offset and length in characters.</summary>
     public (long Offset, int Length)? Highlight { get; set; }
 
-    public int VisibleRows => Math.Max(1, (int)((ActualHeight - (2 * Padding)) / Cell.Height));
+    public int VisibleRows => Math.Max(1, (int)((Bounds.Height - (2 * Padding)) / Cell.Height));
 
-    public int VisibleColumns => Math.Max(1, (int)((ActualWidth - (2 * Padding)) / Cell.Width));
+    public int VisibleColumns => Math.Max(1, (int)((Bounds.Width - (2 * Padding)) / Cell.Width));
 
     /// <summary>Percent of the file above the top row.</summary>
     public double Percent => _document is { Length: > 0 } d ? Math.Min(100, TopOffset * 100.0 / d.Length) : 100;
@@ -81,7 +85,7 @@ public sealed class ViewerView : FrameworkElement
             if (_cell.IsEmpty || _cell.Width == 0 || _cellFontVersion != FontVersion)
             {
                 _cellFontVersion = FontVersion;
-                var sample = new FormattedText("M", CultureInfo.InvariantCulture, FlowDirection.LeftToRight, Mono, FontSize, Brushes.White, VisualTreeHelper.GetDpi(this).PixelsPerDip);
+                var sample = new FormattedText("M", CultureInfo.InvariantCulture, FlowDirection.LeftToRight, Mono, FontSize, Brushes.White);
                 _cell = new Size(sample.WidthIncludingTrailingWhitespace, Math.Ceiling(sample.Height));
             }
 
@@ -170,30 +174,23 @@ public sealed class ViewerView : FrameworkElement
         PositionChanged?.Invoke();
     }
 
-    protected override void OnDpiChanged(DpiScale oldDpi, DpiScale newDpi)
+    protected override void OnPointerWheelChanged(PointerWheelEventArgs e)
     {
-        base.OnDpiChanged(oldDpi, newDpi);
-        _cell = Size.Empty;
-        InvalidateVisual();
-    }
-
-    protected override void OnMouseWheel(MouseWheelEventArgs e)
-    {
-        base.OnMouseWheel(e);
-        ScrollLines(e.Delta > 0 ? -3 : 3);
+        base.OnPointerWheelChanged(e);
+        ScrollLines(e.Delta.Y > 0 ? -3 : 3);
         e.Handled = true;
     }
 
-    protected override void OnRender(DrawingContext drawingContext)
+    public override void Render(DrawingContext context)
     {
-        var dc = drawingContext;
-        dc.DrawRectangle(PanelPalette.Background, null, new Rect(RenderSize));
+        var dc = context;
+        dc.DrawRectangle(PanelPalette.Background, null, new Rect(Bounds.Size));
         if (_document is null)
         {
             return;
         }
 
-        var pixelsPerDip = VisualTreeHelper.GetDpi(this).PixelsPerDip;
+        var pixelsPerDip = 1.0;
         var cell = Cell;
         var rows = VisibleRows + 1;
         var offset = TopOffset;
@@ -330,7 +327,7 @@ public sealed class ViewerView : FrameworkElement
         return chunks;
     }
 
-    private static void DrawText(DrawingContext dc, string text, double x, double y, Brush brush, double pixelsPerDip)
+    private static void DrawText(DrawingContext dc, string text, double x, double y, IBrush brush, double pixelsPerDip)
     {
         if (text.Length == 0)
         {
@@ -345,6 +342,6 @@ public sealed class ViewerView : FrameworkElement
                 span[i] = source[i] < ' ' ? '·' : source[i];
             }
         });
-        dc.DrawText(new FormattedText(printable, CultureInfo.CurrentUICulture, FlowDirection.LeftToRight, Mono, FontSize, brush, pixelsPerDip), new Point(x, y));
+        dc.DrawText(new FormattedText(printable, CultureInfo.CurrentUICulture, FlowDirection.LeftToRight, Mono, FontSize, brush), new Point(x, y));
     }
 }

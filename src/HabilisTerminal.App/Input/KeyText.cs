@@ -1,5 +1,5 @@
 using System.Runtime.InteropServices;
-using System.Windows.Input;
+using Avalonia.Input;
 
 namespace HabilisTerminal.App.Input;
 
@@ -8,7 +8,7 @@ public static class KeyText
 {
     public static char? CharOf(Key key, bool shift)
     {
-        var virtualKey = (uint)KeyInterop.VirtualKeyFromKey(key);
+        var virtualKey = (uint)(Hosting.TerminalKeys.VirtualKey(key) ?? 0);
         var state = new byte[256];
         if (shift)
         {

@@ -1,6 +1,11 @@
 using System.IO;
-using System.Windows;
-using System.Windows.Threading;
+using Avalonia;
+using Avalonia.Controls;
+using Avalonia.Media;
+using Avalonia.Controls.Primitives;
+using Avalonia.Layout;
+using Avalonia.Interactivity;
+using Avalonia.Threading;
 using HabilisTerminal.Core.Reporting;
 using HabilisTerminal.Core.Settings;
 
@@ -29,7 +34,7 @@ public static class CrashCapture
             Write(e.Exception, "task", always: true);
             e.SetObserved();
         };
-        app.DispatcherUnhandledException += (_, e) =>
+        Dispatcher.UIThread.UnhandledException += (_, e) =>
         {
             Write(e.Exception, "dispatcher");
             e.Handled = true;
@@ -68,7 +73,7 @@ public static class CrashCapture
                 default:
                     throw new InvalidOperationException($"Test crash on the UI thread (HABI_TEST_CRASH) in {Environment.CurrentDirectory}");
             }
-        }, dispatcher);
+        });
         timer.Start();
     }
 

@@ -1,3 +1,4 @@
+using Avalonia;
 using Velopack;
 
 namespace HabilisTerminal.App;
@@ -17,8 +18,9 @@ public static class Program
         // Install / update / uninstall hooks run here and may exit the process (SPEC §15).
         VelopackApp.Build().Run();
 
-        var app = new App();
-        app.InitializeComponent();
-        app.Run();
+        BuildAvaloniaApp().StartWithClassicDesktopLifetime(args);
     }
+
+    /// <summary>The Avalonia application (issue #253); also what the previewer would use.</summary>
+    public static AppBuilder BuildAvaloniaApp() => AppBuilder.Configure<App>().UsePlatformDetect();
 }

@@ -1,10 +1,11 @@
 using System.Globalization;
 using System.IO;
-using System.Windows;
-using System.Windows.Controls;
-using System.Windows.Controls.Primitives;
-using System.Windows.Media;
-using System.Windows.Media.Effects;
+using Avalonia;
+using Avalonia.Controls;
+using Avalonia.Layout;
+using Avalonia.Interactivity;
+using Avalonia.Controls.Primitives;
+using Avalonia.Media;
 using HabilisTerminal.App.Panels;
 using HabilisTerminal.Core.Operations;
 
@@ -18,11 +19,11 @@ public sealed class OperationToasts
 {
     private const double CardWidth = 380;
     private readonly Window _owner;
-    private readonly FrameworkElement _target;
+    private readonly Control _target;
     private readonly Popup _popup;
     private readonly StackPanel _stack = new();
 
-    public OperationToasts(Window owner, FrameworkElement target)
+    public OperationToasts(Window owner, Control target)
     {
         _owner = owner;
         _target = target;
@@ -30,15 +31,22 @@ public sealed class OperationToasts
         {
             Child = _stack,
             PlacementTarget = target,
-            Placement = PlacementMode.Relative,
-            AllowsTransparency = true,
-            StaysOpen = true,
+            Placement = PlacementMode.AnchorAndGravity,
+            PlacementAnchor = Avalonia.Controls.Primitives.PopupPositioning.PopupAnchor.TopLeft,
+            PlacementGravity = Avalonia.Controls.Primitives.PopupPositioning.PopupGravity.BottomRight,
+            IsLightDismissEnabled = false,
         };
         UiZoom.Apply(_popup);
         _stack.SizeChanged += (_, _) => Reposition();
         target.SizeChanged += (_, _) => Reposition();
-        owner.LocationChanged += (_, _) => Reposition();
-        owner.StateChanged += (_, _) => _popup.IsOpen = _stack.Children.Count > 0 && owner.WindowState != WindowState.Minimized;
+        owner.PositionChanged += (_, _) => Reposition();
+        owner.PropertyChanged += (_, e) =>
+        {
+            if (e.Property == Window.WindowStateProperty)
+            {
+                _popup.IsOpen = _stack.Children.Count > 0 && owner.WindowState != WindowState.Minimized;
+            }
+        };
         owner.Activated += (_, _) => _popup.IsOpen = _stack.Children.Count > 0;
         owner.Deactivated += (_, _) => _popup.IsOpen = false;
     }
@@ -88,7 +96,7 @@ public sealed class OperationToasts
             Padding = new Thickness(14, 10, 14, 10),
             Margin = new Thickness(16, 8, 16, 0),
             Child = layout,
-            Effect = new DropShadowEffect { BlurRadius = 12, ShadowDepth = 3, Opacity = 0.4, Color = Colors.Black },
+            BoxShadow = BoxShadows.Parse("0 4 16 0 #73000000"),
         };
         root.SetResourceReference(Border.BackgroundProperty, "Habi.WidgetBackground");
         root.SetResourceReference(Border.BorderBrushProperty, "Habi.WidgetBorder");
@@ -160,7 +168,7 @@ public sealed class OperationToasts
             _title.Text = title;
             _title.TextTrimming = TextTrimming.CharacterEllipsis;
             _title.ToolTip = title;
-            _pause.Visibility = canPause ? Visibility.Visible : Visibility.Collapsed;
+            _pause.IsVisible = canPause;
             _current.Text = "Preparing…";
             _current.TextTrimming = TextTrimming.CharacterEllipsis;
             _current.SetResourceReference(TextBlock.ForegroundProperty, "Habi.Description");
@@ -209,7 +217,7 @@ public sealed class OperationToasts
                 Padding = new Thickness(14, 10, 14, 10),
                 Margin = new Thickness(16, 8, 16, 0),
                 Child = layout,
-                Effect = new DropShadowEffect { BlurRadius = 12, ShadowDepth = 3, Opacity = 0.4, Color = Colors.Black },
+                BoxShadow = BoxShadows.Parse("0 4 16 0 #73000000"),
             };
             Root.SetResourceReference(Border.BackgroundProperty, "Habi.WidgetBackground");
             Root.SetResourceReference(Border.BorderBrushProperty, "Habi.WidgetBorder");
@@ -253,7 +261,7 @@ public sealed class OperationToasts
 
         internal static TextBlock Text(double size, bool bold)
         {
-            var block = new TextBlock { FontFamily = new FontFamily("Segoe UI"), FontSize = size, FontWeight = bold ? FontWeights.SemiBold : FontWeights.Normal };
+            var block = new TextBlock { FontFamily = new FontFamily("Segoe UI"), FontSize = size, FontWeight = bold ? FontWeight.SemiBold : FontWeight.Normal };
             block.SetResourceReference(TextBlock.ForegroundProperty, "Habi.Foreground");
             return block;
         }

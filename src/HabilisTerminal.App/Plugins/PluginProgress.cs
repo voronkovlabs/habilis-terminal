@@ -1,4 +1,4 @@
-using System.Windows.Threading;
+using Avalonia.Threading;
 using HabilisTerminal.App.Widgets;
 using HabilisTerminal.Core.Operations;
 using HabilisTerminal.Plugins;
@@ -78,7 +78,7 @@ internal sealed class PluginProgress(Dispatcher dispatcher, Func<OperationToasts
             return;
         }
 
-        _ = Task.Delay(100).ContinueWith(_ => dispatcher.BeginInvoke(() =>
+        _ = Task.Delay(100).ContinueWith(_ => dispatcher.Post(() =>
         {
             _queued = 0;
             OperationProgress snapshot;

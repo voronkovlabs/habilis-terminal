@@ -2,7 +2,7 @@ using System.IO;
 using HabilisTerminal.App.Panels;
 using HabilisTerminal.Core.Panels;
 using HabilisTerminal.Shell.Integration;
-using Microsoft.Terminal.Wpf;
+using HabilisTerminal.Terminal;
 
 namespace HabilisTerminal.App.Hosting;
 
@@ -16,7 +16,7 @@ internal enum ConsoleTabMark
 }
 
 /// <summary>
-/// One console of the window (issue #119): a shell with its own terminal control, which keeps the screen and the history
+/// One console of the window (issue #119): a shell with its own console view, which keeps the screen and the history
 /// while the tab is not in front, and what belongs to that shell alone. A tab not in front is hidden, not collapsed, and
 /// keeps its size until it is shown again.
 /// </summary>
@@ -24,15 +24,15 @@ internal sealed class ConsoleTab : IDisposable
 {
     public ConsoleTab(ShellHost host)
     {
-        Connection = new ShellConnection(host);
-        Terminal = new TerminalControl { AutoResize = true };
+        Terminal = new TerminalView(new TerminalEmulator(120, 30));
+        Connection = new ShellConnection(host, Terminal);
     }
 
     public ShellConnection Connection { get; }
 
     public ShellHost Host => Connection.Host;
 
-    public TerminalControl Terminal { get; }
+    public TerminalView Terminal { get; }
 
     /// <summary>Between a command's start and the next prompt: the console has every key.</summary>
     public bool CommandRunning { get; set; }

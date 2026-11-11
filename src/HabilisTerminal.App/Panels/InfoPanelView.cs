@@ -1,23 +1,27 @@
 using System.IO;
 using System.Globalization;
-using System.Windows;
-using System.Windows.Media;
+using Avalonia;
+using Avalonia.Controls;
+using Avalonia.Controls.Primitives;
+using Avalonia.Layout;
+using Avalonia.Interactivity;
+using Avalonia.Media;
 using HabilisTerminal.App.Theming;
 
 namespace HabilisTerminal.App.Panels;
 
 /// <summary>Ctrl+L: drive and directory information about the other (active) panel (SPEC §6).</summary>
-public sealed class InfoPanelView : FrameworkElement
+public sealed class InfoPanelView : Control
 {
     private static readonly Typeface UiTypeface = new("Segoe UI");
-    private static readonly Typeface UiTypefaceBold = new(new FontFamily("Segoe UI"), FontStyles.Normal, FontWeights.SemiBold, FontStretches.Normal);
+    private static readonly Typeface UiTypefaceBold = new(new FontFamily("Segoe UI"), FontStyle.Normal, FontWeight.SemiBold, FontStretch.Normal);
 
     public FilePanel? Source { get; set; }
 
-    protected override void OnRender(DrawingContext drawingContext)
+    public override void Render(DrawingContext context)
     {
-        var dc = drawingContext;
-        dc.DrawRectangle(PanelPalette.Background, null, new Rect(RenderSize));
+        var dc = context;
+        dc.DrawRectangle(PanelPalette.Background, null, new Rect(Bounds.Size));
         if (Source is not { } source)
         {
             return;
@@ -94,32 +98,32 @@ public sealed class InfoPanelView : FrameworkElement
 
     private void DrawLines(DrawingContext dc, List<(string Label, string Value, bool Heading)> lines)
     {
-        var pixelsPerDip = VisualTreeHelper.GetDpi(this).PixelsPerDip;
+        var pixelsPerDip = 1.0;
         var y = 12.0;
         foreach (var (label, value, heading) in lines)
         {
             if (heading)
             {
-                Draw(dc, label.ToUpperInvariant(), PanelPalette.Foreground, 14, y, ActualWidth - 28, bold: true, pixelsPerDip);
+                Draw(dc, label.ToUpperInvariant(), PanelPalette.Foreground, 14, y, Bounds.Width - 28, bold: true, pixelsPerDip);
             }
             else if (label.Length > 0)
             {
                 Draw(dc, label, PanelPalette.DescriptionForeground, 14, y, 100, bold: false, pixelsPerDip);
-                Draw(dc, value, PanelPalette.Foreground, 120, y, ActualWidth - 134, bold: false, pixelsPerDip);
+                Draw(dc, value, PanelPalette.Foreground, 120, y, Bounds.Width - 134, bold: false, pixelsPerDip);
             }
 
             y += 22;
         }
     }
 
-    private static void Draw(DrawingContext dc, string text, Brush brush, double x, double y, double width, bool bold, double pixelsPerDip)
+    private static void Draw(DrawingContext dc, string text, IBrush brush, double x, double y, double width, bool bold, double pixelsPerDip)
     {
         if (width <= 4 || text.Length == 0)
         {
             return;
         }
 
-        var formatted = new FormattedText(text, CultureInfo.CurrentUICulture, FlowDirection.LeftToRight, bold ? UiTypefaceBold : UiTypeface, 13, brush, pixelsPerDip)
+        var formatted = new FormattedText(text, CultureInfo.CurrentUICulture, FlowDirection.LeftToRight, bold ? UiTypefaceBold : UiTypeface, 13, brush)
         {
             MaxTextWidth = width,
             MaxLineCount = 1,

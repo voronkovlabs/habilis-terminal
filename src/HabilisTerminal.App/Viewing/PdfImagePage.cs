@@ -1,9 +1,12 @@
 using System.IO;
 using System.Runtime.InteropServices;
-using System.Windows;
-using System.Windows.Controls;
-using System.Windows.Input;
-using System.Windows.Media;
+using Avalonia;
+using Avalonia.Controls;
+using Avalonia.Controls.Primitives;
+using Avalonia.Layout;
+using Avalonia.Interactivity;
+using Avalonia.Input;
+using Avalonia.Media;
 using HabilisTerminal.App.Theming;
 
 namespace HabilisTerminal.App.Viewing;
@@ -21,7 +24,7 @@ public sealed class PdfImagePage : DockPanel, IPage, IDisposable, IContentZoom
 
     private readonly ZoomPanView _view = new(enlargeToFit: true);
     private readonly TextBlock _info = new();
-    private readonly System.Windows.Threading.DispatcherTimer _sharpen;
+    private readonly Avalonia.Threading.DispatcherTimer _sharpen;
     private PdfPreview? _pdf;
     private int _index;
     private int _request;
@@ -31,12 +34,13 @@ public sealed class PdfImagePage : DockPanel, IPage, IDisposable, IContentZoom
 
     public PdfImagePage(string path)
     {
+        AddHandler(KeyDownEvent, OnPreviewKeyDown, Avalonia.Interactivity.RoutingStrategies.Tunnel);
         Focusable = true;
-        FocusVisualStyle = null;
+        ;
         Background = PanelPalette.Background;
         LastChildFill = true;
 
-        var title = new TextBlock { Text = path, FontWeight = FontWeights.SemiBold };
+        var title = new TextBlock { Text = path, FontWeight = FontWeight.SemiBold };
         var hint = new TextBlock { Text = "PgUp PgDn page · Ctrl+wheel zoom · Ctrl+F find, select text · F3 as text · Esc close" };
         foreach (var text in new[] { title, _info, hint })
         {
@@ -57,7 +61,7 @@ public sealed class PdfImagePage : DockPanel, IPage, IDisposable, IContentZoom
         Children.Add(headerBorder);
 
         Children.Add(_view);
-        _sharpen = new System.Windows.Threading.DispatcherTimer(TimeSpan.FromMilliseconds(120), System.Windows.Threading.DispatcherPriority.Background, (_, _) => Sharpen(), Dispatcher);
+        _sharpen = new Avalonia.Threading.DispatcherTimer(TimeSpan.FromMilliseconds(120), Avalonia.Threading.DispatcherPriority.Background, (_, _) => Sharpen());
         _view.ViewChanged += () =>
         {
             ShowInfo();
@@ -66,6 +70,8 @@ public sealed class PdfImagePage : DockPanel, IPage, IDisposable, IContentZoom
         };
         _ = OpenAsync(path);
     }
+
+    public static bool IsPdf(string path) => string.Equals(Path.GetExtension(path), ".pdf", StringComparison.OrdinalIgnoreCase);
 
     /// <summary>Esc / F10 / Alt+F3.</summary>
     public event Action? CloseRequested;
@@ -89,25 +95,24 @@ public sealed class PdfImagePage : DockPanel, IPage, IDisposable, IContentZoom
         _pdf = null;
     }
 
-    protected override void OnPreviewKeyDown(KeyEventArgs e)
+    private void OnPreviewKeyDown(object? sender, KeyEventArgs e)
     {
-        base.OnPreviewKeyDown(e);
-        var key = e.Key == Key.System ? e.SystemKey : e.Key;
-        if (key == Key.F && Keyboard.Modifiers == ModifierKeys.Control)
+        var key = e.Key;
+        if (key == Key.F && Keyboard.Modifiers == KeyModifiers.Control)
         {
             e.Handled = true;
             SearchRequested?.Invoke(_index);
             return;
         }
 
-        if (key == Key.F3 && Keyboard.Modifiers == ModifierKeys.Alt)
+        if (key == Key.F3 && Keyboard.Modifiers == KeyModifiers.Alt)
         {
             e.Handled = true;
             CloseRequested?.Invoke();
             return;
         }
 
-        if (Keyboard.Modifiers != ModifierKeys.None)
+        if (Keyboard.Modifiers != KeyModifiers.None)
         {
             return;
         }
@@ -140,13 +145,13 @@ public sealed class PdfImagePage : DockPanel, IPage, IDisposable, IContentZoom
     }
 
     /// <summary>Fitted, the wheel turns pages; zoomed, the view has scrolled with it already.</summary>
-    protected override void OnMouseWheel(MouseWheelEventArgs e)
+    protected override void OnPointerWheelChanged(PointerWheelEventArgs e)
     {
-        base.OnMouseWheel(e);
-        if (!e.Handled && Keyboard.Modifiers == ModifierKeys.None)
+        base.OnPointerWheelChanged(e);
+        if (!e.Handled && Keyboard.Modifiers == KeyModifiers.None)
         {
             e.Handled = true;
-            GoTo(_index + (e.Delta < 0 ? 1 : -1));
+            GoTo(_index + (e.Delta.Y < 0 ? 1 : -1));
         }
     }
 
@@ -196,9 +201,9 @@ public sealed class PdfImagePage : DockPanel, IPage, IDisposable, IContentZoom
         var index = _index;
         try
         {
-            var dpi = VisualTreeHelper.GetDpi(this);
+            var dpi = TopLevel.GetTopLevel(this)?.RenderScaling ?? 1;
             var size = pdf.PageSize(index);
-            var pixels = new Size(size.Width * dpi.DpiScaleX, size.Height * dpi.DpiScaleY);
+            var pixels = new Size(size.Width * dpi, size.Height * dpi);
             var fitted = _view.FittedPixels(pixels);
             var bitmap = await pdf.RenderAsync(index, fitted.Width, fitted.Height).ConfigureAwait(true);
             if (request == _request)

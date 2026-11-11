@@ -18,7 +18,7 @@ public sealed class QuickPickItem : INotifyPropertyChanged
     public string Icon { get; init; } = string.Empty;
 
     /// <summary>The icon as geometry for the template.</summary>
-    public System.Windows.Media.Geometry? IconGeometry => Theming.Codicon.GeometryOf(Icon);
+    public Avalonia.Media.Geometry? IconGeometry => Theming.Codicon.GeometryOf(Icon);
 
     /// <summary>A key that accepts this item at once while the filter is empty (drive letters).</summary>
     public char? Hotkey { get; init; }

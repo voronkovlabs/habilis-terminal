@@ -1,29 +1,43 @@
-using Microsoft.Terminal.Wpf;
 using HabilisTerminal.Shell.Integration;
+using HabilisTerminal.Terminal;
 
 namespace HabilisTerminal.App.Hosting;
 
-/// <summary>Bridges the Windows Terminal WPF control to a <see cref="ShellHost"/>.</summary>
-public sealed class ShellConnection : ITerminalConnection, IDisposable
+/// <summary>
+/// Joins a <see cref="ShellHost"/> to the console view (issue #253): the shell's output goes into the emulator, keys
+/// and the emulator's replies go back to the shell, and the view's grid size becomes the pseudo console's.
+/// </summary>
+public sealed class ShellConnection : IDisposable
 {
-    private int _columns = 120;
-    private int _rows = 30;
     private bool _started;
 
-    public ShellConnection(ShellHost host)
+    public ShellConnection(ShellHost host, TerminalView view)
     {
         Host = host;
+        View = view;
         Host.Output += text =>
         {
             using var measure = Core.Diagnostics.Perf.Measure("console.output");
-            TerminalOutput?.Invoke(this, new TerminalOutputEventArgs(text));
+            view.Emulator.Feed(text);
+        };
+        view.Emulator.Reply += Host.Write;
+        view.Input += Host.Write;
+        view.GridResized += (columns, rows) =>
+        {
+            if (_started)
+            {
+                Host.Resize(columns, rows);
+            }
         };
     }
 
-    public event EventHandler<TerminalOutputEventArgs>? TerminalOutput;
-
     public ShellHost Host { get; }
 
+    public TerminalView View { get; }
+
+    public TerminalEmulator Emulator => View.Emulator;
+
+    /// <summary>Starts the shell at the view's current grid.</summary>
     public void Start()
     {
         if (_started)
@@ -32,20 +46,11 @@ public sealed class ShellConnection : ITerminalConnection, IDisposable
         }
 
         _started = true;
-        Host.Start(_columns, _rows);
+        Host.Start(View.Columns, View.Rows);
     }
 
-    /// <summary>Input from the terminal control: keys (win32-input-mode sequences) and replies.</summary>
+    /// <summary>Input for the console: keys (win32-input-mode sequences), text and replies.</summary>
     public void WriteInput(string data) => Host.Write(data);
-
-    public void Resize(uint rows, uint columns)
-    {
-        _rows = (int)rows;
-        _columns = (int)columns;
-        Host.Resize(_columns, _rows);
-    }
-
-    public void Close() => Dispose();
 
     public void Dispose() => Host.Dispose();
 }

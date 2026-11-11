@@ -1,5 +1,9 @@
-using System.Windows;
-using System.Windows.Controls;
+using Avalonia;
+using Avalonia.Controls;
+using Avalonia.Media;
+using Avalonia.Controls.Primitives;
+using Avalonia.Layout;
+using Avalonia.Interactivity;
 using HabilisTerminal.App.Widgets;
 using HabilisTerminal.Plugins;
 
@@ -9,7 +13,7 @@ namespace HabilisTerminal.App.Plugins;
 /// Plugin dialogs drawn with the host's themed dialog and quick pick (docs/plugins.md §4). Callable from any thread:
 /// everything runs on the UI thread.
 /// </summary>
-internal sealed class PluginDialogs(Window owner, Func<FrameworkElement> pickTarget) : IPluginDialogs
+internal sealed class PluginDialogs(Window owner, Func<Control> pickTarget) : IPluginDialogs
 {
     public Task ShowMessageAsync(string title, string message, MessageKind kind = MessageKind.Information) =>
         OnUi(() =>
@@ -57,24 +61,23 @@ internal sealed class PluginDialogs(Window owner, Func<FrameworkElement> pickTar
     public Task<string?> InputSecretAsync(string title, string prompt) =>
         OnUi(() =>
         {
-            var box = new PasswordBox { MinWidth = 280 };
+            var box = new TextBox { MinWidth = 280, PasswordChar = '•' };
             var body = new StackPanel();
             body.Children.Add(Label(prompt, bottom: 6));
             body.Children.Add(box);
             var accepted = ThemedDialog.Show(owner, title, body,
                 [new DialogButton<bool>("OK", true, IsDefault: true), new DialogButton<bool>("Cancel", false, IsCancel: true)], false, box);
-            return accepted ? box.Password : null;
+            return accepted ? box.Text : null;
         });
 
     public async Task<string?> ChooseAsync(string title, IReadOnlyList<string> choices, string? current = null)
     {
-        var dispatcher = owner.Dispatcher;
-        var task = await dispatcher.InvokeAsync(() =>
+        var dispatcher = Avalonia.Threading.Dispatcher.UIThread;
+        var result = await dispatcher.InvokeAsync(() =>
         {
             var items = choices.Select(c => new QuickPickItem { Label = c, Tag = c, IsCurrent = c == current }).ToList();
             return QuickPick.ShowAsync(pickTarget(), items, new QuickPickOptions { Title = title });
         });
-        var result = await task;
         return result?.Item?.Tag as string;
     }
 
@@ -84,7 +87,7 @@ internal sealed class PluginDialogs(Window owner, Func<FrameworkElement> pickTar
             while (true)
             {
                 var (body, apply, first) = BuildForm(form);
-                var error = new TextBlock { Visibility = Visibility.Collapsed, Margin = new Thickness(0, 8, 0, 0), TextWrapping = TextWrapping.Wrap };
+                var error = new TextBlock { IsVisible = false, Margin = new Thickness(0, 8, 0, 0), TextWrapping = TextWrapping.Wrap };
                 error.SetResourceReference(TextBlock.ForegroundProperty, "Habi.Error");
                 body.Children.Add(error);
                 var scroll = new ScrollViewer { Content = body, MaxHeight = 520, VerticalScrollBarVisibility = ScrollBarVisibility.Auto };
@@ -107,15 +110,15 @@ internal sealed class PluginDialogs(Window owner, Func<FrameworkElement> pickTar
             }
         });
 
-    private static (StackPanel Body, Action Apply, UIElement? First) BuildForm(PluginForm form)
+    private static (StackPanel Body, Action Apply, Control? First) BuildForm(PluginForm form)
     {
         var body = new StackPanel { MinWidth = 460 };
         var appliers = new List<Action>();
-        UIElement? first = null;
+        Control? first = null;
         foreach (var field in form.Fields)
         {
             var row = new StackPanel { Margin = new Thickness(0, 0, 0, 10) };
-            FrameworkElement editor;
+            Control editor;
             switch (field)
             {
                 case TextField text:
@@ -145,7 +148,7 @@ internal sealed class PluginDialogs(Window owner, Func<FrameworkElement> pickTar
                     editor = combo;
                     break;
                 case ListField list:
-                    var lines = new TextBox { Text = string.Join(Environment.NewLine, list.Values), AcceptsReturn = true, MinHeight = 60, MaxHeight = 140, VerticalScrollBarVisibility = ScrollBarVisibility.Auto };
+                    var lines = new TextBox { Text = string.Join(Environment.NewLine, list.Values), AcceptsReturn = true, MinHeight = 60, MaxHeight = 140 };
                     appliers.Add(() => list.Values = lines.Text.Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries));
                     editor = lines;
                     break;
@@ -209,7 +212,7 @@ internal sealed class PluginDialogs(Window owner, Func<FrameworkElement> pickTar
     private static TextBlock Label(string text, string? brushKey = null, bool bold = false, double top = 0, double bottom = 0)
     {
         var block = new TextBlock { Text = text, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, top, 0, bottom) };
-        block.SetResourceReference(FrameworkElement.StyleProperty, "Habi.LabelStyle");
+        block.Classes.Add("label");
         if (brushKey is not null)
         {
             block.SetResourceReference(TextBlock.ForegroundProperty, brushKey);
@@ -217,11 +220,11 @@ internal sealed class PluginDialogs(Window owner, Func<FrameworkElement> pickTar
 
         if (bold)
         {
-            block.FontWeight = FontWeights.SemiBold;
+            block.FontWeight = FontWeight.SemiBold;
         }
 
         return block;
     }
 
-    private Task<T> OnUi<T>(Func<T> work) => owner.Dispatcher.InvokeAsync(work).Task;
+    private static Task<T> OnUi<T>(Func<T> work) => Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(work).GetTask();
 }

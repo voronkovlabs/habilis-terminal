@@ -1,4 +1,9 @@
-using System.Windows;
+using Avalonia;
+using Avalonia.Controls;
+using Avalonia.Media;
+using Avalonia.Controls.Primitives;
+using Avalonia.Layout;
+using Avalonia.Interactivity;
 using HabilisTerminal.App.Hosting;
 using HabilisTerminal.Shell.Integration;
 
@@ -25,7 +30,7 @@ public partial class MainWindow
                 tab.OverflowPosted = (0, false);
             }
 
-            Dispatcher.BeginInvoke(() =>
+            Avalonia.Threading.Dispatcher.UIThread.Post(() =>
             {
                 // A new command grows from where the console is now; focus moving away stops it only for one command.
                 tab.OverflowBase = tab == _tab ? Workspace.OverlayRows : tab.OverlayRows;
@@ -48,7 +53,7 @@ public partial class MainWindow
             }
 
             // A console not in front never grows over the panels; ShowTab catches up.
-            Dispatcher.BeginInvoke(() =>
+            Avalonia.Threading.Dispatcher.UIThread.Post(() =>
             {
                 if (tab == _tab)
                 {

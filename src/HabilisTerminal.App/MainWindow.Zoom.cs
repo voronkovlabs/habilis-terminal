@@ -1,6 +1,10 @@
-using System.Windows;
-using System.Windows.Input;
-using System.Windows.Shell;
+using Avalonia;
+using Avalonia.Controls;
+using Avalonia.Media;
+using Avalonia.Controls.Primitives;
+using Avalonia.Layout;
+using Avalonia.Interactivity;
+using Avalonia.Input;
 using HabilisTerminal.App.Input;
 using HabilisTerminal.App.Widgets;
 using HabilisTerminal.Core.Settings;
@@ -16,39 +20,27 @@ public partial class MainWindow
     private void InstallZoom(AppState state)
     {
         UiZoom.Set(state.Zoom ?? 1.0);
-        UiZoom.Apply(Root);
+        Content = null;
+        Content = UiZoom.Wrap(Root);
         ApplyCaptionHeight();
         UiZoom.Changed += OnZoomChanged;
-        PreviewMouseWheel += (_, e) =>
+        AddHandler(PointerWheelChangedEvent, (_, e) =>
         {
-            if (Keyboard.Modifiers == ModifierKeys.Control && e.Delta != 0)
+            if (Keyboard.Modifiers == KeyModifiers.Control && e.Delta.Y != 0)
             {
                 e.Handled = true;
 
                 // A picture or a PDF page zooms itself (issue #241).
                 if (ContentZoom is { } view)
                 {
-                    view.ZoomAt(e.GetPosition(view), Math.Sign(e.Delta));
+                    view.ZoomAt(e.GetPosition(view), Math.Sign(e.Delta.Y));
                 }
                 else
                 {
-                    UiZoom.Step(Math.Sign(e.Delta));
+                    UiZoom.Step(Math.Sign(e.Delta.Y));
                 }
             }
-        };
-
-        // A WebView2 page holds the keyboard in its own process: its Ctrl+Alt keys come back only as routed events.
-        PreviewKeyDown += (_, e) =>
-        {
-            var key = e.Key == Key.System ? e.SystemKey : e.Key;
-            var modifiers = (Keyboard.Modifiers.HasFlag(ModifierKeys.Control) ? KeyModifiers.Control : KeyModifiers.None)
-                | (Keyboard.Modifiers.HasFlag(ModifierKeys.Alt) ? KeyModifiers.Alt : KeyModifiers.None)
-                | (Keyboard.Modifiers.HasFlag(ModifierKeys.Shift) ? KeyModifiers.Shift : KeyModifiers.None);
-            if (HandleZoomKey(key, modifiers))
-            {
-                e.Handled = true;
-            }
-        };
+        }, Avalonia.Interactivity.RoutingStrategies.Tunnel);
     }
 
     /// <summary>The open page's own zoom (a picture, a PDF page), if it has one.</summary>
@@ -94,24 +86,9 @@ public partial class MainWindow
         }
     }
 
-    private void OnZoomChanged()
-    {
-        ApplyCaptionHeight();
-        foreach (var tab in _tabs)
-        {
-            UiZoom.Unscale(tab.Terminal);
-        }
-
-        ApplyTerminalTheme(_themes.Current);
-        UpdateCellSize();
-    }
+    /// <summary>The console is scaled with the rest (issue #253): its grid stays, only the title bar's height follows.</summary>
+    private void OnZoomChanged() => ApplyCaptionHeight();
 
     /// <summary>The title bar grows with the zoom, so its drag area must too.</summary>
-    private void ApplyCaptionHeight()
-    {
-        if (WindowChrome.GetWindowChrome(this) is { IsFrozen: false } chrome)
-        {
-            chrome.CaptionHeight = TitleBar.BarHeight * UiZoom.Factor;
-        }
-    }
+    private void ApplyCaptionHeight() => ExtendClientAreaTitleBarHeightHint = TitleBar.BarHeight * UiZoom.Factor;
 }

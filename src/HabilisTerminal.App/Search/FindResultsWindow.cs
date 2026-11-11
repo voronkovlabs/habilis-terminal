@@ -1,11 +1,12 @@
 using System.Collections.ObjectModel;
-using System.Windows;
-using System.Windows.Controls;
-using System.Windows.Input;
-using System.Windows.Markup;
-using System.Windows.Media;
-using System.Windows.Media.Effects;
-using System.Windows.Threading;
+using Avalonia;
+using Avalonia.Controls;
+using Avalonia.Controls.Primitives;
+using Avalonia.Layout;
+using Avalonia.Interactivity;
+using Avalonia.Input;
+using Avalonia.Media;
+using Avalonia.Threading;
 using HabilisTerminal.Core.Search;
 
 namespace HabilisTerminal.App.Search;
@@ -24,29 +25,16 @@ internal enum FindAction
 /// Results of Alt+F7 as they come (issue #198), in the style of the app's dialogs: Enter goes to the file, F3 views it,
 /// F4 edits it, Panel puts the list in the panel, Stop ends the search and Esc closes it.
 /// </summary>
-internal sealed class FindResultsWindow : Window
+internal sealed class FindResultsWindow : Widgets.ModalWindow
 {
-    private const string ItemStyle = """
-        <Style xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" TargetType="ListBoxItem">
-          <Setter Property="Foreground" Value="{DynamicResource Habi.Foreground}" />
-          <Setter Property="FocusVisualStyle" Value="{x:Null}" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" />
-          <Setter Property="Template">
-            <Setter.Value>
-              <ControlTemplate TargetType="ListBoxItem">
-                <Border x:Name="Row" Background="Transparent" Padding="6,1,6,1" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
-                  <ContentPresenter />
-                </Border>
-                <ControlTemplate.Triggers>
-                  <Trigger Property="IsSelected" Value="True">
-                    <Setter TargetName="Row" Property="Background" Value="{DynamicResource Habi.Selection}" />
-                    <Setter Property="Foreground" Value="{DynamicResource Habi.SelectionForeground}" />
-                  </Trigger>
-                </ControlTemplate.Triggers>
-              </ControlTemplate>
-            </Setter.Value>
-          </Setter>
-        </Style>
-        """;
+    /// <summary>Rows without the Fluent padding, the selection in the theme's colours.</summary>
+    private static Avalonia.Styling.Style ItemStyle()
+    {
+        var style = new Avalonia.Styling.Style(x => Avalonia.Styling.Selectors.OfType<ListBoxItem>(x));
+        style.Setters.Add(new Avalonia.Styling.Setter(ListBoxItem.PaddingProperty, new Thickness(6, 1, 6, 1)));
+        style.Setters.Add(new Avalonia.Styling.Setter(ListBoxItem.MinHeightProperty, 0d));
+        return style;
+    }
 
     private readonly FindSession _session;
     private readonly ObservableCollection<string> _rows = [];
@@ -60,10 +48,10 @@ internal sealed class FindResultsWindow : Window
     private FindResultsWindow(FindSession session)
     {
         _session = session;
-        WindowStyle = WindowStyle.None;
-        AllowsTransparency = true;
+        WindowDecorations = WindowDecorations.None;
+        TransparencyLevelHint = [WindowTransparencyLevel.Transparent];
         Background = Brushes.Transparent;
-        ResizeMode = ResizeMode.NoResize;
+        CanResize = false;
         ShowInTaskbar = false;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         FontFamily = new FontFamily("Segoe UI");
@@ -71,9 +59,9 @@ internal sealed class FindResultsWindow : Window
         Width = 820 * Widgets.UiZoom.Factor;
         Height = 560 * Widgets.UiZoom.Factor;
 
-        var title = new TextBlock { Text = TitleOf(session.Options), FontWeight = FontWeights.SemiBold, Margin = new Thickness(0, 0, 0, 10), TextTrimming = TextTrimming.CharacterEllipsis };
-        title.SetResourceReference(StyleProperty, "Habi.LabelStyle");
-        _status.SetResourceReference(StyleProperty, "Habi.DescriptionStyle");
+        var title = new TextBlock { Text = TitleOf(session.Options), FontWeight = FontWeight.SemiBold, Margin = new Thickness(0, 0, 0, 10), TextTrimming = TextTrimming.CharacterEllipsis };
+        title.Classes.Add("label");
+        _status.Classes.Add("description");
 
         _list = new ListBox
         {
@@ -81,12 +69,11 @@ internal sealed class FindResultsWindow : Window
             BorderThickness = new Thickness(1),
             FontFamily = new FontFamily("Cascadia Mono, Consolas"),
             FontSize = 13,
-            ItemContainerStyle = (Style)XamlReader.Parse(ItemStyle),
         };
+        _list.Styles.Add(ItemStyle());
         _list.SetResourceReference(BackgroundProperty, "Habi.InputBackground");
         _list.SetResourceReference(BorderBrushProperty, "Habi.WidgetBorder");
-        VirtualizingPanel.SetIsVirtualizing(_list, true);
-        _list.MouseDoubleClick += (_, _) => Finish(FindAction.GoTo);
+        _list.DoubleTapped += (_, _) => Finish(FindAction.GoTo);
 
         var buttons = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right, Margin = new Thickness(0, 12, 0, 0) };
         foreach (var (label, action) in new[] { ("_Go to", FindAction.GoTo), ("_View", FindAction.View), ("_Edit", FindAction.Edit), ("_Panel", FindAction.Panel), ("_New search", FindAction.NewSearch) })
@@ -119,21 +106,21 @@ internal sealed class FindResultsWindow : Window
             Padding = new Thickness(20, 16, 20, 16),
             Margin = new Thickness(16),
             Child = layout,
-            Effect = new DropShadowEffect { BlurRadius = 18, ShadowDepth = 4, Opacity = 0.45, Color = Colors.Black },
+            BoxShadow = BoxShadows.Parse("0 4 16 0 #73000000"),
         };
         frame.SetResourceReference(Border.BackgroundProperty, "Habi.WidgetBackground");
         frame.SetResourceReference(Border.BorderBrushProperty, "Habi.WidgetBorder");
-        frame.MouseLeftButtonDown += (_, e) =>
+        frame.PointerPressed += (_, e) =>
         {
-            if (e.OriginalSource is Border or TextBlock && e.OriginalSource is not ListBoxItem)
+            if (e.Source is Border or TextBlock && e.Source is not ListBoxItem)
             {
-                DragMove();
+                BeginMoveDrag(e);
             }
         };
         Content = frame;
         Widgets.UiZoom.Attach(this);
 
-        PreviewKeyDown += OnKey;
+        AddHandler(Avalonia.Input.InputElement.KeyDownEvent, OnKey, Avalonia.Interactivity.RoutingStrategies.Tunnel);
         _timer = new DispatcherTimer(DispatcherPriority.Background) { Interval = TimeSpan.FromMilliseconds(200) };
         _timer.Tick += (_, _) => Pull();
         Loaded += (_, _) =>
@@ -149,8 +136,8 @@ internal sealed class FindResultsWindow : Window
     /// <summary>What the user chose, with the item when the action needs one.</summary>
     public static (FindAction Action, FoundItem? Item) Show(Window owner, FindSession session)
     {
-        var window = new FindResultsWindow(session) { Owner = owner };
-        window.ShowDialog();
+        var window = new FindResultsWindow(session) { ModalOwner = owner };
+        window.ShowModal();
         var item = window._list.SelectedIndex is >= 0 and var index && index < window._items.Count ? window._items[index] : null;
         session.Selected = Math.Max(0, window._list.SelectedIndex);
         return (window._action, item);
@@ -197,9 +184,9 @@ internal sealed class FindResultsWindow : Window
             return;
         }
 
-        _list.ScrollIntoView(_list.SelectedItem);
+        _list.ScrollIntoView(_list.SelectedIndex);
         _list.UpdateLayout();
-        if (_list.ItemContainerGenerator.ContainerFromIndex(_list.SelectedIndex) is ListBoxItem row)
+        if (_list.ContainerFromIndex(_list.SelectedIndex) is ListBoxItem row)
         {
             row.Focus();
         }
@@ -209,9 +196,9 @@ internal sealed class FindResultsWindow : Window
         }
     }
 
-    private void OnKey(object sender, KeyEventArgs e)
+    private void OnKey(object? sender, KeyEventArgs e)
     {
-        if (Keyboard.Modifiers != ModifierKeys.None)
+        if (Keyboard.Modifiers != KeyModifiers.None)
         {
             return;
         }
@@ -239,7 +226,7 @@ internal sealed class FindResultsWindow : Window
                     var marker = label.IndexOf('_', StringComparison.Ordinal);
                     if (marker >= 0 && marker + 1 < label.Length && letter.Length == 1 && char.ToUpperInvariant(label[marker + 1]) == letter[0] && button.IsEnabled)
                     {
-                        button.RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Primitives.ButtonBase.ClickEvent));
+                        button.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
                         e.Handled = true;
                     }
                 }
@@ -261,11 +248,10 @@ internal sealed class FindResultsWindow : Window
         Close();
     }
 
-    private static IEnumerable<Button> FindButtons(DependencyObject root)
+    private static IEnumerable<Button> FindButtons(Avalonia.Visual root)
     {
-        for (var i = 0; i < VisualTreeHelper.GetChildrenCount(root); i++)
+        foreach (var child in Avalonia.VisualTree.VisualExtensions.GetVisualChildren(root))
         {
-            var child = VisualTreeHelper.GetChild(root, i);
             if (child is Button button)
             {
                 yield return button;

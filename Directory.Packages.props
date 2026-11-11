@@ -8,8 +8,13 @@
     <PackageVersion Include="Microsoft.Windows.Console.ConPTY" Version="1.25.260930003" />
     <!-- Installer and updates -->
     <PackageVersion Include="Velopack" Version="1.2.161" />
+    <!-- UI on Avalonia (issue #253): the newest versions at least two weeks old on 2026-11-11 -->
+    <PackageVersion Include="Avalonia" Version="12.1.4" />
+    <PackageVersion Include="Avalonia.Desktop" Version="12.1.4" />
+    <PackageVersion Include="Avalonia.Themes.Fluent" Version="12.1.4" />
     <!-- Editor -->
     <PackageVersion Include="AvalonEdit" Version="6.3.1.120" />
+    <PackageVersion Include="Avalonia.AvaloniaEdit" Version="12.0.0" />
     <!-- Syntax colours as in VS Code (issue #207) -->
     <PackageVersion Include="TextMateSharp" Version="2.0.4" />
     <PackageVersion Include="TextMateSharp.Grammars" Version="2.0.4" />

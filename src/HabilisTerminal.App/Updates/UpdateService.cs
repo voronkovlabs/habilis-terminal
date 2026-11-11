@@ -1,5 +1,5 @@
 using System.Net.Http;
-using System.Windows.Threading;
+using Avalonia.Threading;
 using HabilisTerminal.Core.Settings;
 using Velopack;
 using Velopack.Sources;
@@ -121,7 +121,7 @@ public sealed class UpdateService
             var version = update.TargetFullRelease.Version.ToString();
             if (_dispatcher is { } dispatcher)
             {
-                await dispatcher.BeginInvoke(() => UpdateReady?.Invoke(version));
+                await dispatcher.InvokeAsync(() => UpdateReady?.Invoke(version));
             }
 
             return new UpdateCheck(UpdateCheckKind.Ready, version);
