@@ -303,6 +303,7 @@ public sealed record InfoLine(string Label, string Value);
 | `PanelEntry.Modified` | Local time is converted; UTC and unspecified are taken as UTC |
 | `EnterAsync` returns false for a file | The host views it, as F3 does |
 | F3 | `IViewEntry` first. If absent, or it returns null: `GetFilesAsync` into a temporary folder, then the viewer. Neither: "Not supported" |
+| Alt+F3 | On a file, with `IGetFiles`: a temporary copy shown as Alt+F3 shows a local file (pictures, PDF, Markdown in the program; others in their associated program). Without it, as F3 |
 | Ctrl+R | Calls `ListAsync` again on the same provider. Re-read your source there, if it can change |
 | A slow `OpenFileAsync` or `OpenAddressAsync` | After 0.4 s the host shows a card with Cancel, which cancels the token |
 

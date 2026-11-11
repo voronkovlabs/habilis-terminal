@@ -20,17 +20,12 @@ namespace HabilisTerminal.App.Viewing;
 
 /// <summary>
 /// F3 (SPEC §9): full-window viewer with Far keys — F2 wrap, F4 hex, F7 / Shift+F7 / Alt+F7 search, F8 ANSI ↔ OEM,
-/// Shift+F8 encoding, Alt+F8 go to line / offset / percent, F6 editor, Esc / F3 / F10 close. Images are shown
-/// with the WPF decoders. Text files up to <c>viewer.textModeMaxMB</c> show in a read-only editor (issue #56): syntax
+/// Shift+F8 encoding, Alt+F8 go to line / offset / percent, F6 editor, Esc / F3 / F10 close. Every file shows as
+/// its content, whatever its format (issue #231); pictures, PDF and Markdown have Alt+F3. Text files up to <c>viewer.textModeMaxMB</c> show in a read-only editor (issue #56): syntax
 /// colours, mouse selection, Ctrl+C; F4 still switches to hex, and larger files use the paged <see cref="ViewerView"/>.
 /// </summary>
 public sealed class ViewerPage : DockPanel, IDisposable, IPage
 {
-    public static readonly HashSet<string> ImageExtensions = new(StringComparer.OrdinalIgnoreCase)
-    {
-        ".png", ".jpg", ".jpeg", ".gif", ".bmp", ".ico", ".webp", ".tif", ".tiff",
-    };
-
     private readonly ViewerView _view = new();
     private readonly TextBlock _title = new();
     private readonly TextBlock _info = new();
@@ -71,12 +66,6 @@ public sealed class ViewerPage : DockPanel, IDisposable, IPage
         Children.Add(headerBorder);
 
         _title.Text = path;
-        if (ImageExtensions.Contains(Path.GetExtension(path)))
-        {
-            Children.Add(CreateImage(path));
-            return;
-        }
-
         try
         {
             _document = ViewerDocument.Open(path);
@@ -581,24 +570,4 @@ public sealed class ViewerPage : DockPanel, IDisposable, IPage
         }
     }
 
-    private UIElement CreateImage(string path)
-    {
-        try
-        {
-            var image = new BitmapImage();
-            image.BeginInit();
-            image.CacheOption = BitmapCacheOption.OnLoad;
-            image.CreateOptions = BitmapCreateOptions.IgnoreColorProfile;
-            image.UriSource = new Uri(path);
-            image.EndInit();
-            image.Freeze();
-            _info.Text = $"{image.PixelWidth} × {image.PixelHeight}  ·  {PanelColumns.FormatCompactSize(new FileInfo(path).Length, CultureInfo.CurrentCulture)}";
-            return new Image { Source = image, Stretch = Stretch.Uniform, StretchDirection = StretchDirection.DownOnly, Margin = new Thickness(12) };
-        }
-        catch (Exception ex) when (ex is IOException or NotSupportedException or UnauthorizedAccessException or ArgumentException)
-        {
-            _info.Text = $"Cannot show the image: {ex.Message}";
-            return new Grid();
-        }
-    }
 }

@@ -9,9 +9,9 @@ using HabilisTerminal.App.Theming;
 namespace HabilisTerminal.App.Viewing;
 
 /// <summary>
-/// F3 on a PDF (issue #114): one page at a time through <see cref="PdfPreview"/>. The Edge viewer starts a browser process
+/// Alt+F3 on a PDF (issues #114, #231): one page at a time through <see cref="PdfPreview"/>. The Edge viewer starts a browser process
 /// and reads the whole file, about 60 ms per MB, so it comes only on Ctrl+F, for search and text selection.
-/// PgUp / PgDn, arrows and the wheel turn pages, Home / End go to the ends, Esc / F10 / F3 close.
+/// PgUp / PgDn, arrows and the wheel turn pages, Home / End go to the ends, F3 the text viewer, Esc / F10 / Alt+F3 close.
 /// </summary>
 public sealed class PdfImagePage : DockPanel, IPage, IDisposable
 {
@@ -31,7 +31,7 @@ public sealed class PdfImagePage : DockPanel, IPage, IDisposable
         LastChildFill = true;
 
         var title = new TextBlock { Text = path, FontWeight = FontWeights.SemiBold };
-        var hint = new TextBlock { Text = "PgUp PgDn page · Home End · Ctrl+F find, select text · Esc close" };
+        var hint = new TextBlock { Text = "PgUp PgDn page · Home End · Ctrl+F find, select text · F3 as text · Esc close" };
         foreach (var text in new[] { title, _info, hint })
         {
             text.FontFamily = new FontFamily("Segoe UI");
@@ -56,8 +56,11 @@ public sealed class PdfImagePage : DockPanel, IPage, IDisposable
         _ = OpenAsync(path);
     }
 
-    /// <summary>Esc / F10 / F3.</summary>
+    /// <summary>Esc / F10 / Alt+F3.</summary>
     public event Action? CloseRequested;
+
+    /// <summary>F3: the same file in the text viewer.</summary>
+    public event Action? ViewRequested;
 
     /// <summary>Ctrl+F: the same file in the Edge viewer, at this zero-based page.</summary>
     public event Action<int>? SearchRequested;
@@ -83,6 +86,13 @@ public sealed class PdfImagePage : DockPanel, IPage, IDisposable
             return;
         }
 
+        if (key == Key.F3 && Keyboard.Modifiers == ModifierKeys.Alt)
+        {
+            e.Handled = true;
+            CloseRequested?.Invoke();
+            return;
+        }
+
         if (Keyboard.Modifiers != ModifierKeys.None)
         {
             return;
@@ -91,8 +101,11 @@ public sealed class PdfImagePage : DockPanel, IPage, IDisposable
         e.Handled = true;
         switch (key)
         {
-            case Key.Escape or Key.F10 or Key.F3:
+            case Key.Escape or Key.F10:
                 CloseRequested?.Invoke();
+                break;
+            case Key.F3:
+                ViewRequested?.Invoke();
                 break;
             case Key.PageDown or Key.Down or Key.Right or Key.Space:
                 GoTo(_index + 1);

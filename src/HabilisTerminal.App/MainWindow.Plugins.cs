@@ -215,10 +215,10 @@ public partial class MainWindow : IPluginWindow
 
             switch (key)
             {
-                case Key.F3 when modifiers == KeyModifiers.None:
+                case Key.F3 when modifiers is KeyModifiers.None or KeyModifiers.Alt:
                     if (panel.EntryOf(panel.State.Current) is { } entry)
                     {
-                        Fire(PluginViewAsync(panel, entry));
+                        Fire(PluginViewAsync(panel, entry, rich: modifiers == KeyModifiers.Alt));
                     }
 
                     return true;
@@ -315,15 +315,19 @@ public partial class MainWindow : IPluginWindow
         }
     }
 
-    /// <summary>F3 and Enter on a plugin entry: the plugin's own view, else a temporary copy in the viewer.</summary>
-    private async Task PluginViewAsync(FilePanel panel, PanelEntry entry)
+    /// <summary>
+    /// F3 and Enter on a plugin entry: the plugin's own view, else a temporary copy in the viewer. Alt+F3
+    /// (<paramref name="rich"/>, issue #231): a temporary copy shown as Alt+F3 shows a file on disk, when the plugin
+    /// can give one.
+    /// </summary>
+    private async Task PluginViewAsync(FilePanel panel, PanelEntry entry, bool rich = false)
     {
         var plugin = panel.Plugin!;
         using var busy = _plugins.BeginOperation(plugin);
         var provider = panel.Provider!;
         try
         {
-            if (provider is IViewEntry viewer)
+            if (provider is IViewEntry viewer && !(rich && provider is IGetFiles && !entry.IsFolder))
             {
                 // A view that takes longer than half a second gets a card with Cancel.
                 using var control = new OperationControl();
@@ -366,7 +370,14 @@ public partial class MainWindow : IPluginWindow
                 var file = Directory.EnumerateFiles(folder).FirstOrDefault();
                 if (outcome is { Failed: 0 } && file is not null)
                 {
-                    OpenViewer(file, panel);
+                    if (!rich)
+                    {
+                        OpenViewer(file, panel);
+                    }
+                    else if (!OpenRich(file, panel))
+                    {
+                        OpenWithAssociation(panel, file, folder);
+                    }
                 }
                 else
                 {

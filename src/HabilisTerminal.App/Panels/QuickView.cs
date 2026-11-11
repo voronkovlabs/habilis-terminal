@@ -117,7 +117,7 @@ public sealed class QuickView : Grid, IDisposable
 
         try
         {
-            if (ViewerPage.ImageExtensions.Contains(Path.GetExtension(path)))
+            if (ImagePage.IsImage(path))
             {
                 var image = new BitmapImage();
                 image.BeginInit();

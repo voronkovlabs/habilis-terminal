@@ -164,9 +164,12 @@ public static class CommandCatalog
         new("files.view", Files, "View", "F3", HasItems)
         {
             DynamicTitle = c => Items(c, "View"),
-            Help = "View (on a folder: compute its size; a PDF shows page by page; there Ctrl+F opens the Edge viewer, for finding text)",
+            Help = "View the content as text or hex, whatever the format (on a folder: compute its size)",
         },
-        new("files.open", Files, "Render or open in its program", "Alt+F3", c => Local(c) && c.Cursor == CursorKind.File) { Help = "Markdown rendered; other files in their associated program" },
+        new("files.open", Files, "Show or open in its program", "Alt+F3", c => HasPanel(c) && c.Cursor == CursorKind.File)
+        {
+            Help = "Pictures, PDF pages and Markdown shown in the program (in a PDF Ctrl+F opens the Edge viewer, for finding text); other files in their associated program",
+        },
         new("files.edit", Files, "Edit", "F4", c => Local(c) && c.Cursor == CursorKind.File) { DynamicTitle = c => Items(c with { Marked = 0 }, "Edit") },
         new("files.new", Files, "New file", "Shift+F4", Local) { Help = "New file: asks for a name, created when saved" },
         new("files.find", Files, "Find file", "Alt+F7", Local) { Help = "Find files by masks and text, as in Far; Panel puts the results in a temporary panel" },

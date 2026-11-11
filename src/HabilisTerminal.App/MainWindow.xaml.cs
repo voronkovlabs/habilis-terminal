@@ -601,9 +601,13 @@ public partial class MainWindow : Window
     }
 
     /// <summary>The file's default shell verb; with no associated program Windows asks which one to use.</summary>
-    private static void OpenWithAssociation(FilePanel panel, string name)
+    private static void OpenWithAssociation(FilePanel panel, string name) =>
+        OpenWithAssociation(panel, Path.Combine(panel.CurrentPath, name), panel.CurrentPath);
+
+    /// <summary>A file anywhere, a temporary copy from a plugin say; errors go to the panel's message line.</summary>
+    private static void OpenWithAssociation(FilePanel panel, string path, string folder)
     {
-        var path = Path.Combine(panel.CurrentPath, name);
+        var name = Path.GetFileName(path);
         foreach (var verb in new[] { string.Empty, "openas" })
         {
             try
@@ -612,7 +616,7 @@ public partial class MainWindow : Window
                 {
                     UseShellExecute = true,
                     Verb = verb,
-                    WorkingDirectory = panel.CurrentPath,
+                    WorkingDirectory = folder,
                 });
                 return;
             }

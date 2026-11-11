@@ -159,7 +159,7 @@ Far Manager defaults unless noted.
 | Ctrl+Up/Down, Ctrl+Left/Right | Resize terminal height / single-panel width |
 | F1 | Help (keyboard map) |
 | F3 / F4 | View / edit (§9) |
-| Alt+F3 | Markdown files rendered (§9); any other file in its associated program, as Far's external viewer (issue #57) |
+| Alt+F3 | Pictures, PDF pages and rendered Markdown in the program (§9); any other file in its associated program, as Far's external viewer (issues #57, #231) |
 | F5 / Shift+F5 | Copy / copy the item under the cursor |
 | F6 / Shift+F6 | Move-rename / rename the item under the cursor |
 | F7 | Make directory |
@@ -368,6 +368,8 @@ Both open as full-window pages over panels and terminal. Esc / F10 closes and re
 F6 switches between viewer and editor, as in Far. One page at a time (no F12 screens).
 
 ### Viewer (F3, Ctrl+Q)
+- F3 always shows a file's content, as text or hex, whatever its format (issue #231). Pictures, PDF and Markdown are
+  shown for reading by Alt+F3.
 - Own lightweight control: memory-mapped file, lazy line index — multi-GB files open instantly.
 - **Text mode for small files (issue #56):** text files up to `viewer.textModeMaxMB` (10 MB; 0 turns it off) show in a
   read-only AvalonEdit with the editor's syntax colours, line numbers, mouse selection and Ctrl+C. A line over 10 000
@@ -380,7 +382,6 @@ F6 switches between viewer and editor, as in Far. One page at a time (no F12 scr
 - Text / hex modes, word wrap on/off.
 - Encodings: auto-detection (BOM, UTF-8 heuristic), manual switch to UTF-8, UTF-16 LE/BE, ANSI (1251), OEM (866).
 - Search (F7, Shift+F7 next), go to line / offset.
-- Images (png, jpg, gif, bmp, ico, webp) via WPF decoders.
 - F3 on a directory computes its size in the background (cancellable, junctions not traversed) and stores it in the
   shared folder-size cache (§6);
   the cursor stays on it, the panel's status line shows the number of files and their size, and the size
@@ -388,11 +389,20 @@ F6 switches between viewer and editor, as in Far. One page at a time (no F12 scr
   selection's files and size, the contents of the counted folders included. While counting, the status line
   shows "Counting <folder>…" with the running totals; moving the cursor or leaving the directory stops it.
 - Ctrl+Q shows the same control as quick view in the opposite panel, by the same rule as F3 (issue #74): text files up
-  to `viewer.textModeMaxMB` in the read-only editor with syntax colours, larger ones in the paged control. Choosing a
+  to `viewer.textModeMaxMB` in the read-only editor with syntax colours, larger ones in the paged control; pictures and
+  PDF pages are shown as pictures. Choosing a
   drive or place in Alt+F1 / Alt+F2 for the panel showing the quick view (or info) turns it back into a file panel
   there, as in Far (issue #75).
 
-### Markdown view (Alt+F3, issue #57)
+### Alt+F3: pictures, PDF, Markdown (issues #57, #231)
+- Pictures (png, jpg, gif, bmp, ico, webp, tif) through the WPF decoders, fitted to the window and never enlarged.
+- PDF one page at a time (PgUp / PgDn, arrows, wheel, Home / End); Ctrl+F opens the Edge viewer for finding and
+  selecting text.
+- In all three, F3 shows the same file in the viewer, and Esc / F10 / Alt+F3 close. In a plugin panel Alt+F3 works on a
+  temporary copy, as F3 does.
+- Any other file opens in its associated program.
+
+#### Markdown
 - `.md`, `.markdown`, `.mdown`, `.mkd`: Markdig (advanced extensions: tables, task lists, footnotes, autolinks) renders
   the file to HTML, shown in WebView2 in a GitHub-like style with the colour theme's editor colours.
 - Raw HTML in the file is escaped and the page allows no scripts. The file's folder is served as

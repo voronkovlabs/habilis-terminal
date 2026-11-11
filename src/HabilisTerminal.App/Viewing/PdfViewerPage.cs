@@ -13,7 +13,7 @@ namespace HabilisTerminal.App.Viewing;
 
 /// <summary>
 /// Ctrl+F in the PDF page view (issues #110, #114): the Edge PDF viewer in WebView2, with its text selection and zoom.
-/// Read-only: the toolbar's save buttons are hidden. Web links open in the browser. Esc / F10 / F3 close. It opens with a
+/// Read-only: the toolbar's save buttons are hidden. Web links open in the browser. F3 the text viewer, Esc / F10 / Alt+F3 close. It opens with a
 /// search row of our own, Esc closes that first: the viewer's search bar takes no input when hosted in WebView2, while
 /// its find API works on the document.
 /// </summary>
@@ -85,8 +85,11 @@ public sealed class PdfViewerPage : DockPanel, IPage, IDisposable
         _ = InitializeAsync();
     }
 
-    /// <summary>Esc / F10 / F3.</summary>
+    /// <summary>Esc / F10 / Alt+F3.</summary>
     public event Action? CloseRequested;
+
+    /// <summary>F3: the same file in the text viewer.</summary>
+    public event Action? ViewRequested;
 
     public static bool IsPdf(string path) => string.Equals(Path.GetExtension(path), ".pdf", StringComparison.OrdinalIgnoreCase);
 
@@ -140,8 +143,12 @@ public sealed class PdfViewerPage : DockPanel, IPage, IDisposable
             case Key.Enter when searching && _search.IsKeyboardFocused && modifiers == ModifierKeys.Shift:
                 _web.CoreWebView2?.Find.FindPrevious();
                 break;
-            case Key.Escape or Key.F10 or Key.F3 when modifiers == ModifierKeys.None:
+            case Key.Escape or Key.F10 when modifiers == ModifierKeys.None:
+            case Key.F3 when modifiers == ModifierKeys.Alt:
                 CloseRequested?.Invoke();
+                break;
+            case Key.F3 when modifiers == ModifierKeys.None:
+                ViewRequested?.Invoke();
                 break;
             default:
                 e.Handled = false;

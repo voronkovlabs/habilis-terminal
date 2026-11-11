@@ -55,7 +55,7 @@ public partial class MainWindow
     }
 
     /// <summary>
-    /// F3: files open in the viewer. On a folder its files are counted and sized in the background; with folders
+    /// F3: files open in the viewer as their content, whatever the format (issue #231). On a folder its files are counted and sized in the background; with folders
     /// selected all of them are counted (Far).
     /// </summary>
     private void View(FilePanel panel)
@@ -89,15 +89,47 @@ public partial class MainWindow
         OpenViewer(path, returnTo: panel);
     }
 
-    private void OpenViewer(string path, FilePanel returnTo)
+    /// <summary>F3 and everything that views a file: the text viewer, with hex on F4.</summary>
+    private void OpenViewer(string path, FilePanel returnTo) => OpenPlainViewer(path, returnTo);
+
+    /// <summary>
+    /// Alt+F3 inside the program: Markdown rendered, PDF pages, pictures. False for any other file, which goes to its
+    /// associated program.
+    /// </summary>
+    private bool OpenRich(string path, FilePanel returnTo)
     {
-        if (PdfViewerPage.IsPdf(path))
+        if (MarkdownPage.IsMarkdown(path))
+        {
+            OpenMarkdown(path, returnTo);
+        }
+        else if (PdfViewerPage.IsPdf(path))
         {
             OpenPdf(path, returnTo);
-            return;
+        }
+        else if (ImagePage.IsImage(path))
+        {
+            OpenImage(path, returnTo);
+        }
+        else
+        {
+            return false;
         }
 
-        OpenPlainViewer(path, returnTo);
+        return true;
+    }
+
+    private void OpenImage(string path, FilePanel returnTo)
+    {
+        var page = new ImagePage(path);
+        RememberFile(path, edited: false);
+        page.CloseRequested += () =>
+        {
+            ClosePage();
+            returnTo.State.TrySetCursor(Path.GetFileName(path));
+            returnTo.Refresh();
+        };
+        page.ViewRequested += file => OpenViewer(file, returnTo);
+        ShowPage(page);
     }
 
     private void OpenPdf(string path, FilePanel returnTo)
@@ -112,11 +144,13 @@ public partial class MainWindow
         RememberFile(path, edited: false);
         var pages = new PdfImagePage(path);
         pages.CloseRequested += Close;
+        pages.ViewRequested += () => OpenViewer(path, returnTo);
         pages.SearchRequested += index =>
         {
             ClosePage(refocus: false);
             var viewer = new PdfViewerPage(path, _themes.Current, index);
             viewer.CloseRequested += Close;
+            viewer.ViewRequested += () => OpenViewer(path, returnTo);
             ShowPage(viewer);
         };
         ShowPage(pages);
@@ -137,8 +171,8 @@ public partial class MainWindow
     }
 
     /// <summary>
-    /// Alt+F3 (issue #57): Markdown renders in <see cref="MarkdownPage"/>; any other file opens in its associated
-    /// program, as Far's external viewer.
+    /// Alt+F3 (issues #57, #231): Markdown, PDF and pictures in the program (<see cref="OpenRich"/>); any other file in
+    /// its associated program, as Far's external viewer.
     /// </summary>
     private void ViewAlternative(FilePanel panel)
     {
@@ -148,12 +182,7 @@ public partial class MainWindow
             return;
         }
 
-        var path = Path.Combine(panel.CurrentPath, item.Name);
-        if (MarkdownPage.IsMarkdown(path))
-        {
-            OpenMarkdown(path, panel);
-        }
-        else
+        if (!OpenRich(Path.Combine(panel.CurrentPath, item.Name), panel))
         {
             OpenWithAssociation(panel, item.Name);
         }
