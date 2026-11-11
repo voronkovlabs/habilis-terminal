@@ -462,7 +462,8 @@ public partial class MainWindow
         }
     }
 
-    private static readonly string? TraceFile = Environment.GetEnvironmentVariable("HABI_TRACE");
+    private static readonly string? TraceFile = Environment.GetEnvironmentVariable("HABI_TRACE")
+        ?? (File.Exists(Path.Combine(AppContext.BaseDirectory, "trace-on")) ? Path.Combine(AppContext.BaseDirectory, "trace.log") : null);
 
     /// <summary>Development trace (HABI_TRACE=path) for focus and key routing problems.</summary>
     internal static void Trace(string message)

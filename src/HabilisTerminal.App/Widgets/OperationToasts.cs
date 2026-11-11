@@ -63,7 +63,9 @@ public sealed class OperationToasts
         };
         _stack.Children.Add(card.Root);
         _popup.IsOpen = _owner.IsActive;
-        Reposition();
+
+        // After the card's layout: a layout forced here broke Avalonia's own pass (issue #253).
+        Avalonia.Threading.Dispatcher.UIThread.Post(Reposition, Avalonia.Threading.DispatcherPriority.Loaded);
         return card;
     }
 
@@ -145,7 +147,6 @@ public sealed class OperationToasts
 
     private void Reposition()
     {
-        _stack.UpdateLayout();
         _popup.HorizontalOffset = Math.Max(0, _target.ActualWidth - CardWidth - 32);
         _popup.VerticalOffset = Math.Max(0, _target.ActualHeight - _stack.ActualHeight - 48); // above the console's button and tabs
 
