@@ -263,19 +263,34 @@ public class ShellHostTests
         Directory.CreateDirectory(folder);
         var file = Path.Combine(folder, "notes.txt");
         File.WriteAllText(file, "x");
-        var temp = Path.GetFullPath(Environment.GetEnvironmentVariable("TEMP")!).TrimEnd('\\');
-
-        foreach (var (line, expected) in new[]
+        // The shell may see %TEMP% in its short 8.3 form (the CI runner does): the folder is recognised by a file in it.
+        var marker = Path.Combine(Environment.GetEnvironmentVariable("TEMP")!, "habi-cd-" + Guid.NewGuid().ToString("N") + ".txt");
+        File.WriteAllText(marker, "x");
+        try
         {
-            (@"cd 'sub dir\notes.txt'", file),
-            ("cd %TEMP%", temp),
-            (@"Set-Location ""%TEMP%""", temp),
-        })
+            foreach (var (line, isTemp) in new[]
+            {
+                (@"cd 'sub dir\notes.txt'", false),
+                ("cd %TEMP%", true),
+                (@"Set-Location ""%TEMP%""", true),
+            })
+            {
+                shell.Host.Write(line + "\r");
+                await TestShell.WaitUntilAsync(() => !paths.IsEmpty, "cd message for: " + line);
+                Assert.True(paths.TryDequeue(out var path));
+                if (isTemp)
+                {
+                    Assert.True(File.Exists(Path.Combine(path, Path.GetFileName(marker))), path);
+                }
+                else
+                {
+                    Assert.Equal(file, path, ignoreCase: true);
+                }
+            }
+        }
+        finally
         {
-            shell.Host.Write(line + "\r");
-            await TestShell.WaitUntilAsync(() => !paths.IsEmpty, "cd message for: " + line);
-            Assert.True(paths.TryDequeue(out var path));
-            Assert.Equal(expected, path.TrimEnd('\\'), ignoreCase: true);
+            File.Delete(marker);
         }
 
         // A folder without variables, or a place that is not there, is cd as ever.
