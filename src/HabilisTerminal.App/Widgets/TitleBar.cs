@@ -77,10 +77,10 @@ public sealed class TitleBar : DockPanel
         SetDock(MenuStrip, Dock.Left);
         Children.Add(MenuStrip);
 
-        var close = CaptionButton(CloseGlyph, WindowDecorationsElementRole.CloseButton, isClose: true);
-        _maximize = CaptionButton(MaximizeGlyph, WindowDecorationsElementRole.MaximizeButton, isClose: false);
+        var close = CaptionButton(CloseGlyph, () => _window.Close(), isClose: true);
+        _maximize = CaptionButton(MaximizeGlyph, ToggleMaximize, isClose: false);
         _maximizeGlyph = (TextBlock)_maximize.Child!;
-        var minimize = CaptionButton(MinimizeGlyph, WindowDecorationsElementRole.MinimizeButton, isClose: false);
+        var minimize = CaptionButton(MinimizeGlyph, () => _window.WindowState = WindowState.Minimized, isClose: false);
         var feedback = FeedbackButton();
         foreach (var button in new[] { close, _maximize, minimize, feedback, ZoomButton() })
         {
@@ -202,7 +202,11 @@ public sealed class TitleBar : DockPanel
     private void UpdateMaximizeGlyph() =>
         _maximizeGlyph.Text = _window.WindowState == WindowState.Maximized ? RestoreGlyph : MaximizeGlyph;
 
-    private static Border CaptionButton(string glyph, WindowDecorationsElementRole role, bool isClose)
+    /// <summary>
+    /// A caption button that acts on its own click (issue #254): the decoration roles alone left the clicks to Windows,
+    /// which did nothing with them.
+    /// </summary>
+    private static Border CaptionButton(string glyph, Action click, bool isClose)
     {
         var text = new TextBlock
         {
@@ -214,9 +218,18 @@ public sealed class TitleBar : DockPanel
         };
         text.SetResourceReference(TextBlock.ForegroundProperty, "Habi.TitleBarForeground");
         var button = new Border { Width = ButtonWidth, Background = Brushes.Transparent, Child = text };
-        WindowDecorationProperties.SetElementRole(button, role);
+        WindowDecorationProperties.SetElementRole(button, WindowDecorationsElementRole.User);
         button.PointerEntered += (_, _) => SetHover(button, true, isClose);
         button.PointerExited += (_, _) => SetHover(button, false, isClose);
+        button.PointerPressed += (_, e) => e.Handled = true;
+        button.PointerReleased += (_, e) =>
+        {
+            e.Handled = true;
+            if (e.InitialPressMouseButton == MouseButton.Left && new Rect(button.Bounds.Size).Contains(e.GetPosition(button)))
+            {
+                click();
+            }
+        };
         return button;
     }
 
