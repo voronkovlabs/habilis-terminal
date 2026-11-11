@@ -1,6 +1,8 @@
 <Project>
   <PropertyGroup>
     <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
+    <!-- Lets a PackageVersion below raise a package the AWS SDK brings in. -->
+    <CentralPackageTransitivePinningEnabled>true</CentralPackageTransitivePinningEnabled>
   </PropertyGroup>
   <ItemGroup>
     <!-- The host's SDK, from the local feed (tools/plugins/Build-Plugins.ps1 packs it). Never copied with a plugin. -->
@@ -16,6 +18,8 @@
     <PackageVersion Include="AWSSDK.SecurityToken" Version="4.0.101.7" />
     <PackageVersion Include="AWSSDK.SSO" Version="4.0.100.23" />
     <PackageVersion Include="AWSSDK.SSOOIDC" Version="4.0.100.22" />
+    <!-- Pinned above the 9.0.5 that AWSSDK.CloudWatch brings: GHSA-vmv3-wvjp-wqpj (denial of service), issue #233. -->
+    <PackageVersion Include="System.Formats.Cbor" Version="9.0.24" />
     <!-- Tests. -->
     <PackageVersion Include="xunit.v3" Version="4.0.2" />
   </ItemGroup>
