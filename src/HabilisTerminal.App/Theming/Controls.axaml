@@ -158,6 +158,12 @@
         <Setter Property="FontSize" Value="12" />
     </Style>
 
+    <!-- Popups draw inside the window (issue #253): with no native console window there is nothing to sit over, and a
+         popup window of its own came with a white background and the wrong size. -->
+    <Style Selector="Popup">
+        <Setter Property="ShouldUseOverlayLayer" Value="True" />
+    </Style>
+
     <!-- A console tab's mark while its command runs (issue #119). -->
     <Style Selector="TextBlock.pulsing">
         <Style.Animations>

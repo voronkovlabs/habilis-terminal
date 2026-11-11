@@ -22,6 +22,10 @@ public partial class MainWindow
         using var measure = Core.Diagnostics.Perf.Measure("page.show", page.GetType().Name);
         ClosePage(refocus: false);
         Workspace.Visibility = Visibility.Hidden;
+
+        // Hidden, the workspace keeps its size, and its console would keep the focus: keys meant for the page went to
+        // the shell. Disabled, nothing in it can hold the focus while the page is up (issue #253).
+        Workspace.IsEnabled = false;
         PageHost.Content = page;
         PageHost.IsVisible = true;
         UpdateHintButton();
@@ -33,6 +37,12 @@ public partial class MainWindow
             }
             else
             {
+                page.Focus();
+            }
+
+            if (!PageHost.IsKeyboardFocusWithin)
+            {
+                page.Focusable = true;
                 page.Focus();
             }
 
@@ -49,7 +59,8 @@ public partial class MainWindow
 
         PageHost.Content = null;
         PageHost.IsVisible = false;
-        Workspace.IsVisible = true;
+        Workspace.IsEnabled = true;
+        Workspace.Visibility = Visibility.Visible;
         UpdateHintButton();
         if (refocus)
         {

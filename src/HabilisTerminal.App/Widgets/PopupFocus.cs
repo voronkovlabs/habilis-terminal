@@ -17,6 +17,7 @@ public static class PopupFocus
     public static void Open(Popup popup)
     {
         Opening?.Invoke();
+        PopupParking.Park(popup, whileOpen: true);
         popup.Closed += (_, _) => Closed?.Invoke();
         popup.IsOpen = true;
     }

@@ -3,6 +3,7 @@
              x:Class="HabilisTerminal.App.App">
     <Application.Styles>
         <FluentTheme />
+        <StyleInclude Source="avares://AvaloniaEdit/Themes/Fluent/AvaloniaEdit.xaml" />
         <StyleInclude Source="avares://habi/Theming/Controls.axaml" />
     </Application.Styles>
 </Application>

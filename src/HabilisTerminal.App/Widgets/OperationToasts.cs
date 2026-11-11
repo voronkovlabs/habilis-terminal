@@ -29,6 +29,7 @@ public sealed class OperationToasts
         _target = target;
         _popup = new Popup
         {
+            ShouldUseOverlayLayer = true,
             Child = _stack,
             PlacementTarget = target,
             Placement = PlacementMode.AnchorAndGravity,
@@ -37,6 +38,7 @@ public sealed class OperationToasts
             IsLightDismissEnabled = false,
         };
         UiZoom.Apply(_popup);
+        PopupParking.Park(_popup, whileOpen: false);
         _stack.SizeChanged += (_, _) => Reposition();
         target.SizeChanged += (_, _) => Reposition();
         owner.PositionChanged += (_, _) => Reposition();

@@ -167,12 +167,27 @@ public sealed class TitleBar : DockPanel
         CommandBox.IsVisible = true;
     }
 
-    /// <summary>The window draws its own caption: the client area takes the title bar's place, the frame stays Windows'.</summary>
+    /// <summary>
+    /// The window draws its own caption: the client area takes the title bar's place, the frame stays Windows'.
+    /// Avalonia would draw a title bar of its own over ours (title and caption buttons): its decorations get an empty
+    /// template, so only our bar shows, and the roles above tell Windows what each part is.
+    /// </summary>
     public static void Install(Window window)
     {
         window.ExtendClientAreaToDecorationsHint = true;
         window.ExtendClientAreaTitleBarHeightHint = BarHeight;
         window.WindowDecorations = WindowDecorations.Full;
+        var theme = new Avalonia.Styling.ControlTheme(typeof(WindowDrawnDecorations));
+        theme.Setters.Add(new Avalonia.Styling.Setter(WindowDrawnDecorations.TemplateProperty, new NoDrawnDecorations()));
+        window.WindowDecorationsTheme = theme;
+    }
+
+    /// <summary>Avalonia's drawn decorations with nothing in them.</summary>
+    private sealed class NoDrawnDecorations : IWindowDrawnDecorationsTemplate
+    {
+        public Avalonia.Controls.Templates.TemplateResult<WindowDrawnDecorationsContent> Build() => new(new WindowDrawnDecorationsContent(), new NameScope());
+
+        object? Avalonia.Styling.ITemplate.Build() => Build();
     }
 
     /// <summary>The window's messages, for the title bar: nothing to do any more (the roles do it), kept for later needs.</summary>

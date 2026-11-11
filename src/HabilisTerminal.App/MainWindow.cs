@@ -60,6 +60,9 @@ public partial class MainWindow : Window
         var grid = new Grid();
         grid.Children.Add(Workspace);
         grid.Children.Add(PageHost);
+        var parking = new Canvas { IsHitTestVisible = false };
+        grid.Children.Add(parking);
+        Widgets.PopupParking.Register(parking);
         Root.Children.Add(grid);
         Content = Root;
 

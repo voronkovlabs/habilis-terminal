@@ -89,6 +89,7 @@ public sealed class TopMenu
 
         _popup = new Popup
         {
+            ShouldUseOverlayLayer = true,
             Child = _root,
             PlacementTarget = target,
             Placement = PlacementMode.AnchorAndGravity,

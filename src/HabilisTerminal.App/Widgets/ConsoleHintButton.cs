@@ -65,6 +65,7 @@ internal sealed class ConsoleHintButton
 
         _popup = new Popup
         {
+            ShouldUseOverlayLayer = true,
             Child = button,
             PlacementTarget = target,
             Placement = PlacementMode.AnchorAndGravity,
@@ -74,6 +75,7 @@ internal sealed class ConsoleHintButton
             Focusable = false,
         };
         UiZoom.Apply(_popup);
+        PopupParking.Park(_popup, whileOpen: false);
         owner.Activated += (_, _) => Apply();
         owner.Deactivated += (_, _) => _popup.IsOpen = false;
         owner.PropertyChanged += (_, e) =>

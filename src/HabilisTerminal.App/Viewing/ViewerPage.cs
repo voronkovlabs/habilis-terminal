@@ -112,7 +112,7 @@ public sealed class ViewerPage : DockPanel, IDisposable, IPage
     {
         if (ShowingText)
         {
-            _text!.Focus();
+            _text!.TextArea.Focus();
         }
         else
         {
@@ -409,7 +409,7 @@ public sealed class ViewerPage : DockPanel, IDisposable, IPage
         UpdateInfo();
         if (hadFocus)
         {
-            Avalonia.Threading.Dispatcher.UIThread.Post(() => _text.Focus(), Avalonia.Threading.DispatcherPriority.Input);
+            Avalonia.Threading.Dispatcher.UIThread.Post(() => _text.TextArea.Focus(), Avalonia.Threading.DispatcherPriority.Input);
         }
     }
 
@@ -510,7 +510,7 @@ public sealed class ViewerPage : DockPanel, IDisposable, IPage
         if (prompt || _lastSearch.Length == 0)
         {
             var result = await QuickPick.ShowAsync(this, [], new QuickPickOptions { Title = "Find", Placeholder = "Text to find (case-insensitive)", InitialText = _lastSearch, AllowFreeText = true });
-            _text!.Focus();
+            _text!.TextArea.Focus();
             if (result is null || result.Text.Length == 0)
             {
                 return;

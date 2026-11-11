@@ -74,7 +74,7 @@ public sealed class QuickPick : UserControl
         _placeholder.SetResourceReference(TextBlock.ForegroundProperty, "Habi.Placeholder");
         _filter.SetResourceReference(TextBox.BorderBrushProperty, "Habi.Accent");
         ScrollViewer.SetHorizontalScrollBarVisibility(_list, ScrollBarVisibility.Disabled);
-        _list.ItemTemplate = new FuncDataTemplate<QuickPickItem>((item, _) => Row(item));
+        _list.ItemTemplate = new FuncDataTemplate<QuickPickItem>((item, _) => item is null ? new StackPanel() : Row(item));
         _list.Styles.Add(PickItemStyle());
 
         var filterGrid = new Grid { Margin = new Thickness(0, 0, 0, 6) };
@@ -125,6 +125,7 @@ public sealed class QuickPick : UserControl
         const double Shadow = 12; // the frame's margin for its shadow
         var popup = new Popup
         {
+            ShouldUseOverlayLayer = true,
             Child = pick,
             PlacementTarget = target,
             Placement = PlacementMode.AnchorAndGravity,
@@ -148,13 +149,6 @@ public sealed class QuickPick : UserControl
         {
             popup.HorizontalOffset = Math.Max(0, (width - pick.Width) / 2) * UiZoom.Factor;
             popup.VerticalOffset = 4 * UiZoom.Factor;
-        }
-
-        // The popup lives in the window's tree: resources resolve and Escape reaches it.
-        if (TopLevel.GetTopLevel(target) is { } top && OverlayHost(top) is { } host)
-        {
-            host.Children.Add(popup);
-            popup.Closed += (_, _) => host.Children.Remove(popup);
         }
 
         popup.Closed += (_, _) => pick._result.TrySetResult(null);

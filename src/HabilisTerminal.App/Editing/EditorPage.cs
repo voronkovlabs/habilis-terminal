@@ -115,7 +115,7 @@ public sealed class EditorPage : DockPanel, IPage
 
     private Border Header { get; }
 
-    public void FocusContent() => _editor.Focus();
+    public void FocusContent() => _editor.TextArea.Focus();
 
     /// <summary>Editor colours from the theme (<c>editor.*</c>) and syntax colours from its <c>tokenColors</c>.</summary>
     public void ApplyTheme(ColorTheme theme)
@@ -196,7 +196,7 @@ public sealed class EditorPage : DockPanel, IPage
         body.Classes.Add("label");
         var answer = ThemedDialog.Show(_owner, "Unsaved changes", body,
             [new DialogButton<int>("_Save", 1, IsDefault: true), new DialogButton<int>("Do_n't save", 2), new DialogButton<int>("Cancel", 0, IsCancel: true)], 0);
-        _editor.Focus();
+        _editor.TextArea.Focus();
         return answer switch
         {
             1 => Save(null),
@@ -234,7 +234,7 @@ public sealed class EditorPage : DockPanel, IPage
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException)
         {
             OperationDialogs.Message(_owner, "Save", ex.Message);
-            _editor.Focus();
+            _editor.TextArea.Focus();
             return false;
         }
     }
@@ -244,14 +244,14 @@ public sealed class EditorPage : DockPanel, IPage
         var body = new TextBlock { Text = question };
         body.Classes.Add("label");
         var yes = ThemedDialog.Show(_owner, title, body, [new DialogButton<bool>("_Yes", true, IsDefault: true), new DialogButton<bool>("_No", false, IsCancel: true)], false);
-        _editor.Focus();
+        _editor.TextArea.Focus();
         return yes;
     }
 
     private async Task SaveAsAsync()
     {
         var result = await QuickPick.ShowAsync(this, [], new QuickPickOptions { Title = "Save as", InitialText = _file.Path, AllowFreeText = true });
-        _editor.Focus();
+        _editor.TextArea.Focus();
         if (result is { Text.Length: > 0 } chosen)
         {
             Save(Path.GetFullPath(chosen.Text.Trim('"')));
@@ -263,7 +263,7 @@ public sealed class EditorPage : DockPanel, IPage
         if (prompt || _lastSearch.Length == 0)
         {
             var result = await QuickPick.ShowAsync(this, [], new QuickPickOptions { Title = "Find", InitialText = _lastSearch, AllowFreeText = true });
-            _editor.Focus();
+            _editor.TextArea.Focus();
             if (result is not { Text.Length: > 0 } chosen)
             {
                 return;
@@ -296,12 +296,12 @@ public sealed class EditorPage : DockPanel, IPage
         var find = await QuickPick.ShowAsync(this, [], new QuickPickOptions { Title = "Replace: find", InitialText = _lastSearch, AllowFreeText = true });
         if (find is not { Text.Length: > 0 })
         {
-            _editor.Focus();
+            _editor.TextArea.Focus();
             return;
         }
 
         var replace = await QuickPick.ShowAsync(this, [], new QuickPickOptions { Title = $"Replace '{find.Text}' with", AllowFreeText = true });
-        _editor.Focus();
+        _editor.TextArea.Focus();
         if (replace is null)
         {
             return;
@@ -340,7 +340,7 @@ public sealed class EditorPage : DockPanel, IPage
     {
         var items = TextEncoding.Choices.Select(e => new QuickPickItem { Label = e.Name, Tag = e, IsCurrent = e.Name == _file.Encoding.Name }).ToList();
         var result = await QuickPick.ShowAsync(this, items, new QuickPickOptions { Title = IsModified ? "Encoding for saving" : "Encoding" });
-        _editor.Focus();
+        _editor.TextArea.Focus();
         if (result?.Item?.Tag is not TextEncoding encoding)
         {
             return;
