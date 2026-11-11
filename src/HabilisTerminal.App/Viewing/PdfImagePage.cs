@@ -79,7 +79,7 @@ public sealed class PdfImagePage : DockPanel, IPage, IDisposable, IContentZoom
     /// <summary>F3: the same file in the text viewer.</summary>
     public event Action? ViewRequested;
 
-    /// <summary>Ctrl+F: the same file in the Edge viewer, at this zero-based page.</summary>
+    /// <summary>Ctrl+F: the file in its program, for finding text (the Edge viewer needs WebView2, issue #253); the zero-based page.</summary>
     public event Action<int>? SearchRequested;
 
     public ZoomPanView ZoomView => _view;

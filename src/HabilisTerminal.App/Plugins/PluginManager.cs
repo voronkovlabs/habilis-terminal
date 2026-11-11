@@ -143,5 +143,12 @@ internal sealed class PluginManager
 
     /// <summary>The message for a failed plugin call: the plugin's own text, or "Plugin X failed: ...".</summary>
     public static string Describe(LoadedPlugin plugin, Exception ex) =>
-        ex is PluginException ? ex.Message : $"{plugin.Name} failed: {ex.Message}";
+        ex is PluginException ? ex.Message
+        : NeedsWpf(ex) ? $"{plugin.Name} draws its own view with WPF, which this version of Habilis Terminal (Avalonia) cannot show."
+        : $"{plugin.Name} failed: {ex.Message}";
+
+    /// <summary>A plugin built on the WPF view SDK (issue #78) cannot load in the Avalonia app (issue #253).</summary>
+    private static bool NeedsWpf(Exception ex) =>
+        ex is FileNotFoundException or FileLoadException or TypeLoadException &&
+        ex.Message.Contains("HabilisTerminal.Plugins.Sdk.Wpf", StringComparison.Ordinal);
 }

@@ -171,7 +171,7 @@ public static class CommandCatalog
         },
         new("files.open", Files, "Show or open in its program", "Alt+F3", c => HasPanel(c) && c.Cursor == CursorKind.File)
         {
-            Help = "Pictures, PDF pages and Markdown shown in the program (in a PDF Ctrl+F opens the Edge viewer, for finding text); other files in their associated program",
+            Help = "Pictures and PDF pages shown in the program (in a PDF Ctrl+F opens it in its program, for finding text); other files, Markdown too, in their associated program",
         },
         new("files.edit", Files, "Edit", "F4", c => Local(c) && c.Cursor == CursorKind.File) { DynamicTitle = c => Items(c with { Marked = 0 }, "Edit") },
         new("files.new", Files, "New file", "Shift+F4", Local) { Help = "New file: asks for a name, created when saved" },
