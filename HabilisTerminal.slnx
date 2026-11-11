@@ -5,6 +5,7 @@
     <Project Path="src/HabilisTerminal.Plugins.Sdk/HabilisTerminal.Plugins.Sdk.csproj" />
     <Project Path="src/HabilisTerminal.Plugins.Sdk.Wpf/HabilisTerminal.Plugins.Sdk.Wpf.csproj" />
     <Project Path="src/HabilisTerminal.Shell/HabilisTerminal.Shell.csproj" />
+    <Project Path="src/HabilisTerminal.Terminal/HabilisTerminal.Terminal.csproj" />
     <Project Path="src/HabilisTerminal.Themes/HabilisTerminal.Themes.csproj" />
   </Folder>
   <Folder Name="/tests/">
@@ -12,6 +13,7 @@
     <Project Path="tests/HabilisTerminal.Core.Tests/HabilisTerminal.Core.Tests.csproj" />
     <Project Path="tests/HabilisTerminal.TestPlugin/HabilisTerminal.TestPlugin.csproj" />
     <Project Path="tests/HabilisTerminal.Shell.Tests/HabilisTerminal.Shell.Tests.csproj" />
+    <Project Path="tests/HabilisTerminal.Terminal.Tests/HabilisTerminal.Terminal.Tests.csproj" />
     <Project Path="tests/HabilisTerminal.Themes.Tests/HabilisTerminal.Themes.Tests.csproj" />
   </Folder>
   <Folder Name="/tools/">

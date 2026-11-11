@@ -1,0 +1,10 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <!-- A terminal emulator with no UI and no Windows dependency (issue #253): the console view draws its screen. -->
+    <TargetFramework>net10.0</TargetFramework>
+    <RootNamespace>HabilisTerminal.Terminal</RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <InternalsVisibleTo Include="HabilisTerminal.Terminal.Tests" />
+  </ItemGroup>
+</Project>
