@@ -264,6 +264,7 @@ public sealed class GitHubTests : IDisposable
     {
         var handler = new ScriptedHandler(
             """{"data":{"viewer":{"login":"me","repositories":{"pageInfo":{"hasNextPage":false,"endCursor":null},"nodes":[{"name":"app","owner":{"login":"me"},"isPrivate":true,"isFork":false,"isArchived":false,"createdAt":"2024-01-10T09:00:00Z","description":null,"url":"https://github.com/me/app","defaultBranchRef":{"name":"main","target":{"committedDate":"2025-06-01T12:00:00Z"}}}]}}}}""",
+            """{"data":{"viewer":{"organizations":{"pageInfo":{"hasNextPage":false,"endCursor":null},"nodes":[]}}}}""",
             """{"ahead_by":2,"behind_by":5,"commits":[{"commit":{"committer":{"date":"2024-01-13T09:00:00Z"}}}]}""",
             """{"sha":"t","truncated":false,"tree":[{"path":"a.txt","type":"blob","size":3,"sha":"s1"},{"path":"src","type":"tree","sha":"s2"},{"path":"lib","type":"commit","sha":"s3"}]}""");
         handler.Headers["x-ratelimit-remaining"] = "4999";
@@ -277,11 +278,59 @@ public sealed class GitHubTests : IDisposable
 
         var compare = await api.CompareAsync("me", "app", "main", "feature/x", CancellationToken.None);
         Assert.Equal(new CompareInfo(Day1.AddDays(3), 2, 5), compare);
-        Assert.EndsWith("/compare/main...feature/x?per_page=1&page=1", handler.Uris[1], StringComparison.Ordinal);
+        Assert.EndsWith("/compare/main...feature/x?per_page=1&page=1", handler.Uris[2], StringComparison.Ordinal);
 
         var tree = await api.TreeAsync("me", "app", "t", recursive: true, CancellationToken.None);
         Assert.Equal(["a.txt", "src"], tree.Items.Select(i => i.Path));
         Assert.Equal(4999, api.RateLimit!.Value.Remaining);
+    }
+
+    [Fact]
+    public async Task Every_repository_of_the_users_organizations_is_listed_once()
+    {
+        const string Repo = """{"name":"%N","owner":{"login":"%O","__typename":"%T"},"visibility":"%V","isFork":false,"isArchived":false,"createdAt":"2024-01-10T09:00:00Z","description":null,"url":"","defaultBranchRef":null}""";
+        static string Node(string owner, string name, string visibility, string type = "Organization") =>
+            Repo.Replace("%N", name, StringComparison.Ordinal).Replace("%O", owner, StringComparison.Ordinal).Replace("%T", type, StringComparison.Ordinal).Replace("%V", visibility, StringComparison.Ordinal);
+
+        var handler = new ScriptedHandler(
+            // The viewer's list: an own repository and one of a team.
+            $$$$$"""{"data":{"viewer":{"login":"me","repositories":{"pageInfo":{"hasNextPage":false,"endCursor":null},"nodes":[{{{{{Node("me", "mine", "PRIVATE", "User")}}}}},{{{{{Node("acme", "team-repo", "PRIVATE")}}}}}]}}}}""",
+            """{"data":{"viewer":{"organizations":{"pageInfo":{"hasNextPage":false,"endCursor":null},"nodes":[{"login":"acme"},{"login":"closed"}]}}}}""",
+            // The organization's own list, in two pages: the team's again, an internal one, one for all members.
+            $$$$$"""{"data":{"organization":{"repositories":{"pageInfo":{"hasNextPage":true,"endCursor":"c1"},"nodes":[{{{{{Node("acme", "team-repo", "PRIVATE")}}}}},{{{{{Node("acme", "handbook", "INTERNAL")}}}}}]}}}}""",
+            $$$$$"""{"data":{"organization":{"repositories":{"pageInfo":{"hasNextPage":false,"endCursor":null},"nodes":[{{{{{Node("acme", "for-all", "PRIVATE")}}}}}]}}}}""",
+            // An organization that keeps the app out.
+            """{"data":null,"errors":[{"type":"FORBIDDEN","message":"Although you appear to have the correct authorization credentials, the organization has enabled OAuth App access restrictions."}]}""");
+        var api = new GitHubApi(new HttpClient(handler), "t");
+
+        var (_, repos) = await api.RepositoriesAsync(CancellationToken.None);
+        Assert.Equal(["acme/for-all", "acme/handbook", "acme/team-repo", "me/mine"], repos.Select(r => r.Owner + "/" + r.Name));
+        Assert.True(repos.Single(r => r.Name == "handbook").IsInternal);
+        Assert.Contains("closed", api.Warning, StringComparison.Ordinal);
+        Assert.Contains("\"after\":\"c1\"", handler.Bodies[3], StringComparison.Ordinal);
+
+        var panel = new GitHubPanel(new FakeHost(), new ListedApi(repos), GitHubLocation.Parse("gh:acme"), () => { });
+        Assert.Equal("internal, empty", (await Listing.AllAsync(panel)).Single(r => r.Name == "handbook").Cells![GitHubPanel.KindKey].Text);
+    }
+
+    /// <summary>Just the repositories given; nothing else is asked for.</summary>
+    private sealed class ListedApi(IReadOnlyList<RepoInfo> repos) : IGitHubApi
+    {
+        public (int Remaining, DateTime Reset)? RateLimit => null;
+
+        public string? Warning => null;
+
+        public Task<(string Login, IReadOnlyList<RepoInfo> Repos)> RepositoriesAsync(CancellationToken cancellationToken) => Task.FromResult(("me", repos));
+
+        public Task<IReadOnlyList<BranchInfo>> BranchesAsync(string owner, string repo, CancellationToken cancellationToken) => throw new NotSupportedException();
+
+        public Task<CompareInfo> CompareAsync(string owner, string repo, string baseBranch, string branch, CancellationToken cancellationToken) => throw new NotSupportedException();
+
+        public Task<GitTree> TreeAsync(string owner, string repo, string treeSha, bool recursive, CancellationToken cancellationToken) => throw new NotSupportedException();
+
+        public Task<IReadOnlyDictionary<string, DateTime>> LastCommitsAsync(string owner, string repo, string branch, IReadOnlyList<string> paths, CancellationToken cancellationToken) => throw new NotSupportedException();
+
+        public Task<Stream> BlobAsync(string owner, string repo, string sha, CancellationToken cancellationToken) => throw new NotSupportedException();
     }
 
     [Fact]
@@ -424,7 +473,8 @@ public sealed class GitHubTests : IDisposable
     public async Task What_github_left_out_is_told()
     {
         var handler = new ScriptedHandler(
-            """{"data":{"viewer":{"login":"me","repositories":{"pageInfo":{"hasNextPage":false,"endCursor":null},"nodes":[]}}},"errors":[{"type":"FORBIDDEN","message":"Resource protected by organization SAML enforcement."}]}""");
+            """{"data":{"viewer":{"login":"me","repositories":{"pageInfo":{"hasNextPage":false,"endCursor":null},"nodes":[]}}},"errors":[{"type":"FORBIDDEN","message":"Resource protected by organization SAML enforcement."}]}""",
+            """{"data":{"viewer":{"organizations":{"pageInfo":{"hasNextPage":false,"endCursor":null},"nodes":[]}}}}""");
         var api = new GitHubApi(new HttpClient(handler), "t");
         var (login, repos) = await api.RepositoriesAsync(CancellationToken.None);
         Assert.Equal("me", login);

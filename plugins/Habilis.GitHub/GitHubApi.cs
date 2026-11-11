@@ -12,6 +12,9 @@ internal sealed record RepoInfo(string Owner, string Name, bool IsPrivate, bool 
 {
     /// <summary>The owner is an organization, not a person's account.</summary>
     public bool OwnerIsOrganization { get; init; }
+
+    /// <summary>Seen by every member of the organization's enterprise (GitHub's "internal"); also counted as private.</summary>
+    public bool IsInternal { get; init; }
 }
 
 /// <param name="TreeSha">The tree of the branch's last commit: its files.</param>
@@ -71,55 +74,137 @@ internal sealed class GitHubApi(HttpClient http, string token) : IGitHubApi
 
     public string? Warning { get; private set; }
 
+    /// <summary>The fields of a repository, in every query that lists them.</summary>
+    private const string RepoFields = """
+        name owner { login __typename } visibility isFork isArchived createdAt description url
+        defaultBranchRef { name target { ... on Commit { committedDate } } }
+        """;
+
+    /// <summary>
+    /// The user's own repositories, those shared with them and those of their teams (the viewer's list), then every
+    /// repository of each of their organizations they can see (issue #229): the viewer's list leaves out internal ones
+    /// and those open to all members through the organization's base permission, which the organization's page shows.
+    /// An organization that cannot be listed (it restricts OAuth apps, or single sign-on is not authorized) is left
+    /// out with a <see cref="Warning"/>.
+    /// </summary>
     public async Task<(string Login, IReadOnlyList<RepoInfo> Repos)> RepositoriesAsync(CancellationToken cancellationToken)
     {
-        const string Query = """
+        const string Viewer = """
             query($after: String) {
               viewer {
                 login
                 repositories(first: 100, after: $after, ownerAffiliations: [OWNER, COLLABORATOR, ORGANIZATION_MEMBER], orderBy: {field: NAME, direction: ASC}) {
                   pageInfo { hasNextPage endCursor }
                   nodes {
-                    name owner { login __typename } isPrivate isFork isArchived createdAt description url
-                    defaultBranchRef { name target { ... on Commit { committedDate } } }
-                  }
+            """ + RepoFields + """
+             }
                 }
               }
             }
             """;
-        var repos = new List<RepoInfo>();
+        const string Organizations = """
+            query($after: String) {
+              viewer { organizations(first: 100, after: $after) { pageInfo { hasNextPage endCursor } nodes { login } } }
+            }
+            """;
+        const string OfOrganization = """
+            query($login: String!, $after: String) {
+              organization(login: $login) {
+                repositories(first: 100, after: $after, orderBy: {field: NAME, direction: ASC}) {
+                  pageInfo { hasNextPage endCursor }
+                  nodes {
+            """ + RepoFields + """
+             }
+                }
+              }
+            }
+            """;
+        Warning = null;
+        var repos = new Dictionary<string, RepoInfo>(StringComparer.OrdinalIgnoreCase);
         var login = string.Empty;
         string? after = null;
         do
         {
-            using var json = await GraphAsync(Query, new Dictionary<string, object?> { ["after"] = after }, cancellationToken).ConfigureAwait(false);
+            using var json = await GraphAsync(Viewer, new Dictionary<string, object?> { ["after"] = after }, cancellationToken).ConfigureAwait(false);
             var viewer = json.RootElement.GetProperty("data").GetProperty("viewer");
             login = viewer.GetProperty("login").GetString() ?? string.Empty;
             var connection = viewer.GetProperty("repositories");
-            foreach (var node in connection.GetProperty("nodes").EnumerateArray())
-            {
-                var branch = node.GetProperty("defaultBranchRef");
-                repos.Add(new RepoInfo(
-                    node.GetProperty("owner").GetProperty("login").GetString()!,
-                    node.GetProperty("name").GetString()!,
-                    node.GetProperty("isPrivate").GetBoolean(),
-                    node.GetProperty("isFork").GetBoolean(),
-                    node.GetProperty("isArchived").GetBoolean(),
-                    Date(node, "createdAt") ?? DateTime.MinValue,
-                    branch.ValueKind == JsonValueKind.Object ? Date(branch.GetProperty("target"), "committedDate") : null,
-                    branch.ValueKind == JsonValueKind.Object ? branch.GetProperty("name").GetString() : null,
-                    Text(node, "description"),
-                    Text(node, "url") ?? string.Empty)
-                {
-                    OwnerIsOrganization = Text(node.GetProperty("owner"), "__typename") == "Organization",
-                });
-            }
-
+            Add(repos, connection);
             after = NextPage(connection);
         }
         while (after is not null);
 
-        return (login, repos);
+        var organizations = new List<string>();
+        after = null;
+        do
+        {
+            using var json = await GraphAsync(Organizations, new Dictionary<string, object?> { ["after"] = after }, cancellationToken).ConfigureAwait(false);
+            var connection = json.RootElement.GetProperty("data").GetProperty("viewer").GetProperty("organizations");
+            organizations.AddRange(connection.GetProperty("nodes").EnumerateArray().Select(n => Text(n, "login")).OfType<string>());
+            after = NextPage(connection);
+        }
+        while (after is not null);
+
+        var warning = Warning;
+        foreach (var organization in organizations)
+        {
+            after = null;
+            try
+            {
+                do
+                {
+                    using var json = await GraphAsync(OfOrganization, new Dictionary<string, object?> { ["login"] = organization, ["after"] = after }, cancellationToken).ConfigureAwait(false);
+                    if (json.RootElement.GetProperty("data").GetProperty("organization") is not { ValueKind: JsonValueKind.Object } found)
+                    {
+                        break;
+                    }
+
+                    var connection = found.GetProperty("repositories");
+                    Add(repos, connection);
+                    after = NextPage(connection);
+                }
+                while (after is not null);
+            }
+            catch (PluginException ex) when (ex is not SignInExpiredException)
+            {
+                warning ??= $"GitHub left out {organization}'s repositories: {ex.Message.Replace("GitHub: ", string.Empty, StringComparison.Ordinal)}";
+            }
+
+            warning ??= Warning;
+        }
+
+        Warning = warning;
+        return (login, [.. repos.Values.OrderBy(r => r.Owner, StringComparer.OrdinalIgnoreCase).ThenBy(r => r.Name, StringComparer.OrdinalIgnoreCase)]);
+    }
+
+    private static void Add(Dictionary<string, RepoInfo> repos, JsonElement connection)
+    {
+        foreach (var node in connection.GetProperty("nodes").EnumerateArray())
+        {
+            if (node.ValueKind != JsonValueKind.Object)
+            {
+                continue; // a node GitHub could not give (an error says why)
+            }
+
+            var branch = node.GetProperty("defaultBranchRef");
+            var visibility = Text(node, "visibility");
+            var repo = new RepoInfo(
+                node.GetProperty("owner").GetProperty("login").GetString()!,
+                node.GetProperty("name").GetString()!,
+                visibility is not "PUBLIC",
+                node.GetProperty("isFork").GetBoolean(),
+                node.GetProperty("isArchived").GetBoolean(),
+                Date(node, "createdAt") ?? DateTime.MinValue,
+                branch.ValueKind == JsonValueKind.Object ? Date(branch.GetProperty("target"), "committedDate") : null,
+                branch.ValueKind == JsonValueKind.Object ? branch.GetProperty("name").GetString() : null,
+                Text(node, "description"),
+                Text(node, "url") ?? string.Empty)
+            {
+                OwnerIsOrganization = Text(node.GetProperty("owner"), "__typename") == "Organization",
+                IsInternal = visibility == "INTERNAL",
+            };
+            repos[repo.Owner + "/" + repo.Name] = repo;
+        }
     }
 
     public async Task<IReadOnlyList<BranchInfo>> BranchesAsync(string owner, string repo, CancellationToken cancellationToken)

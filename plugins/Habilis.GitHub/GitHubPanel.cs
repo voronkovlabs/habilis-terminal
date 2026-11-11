@@ -707,5 +707,5 @@ internal sealed class GitHubPanel : IPanelProvider, IPanelCommands, IGetFiles
     private static CellValue Count(int count) => new(count.ToString("N0", CultureInfo.CurrentCulture), count);
 
     private static string Kind(RepoInfo repo) =>
-        string.Join(", ", new[] { repo.IsPrivate ? "private" : "public", repo.IsFork ? "fork" : null, repo.IsArchived ? "archived" : null, repo.DefaultBranch is null ? "empty" : null }.Where(k => k is not null));
+        string.Join(", ", new[] { repo.IsInternal ? "internal" : repo.IsPrivate ? "private" : "public", repo.IsFork ? "fork" : null, repo.IsArchived ? "archived" : null, repo.DefaultBranch is null ? "empty" : null }.Where(k => k is not null));
 }
