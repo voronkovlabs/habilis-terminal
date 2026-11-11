@@ -21,6 +21,11 @@ public sealed class GitHubPlugin : Plugin
     private const string WithCode = "With a code in the browser";
     private const string WithGitHubCli = "With the GitHub CLI's sign-in (gh)";
     private const string WithToken = "With a personal access token";
+    private const string CreateToken = "Open GitHub to create a token";
+    private const string HaveToken = "I already have a token";
+
+    /// <summary>A new classic token, named and with the scopes the plugin needs ticked.</summary>
+    internal const string NewTokenPage = "https://github.com/settings/tokens/new?scopes=repo,read:org&description=Habilis%20Terminal";
 
     private HttpClient? _http;
 
@@ -32,6 +37,9 @@ public sealed class GitHubPlugin : Plugin
 
     /// <summary>The GitHub CLI's token, or null when it is not signed in; a fake in tests.</summary>
     internal Func<CancellationToken, Task<string?>> GitHubCli { get; set; } = GitHubCliToken.ReadAsync;
+
+    /// <summary>Opens a github.com page in the browser; recorded instead in tests.</summary>
+    internal Action<string> OpenBrowser { get; set; } = url => Process.Start(new ProcessStartInfo(url) { UseShellExecute = true })?.Dispose();
 
     public GitHubPlugin() => Connect = token => new GitHubApi(Http, token);
 
@@ -132,7 +140,7 @@ public sealed class GitHubPlugin : Plugin
 
         if (DeviceFlow.IsGitHubPage(code.VerificationUri))
         {
-            Process.Start(new ProcessStartInfo(code.VerificationUri.AbsoluteUri) { UseShellExecute = true })?.Dispose();
+            OpenBrowser(code.VerificationUri.AbsoluteUri);
         }
 
         Host.ShowStatus($"Waiting for GitHub: enter the code {code.UserCode} in the browser.");
@@ -152,11 +160,31 @@ public sealed class GitHubPlugin : Plugin
         return token;
     }
 
+    /// <summary>
+    /// A classic personal access token (issue #226): GitHub's page for a new one opens with the name and the scopes
+    /// filled in, then the token is pasted.
+    /// </summary>
     private async Task<string?> SignInWithTokenAsync(CancellationToken cancellationToken)
     {
+        var first = await Host.Dialogs.ChooseAsync("GitHub token", [CreateToken, HaveToken], CreateToken).ConfigureAwait(false);
+        if (first is null)
+        {
+            return null;
+        }
+
+        if (first == CreateToken)
+        {
+            OpenBrowser(NewTokenPage);
+        }
+
         var token = (await Host.Dialogs.InputSecretAsync("GitHub token",
-            "A classic personal access token with the \"repo\" and \"read:org\" scopes (github.com > Settings > Developer settings > Personal access tokens). " +
-            "For an organization with single sign-on, also authorize the token for it there. It is kept in Windows Credential Manager.").ConfigureAwait(false))?.Trim();
+            (first == CreateToken
+                ? "GitHub's page for a new token is open in your browser, with the name and the boxes already set.\n"
+                : "A classic token with the \"repo\" and \"read:org\" boxes ticked.\n") +
+            "1. On that page press \"Generate token\" at the bottom.\n" +
+            "2. Copy the token: the line that starts with ghp_. GitHub shows it only once.\n" +
+            "3. If your organization uses single sign-on, press \"Configure SSO\" next to the token and authorize it.\n" +
+            "4. Paste the token here and press OK. It is kept in Windows Credential Manager.").ConfigureAwait(false))?.Trim();
         return string.IsNullOrEmpty(token) ? null : await KeepAsync(token, cancellationToken).ConfigureAwait(false);
     }
 

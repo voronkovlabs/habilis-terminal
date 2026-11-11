@@ -389,13 +389,19 @@ public sealed class GitHubTests : IDisposable
     {
         var host = new FakeHost();
         host.ChooseAnswers.Enqueue("With a personal access token");
+        host.ChooseAnswers.Enqueue("Open GitHub to create a token");
         host.InputAnswers.Enqueue("  ghp_pasted  ");
         var tokens = new MemoryTokens();
-        var plugin = new GitHubPlugin { Tokens = tokens, Connect = _ => new FakeApi() };
+        var opened = new List<string>();
+        var plugin = new GitHubPlugin { Tokens = tokens, Connect = _ => new FakeApi(), OpenBrowser = opened.Add };
         plugin.Initialize(host);
 
         Assert.NotNull(await plugin.OpenAddressAsync("gh:", CancellationToken.None));
         Assert.Equal("ghp_pasted", tokens.Token);
+
+        // The page for a new token, with the scopes ticked.
+        Assert.Equal([GitHubPlugin.NewTokenPage], opened);
+        Assert.StartsWith("https://github.com/settings/tokens/new?scopes=repo,read:org", opened[0], StringComparison.Ordinal);
     }
 
     [Fact]
@@ -403,6 +409,7 @@ public sealed class GitHubTests : IDisposable
     {
         var host = new FakeHost();
         host.ChooseAnswers.Enqueue("With a personal access token");
+        host.ChooseAnswers.Enqueue("I already have a token");
         host.InputAnswers.Enqueue("ghp_wrong");
         var tokens = new MemoryTokens();
         var plugin = new GitHubPlugin { Tokens = tokens, Connect = _ => new FakeApi { Refuse = true } };
