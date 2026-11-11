@@ -87,7 +87,7 @@ public sealed class TitleBar : DockPanel
         _maximizeGlyph = (TextBlock)_maximize.Child;
         var minimize = CaptionButton(MinimizeGlyph, () => _window.WindowState = WindowState.Minimized, isClose: false);
         var feedback = FeedbackButton();
-        foreach (var button in new[] { close, _maximize, minimize, feedback })
+        foreach (var button in new[] { close, _maximize, minimize, feedback, ZoomButton() })
         {
             SetDock(button, Dock.Right);
             Children.Add(button);
@@ -249,6 +249,46 @@ public sealed class TitleBar : DockPanel
             FeedbackRequested?.Invoke();
         };
         return button;
+    }
+
+    /// <summary>
+    /// Left of the feedback button while the zoom is not 100% (issue #239), as a browser shows its zoom in the address
+    /// bar; a click goes back to 100%.
+    /// </summary>
+    private static Border ZoomButton()
+    {
+        var text = new TextBlock { FontFamily = new FontFamily("Segoe UI"), FontSize = 12, VerticalAlignment = VerticalAlignment.Center };
+        text.SetResourceReference(TextBlock.ForegroundProperty, "Habi.TitleBarForeground");
+        var pill = new Border
+        {
+            Child = text,
+            Padding = new Thickness(8, 0, 8, 0),
+            Margin = new Thickness(0, 5, 4, 5),
+            CornerRadius = new CornerRadius(4),
+            BorderThickness = new Thickness(1),
+        };
+        pill.SetResourceReference(Border.BorderBrushProperty, "Habi.TitleBarHover");
+        WindowChrome.SetIsHitTestVisibleInChrome(pill, true);
+        pill.MouseEnter += (_, _) => pill.SetResourceReference(Border.BackgroundProperty, "Habi.TitleBarHover");
+        pill.MouseLeave += (_, _) => pill.Background = Brushes.Transparent;
+        pill.MouseLeftButtonUp += (_, e) =>
+        {
+            e.Handled = true;
+            UiZoom.Reset();
+        };
+
+        void Show()
+        {
+            var percent = Core.Settings.ZoomSteps.Percent(UiZoom.Factor);
+            text.Text = percent;
+            pill.ToolTip = $"Zoom {percent}. Click for 100% (Ctrl+Alt+0)";
+            pill.Visibility = Math.Abs(UiZoom.Factor - 1) < 0.0005 ? Visibility.Collapsed : Visibility.Visible;
+        }
+
+        pill.Background = Brushes.Transparent;
+        Show();
+        UiZoom.Changed += Show;
+        return pill;
     }
 
     private static void SetHover(Border button, bool hover, bool isClose)
