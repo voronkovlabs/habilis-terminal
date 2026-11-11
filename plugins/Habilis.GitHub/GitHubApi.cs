@@ -8,7 +8,11 @@ using HabilisTerminal.Plugins;
 namespace Habilis.GitHub;
 
 internal sealed record RepoInfo(string Owner, string Name, bool IsPrivate, bool IsFork, bool IsArchived, DateTime Created, DateTime? LastCommit,
-    string? DefaultBranch, string? Description, string Url);
+    string? DefaultBranch, string? Description, string Url)
+{
+    /// <summary>The owner is an organization, not a person's account.</summary>
+    public bool OwnerIsOrganization { get; init; }
+}
 
 /// <param name="TreeSha">The tree of the branch's last commit: its files.</param>
 internal sealed record BranchInfo(string Name, DateTime? LastCommit, string? Author, string? CommitSha, string? TreeSha);
@@ -68,7 +72,7 @@ internal sealed class GitHubApi(HttpClient http, string token) : IGitHubApi
                 repositories(first: 100, after: $after, ownerAffiliations: [OWNER, COLLABORATOR, ORGANIZATION_MEMBER], orderBy: {field: NAME, direction: ASC}) {
                   pageInfo { hasNextPage endCursor }
                   nodes {
-                    name owner { login } isPrivate isFork isArchived createdAt description url
+                    name owner { login __typename } isPrivate isFork isArchived createdAt description url
                     defaultBranchRef { name target { ... on Commit { committedDate } } }
                   }
                 }
@@ -97,7 +101,10 @@ internal sealed class GitHubApi(HttpClient http, string token) : IGitHubApi
                     branch.ValueKind == JsonValueKind.Object ? Date(branch.GetProperty("target"), "committedDate") : null,
                     branch.ValueKind == JsonValueKind.Object ? branch.GetProperty("name").GetString() : null,
                     Text(node, "description"),
-                    Text(node, "url") ?? string.Empty));
+                    Text(node, "url") ?? string.Empty)
+                {
+                    OwnerIsOrganization = Text(node.GetProperty("owner"), "__typename") == "Organization",
+                });
             }
 
             after = NextPage(connection);

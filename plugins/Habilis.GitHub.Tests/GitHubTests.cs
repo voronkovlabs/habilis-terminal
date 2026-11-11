@@ -143,6 +143,26 @@ public sealed class GitHubTests : IDisposable
     }
 
     [Fact]
+    public async Task Each_level_has_its_own_icons()
+    {
+        var panel = new GitHubPanel(new FakeHost(), new FakeApi(), GitHubLocation.Top, () => { });
+        var owners = await Listing.AllAsync(panel);
+        Assert.Equal(PanelIcons.User, owners.Single(o => o.Name == "me").Icon);
+        Assert.Equal(PanelIcons.Organization, owners.Single(o => o.Name == "acme").Icon);
+
+        await panel.EnterAsync(owners.Single(o => o.Name == "me"), CancellationToken.None);
+        var repos = await Listing.AllAsync(panel);
+        Assert.Equal(PanelIcons.PrivateRepository, repos.Single(r => r.Name == "app").Icon);
+        Assert.Equal(PanelIcons.ArchivedRepository, repos.Single(r => r.Name == "old").Icon);
+        Assert.Equal(PanelIcons.Repository, repos.Single(r => r.Name == "broken").Icon);
+
+        await panel.EnterAsync(repos.Single(r => r.Name == "app"), CancellationToken.None);
+        var branches = await Listing.AllAsync(panel);
+        Assert.Equal(PanelIcons.DefaultBranch, branches.Single(b => b.Name == "main").Icon);
+        Assert.Equal(PanelIcons.Branch, branches.Single(b => b.Name == "feature/x").Icon);
+    }
+
+    [Fact]
     public async Task An_empty_repository_lists_nothing_and_says_so()
     {
         var host = new FakeHost();
@@ -369,7 +389,7 @@ public sealed class GitHubTests : IDisposable
             [
                 new RepoInfo("me", "app", true, false, false, Day1, Day2, "main", null, ""),
                 new RepoInfo("me", "old", false, false, true, Day1, Day1, "main", null, ""),
-                new RepoInfo("acme", "site", false, true, false, Day1, null, "main", null, ""),
+                new RepoInfo("acme", "site", false, true, false, Day1, null, "main", null, "") { OwnerIsOrganization = true },
                 new RepoInfo("me", "empty-repo", true, false, false, Day1, null, null, null, ""),
                 new RepoInfo("me", "broken", false, false, false, Day1, Day1, "main", null, ""),
             ]));

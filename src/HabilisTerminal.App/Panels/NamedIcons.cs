@@ -1,4 +1,6 @@
+using System.Windows;
 using System.Windows.Media;
+using HabilisTerminal.App.Theming;
 
 namespace HabilisTerminal.App.Panels;
 
@@ -28,9 +30,56 @@ internal static class NamedIcons
             ("#5A9BD5", "M1.5,2.5 H14.5 V13.5 H1.5 Z"),
             ("#1E1E1E", "M2.5,5 H13.5 V12.5 H2.5 Z"),
             ("#E0E0E0", "M4,6.6 L6.6,8.4 L4,10.2 L4,9.2 L5.2,8.4 L4,7.6 Z M7.2,10 H10.5 V10.9 H7.2 Z")),
+
+        // Code hosting (issue #222), from codicon glyphs: people, repositories, branches.
+        ["user"] = Glyphs(("#F0883E", Person, 1.0, 0, 0)),
+        ["organization"] = Glyphs(("#A371F7", OrganizationGlyph, 1.0, 0, 0)),
+        ["repository"] = Glyphs(("#D4A72C", Repo, 1.0, 0, 0)),
+        ["repository-private"] = Glyphs(("#D4A72C", Repo, 1.0, -1.5, 0), ("#E5534B", Lock, 0.6, 7, 6.5)),
+        ["repository-archived"] = Glyphs(("#8B949E", Archive, 1.0, 0, 0)),
+        ["branch"] = Glyphs(("#3FB950", GitBranch, 1.0, 0, 0)),
+        ["branch-default"] = Glyphs(("#E3B341", GitBranch, 1.0, 0, 0)),
     };
 
+    private const string Repo = "\uEA62";
+    private const string Person = "\uEA67";
+    private const string GitBranch = "\uEA68";
+    private const string Lock = "\uEA75";
+    private const string OrganizationGlyph = "\uEA7E";
+    private const string Archive = "\uEA98";
+
     public static Drawing? Get(string name) => Drawings.TryGetValue(name, out var drawing) ? drawing : null;
+
+    /// <summary>
+    /// Codicon glyphs, each fitted into the 16 x 16 cell at <paramref name="parts"/>' scale and offset, in one colour each.
+    /// A glyph missing from the font draws nothing.
+    /// </summary>
+    private static DrawingGroup Glyphs(params (string Color, string Glyph, double Scale, double X, double Y)[] parts)
+    {
+        var group = new DrawingGroup();
+        foreach (var (color, glyph, scale, x, y) in parts)
+        {
+            if (Codicon.GeometryOf(glyph) is not { } outline || outline.Bounds.IsEmpty)
+            {
+                continue;
+            }
+
+            var bounds = outline.Bounds;
+            var fit = 16 * scale / Math.Max(bounds.Width, bounds.Height);
+            var transform = new TransformGroup();
+            transform.Children.Add(new TranslateTransform(-bounds.X, -bounds.Y));
+            transform.Children.Add(new ScaleTransform(fit, fit));
+            transform.Children.Add(new TranslateTransform(x + (16 * scale - bounds.Width * fit) / 2, y + (16 * scale - bounds.Height * fit) / 2));
+            var shape = outline.Clone();
+            shape.Transform = transform;
+            var brush = new SolidColorBrush((Color)ColorConverter.ConvertFromString(color));
+            brush.Freeze();
+            group.Children.Add(new GeometryDrawing(brush, null, shape));
+        }
+
+        group.Freeze();
+        return group;
+    }
 
     private static DrawingGroup Group(params (string Color, string Data)[] shapes)
     {

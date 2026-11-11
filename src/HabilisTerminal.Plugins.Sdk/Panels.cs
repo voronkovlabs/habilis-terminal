@@ -160,4 +160,25 @@ public static class PanelIcons
 
     /// <summary>A running program.</summary>
     public const string Process = "process";
+
+    /// <summary>A person's account (SDK 1.8).</summary>
+    public const string User = "user";
+
+    /// <summary>An organization or team (SDK 1.8).</summary>
+    public const string Organization = "organization";
+
+    /// <summary>A source code repository (SDK 1.8).</summary>
+    public const string Repository = "repository";
+
+    /// <summary>A repository only some can see (SDK 1.8).</summary>
+    public const string PrivateRepository = "repository-private";
+
+    /// <summary>A repository kept read-only, no longer worked on (SDK 1.8).</summary>
+    public const string ArchivedRepository = "repository-archived";
+
+    /// <summary>A branch of a repository (SDK 1.8).</summary>
+    public const string Branch = "branch";
+
+    /// <summary>The main branch of a repository (SDK 1.8).</summary>
+    public const string DefaultBranch = "branch-default";
 }

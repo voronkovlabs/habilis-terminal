@@ -335,6 +335,7 @@ internal sealed class GitHubPanel : IPanelProvider, IPanelCommands, IGetFiles
                 return [.. repos.GroupBy(r => r.Owner, StringComparer.OrdinalIgnoreCase)
                     .Select(g => new PanelEntry(g.Key, IsFolder: true)
                     {
+                        Icon = g.Any(r => r.OwnerIsOrganization) ? PanelIcons.Organization : PanelIcons.User,
                         Group = string.Equals(g.Key, login, StringComparison.OrdinalIgnoreCase) ? 0 : 1,
                         Cells = new Dictionary<string, CellValue> { [ReposKey] = Count(g.Count()) },
                     })];
@@ -350,6 +351,7 @@ internal sealed class GitHubPanel : IPanelProvider, IPanelCommands, IGetFiles
             {
                 Cells = new Dictionary<string, CellValue> { [CreatedKey] = DateCell(r.Created), [KindKey] = Kind(r) },
                 Tone = r.IsArchived ? RowTone.Dim : RowTone.Normal,
+                Icon = r.IsArchived ? PanelIcons.ArchivedRepository : r.IsPrivate ? PanelIcons.PrivateRepository : PanelIcons.Repository,
                 Tag = r,
             })];
         }
@@ -391,7 +393,7 @@ internal sealed class GitHubPanel : IPanelProvider, IPanelCommands, IGetFiles
                     }
                 }
 
-                rows.Add(new PanelEntry(branch.Name, IsFolder: true, Modified: branch.LastCommit) { Cells = cells, Group = isDefault ? 0 : 1, Tag = branch });
+                rows.Add(new PanelEntry(branch.Name, IsFolder: true, Modified: branch.LastCommit) { Cells = cells, Group = isDefault ? 0 : 1, Icon = isDefault ? PanelIcons.DefaultBranch : PanelIcons.Branch, Tag = branch });
             }
 
             if (missing.Count > 0 && repo?.DefaultBranch is { } defaultBranch)

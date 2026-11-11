@@ -228,7 +228,7 @@ public sealed record PanelEntry(string Name, bool IsFolder = false, long? Size =
     public int Group { get; init; }                                      // sorted first: e.g. running jobs
     public RowTone Tone { get; init; }                                   // Normal, Accent, Good, Warning, Bad, Dim
     public object? Tag { get; init; }                                    // plugin data
-    public string? Icon { get; init; }                                   // SDK 1.1: PanelIcons.Bucket, Gpu, Process
+    public string? Icon { get; init; }                                   // SDK 1.1: PanelIcons.Bucket, Gpu, Process; SDK 1.8: User, Organization, Repository, PrivateRepository, ArchivedRepository, Branch, DefaultBranch
     public string? IconPath { get; init; }                               // absolute local path: its Windows shell icon
 }
 ```

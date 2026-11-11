@@ -3,5 +3,5 @@
   "name": "GitHub",
   "version": "1.0.0",
   "assembly": "Habilis.GitHub.dll",
-  "sdk": "1.7"
+  "sdk": "1.8"
 }
