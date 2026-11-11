@@ -11,7 +11,7 @@ $feed = Join-Path $repo 'artifacts\nuget'
 $packages = Join-Path $repo 'artifacts\packages'
 $output = Join-Path $repo 'artifacts\plugins'
 
-foreach ($sdk in 'HabilisTerminal.Plugins.Sdk', 'HabilisTerminal.Plugins.Sdk.Wpf') {
+foreach ($sdk in 'HabilisTerminal.Plugins.Sdk', 'HabilisTerminal.Plugins.Sdk.Avalonia') {
     dotnet pack "$repo\src\$sdk" -c $Configuration -o $feed -nologo -v q | Out-Host
     if ($LASTEXITCODE -ne 0) { throw "Packing $sdk failed." }
 

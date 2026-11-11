@@ -258,7 +258,7 @@ Optional capabilities, by interface:
 | `IViewEntry` | F3 | A plugin-made view (text or a local file), e.g. a job summary. |
 | `IPanelProvider.ShowsParent` | ".." row | SDK 1.2: false hides ".." (flat lists such as queues or jobs); Ctrl+PgUp still leaves the panel. |
 | `IPanelProvider.NameColumns` | name columns | SDK 1.3: above 1 the names flow in that many columns and the layout's columns are not drawn (S3 buckets). Asked after each listing. |
-| `IPanelView` (`HabilisTerminal.Plugins.Sdk.Wpf`) | the panel | SDK 1.2: the plugin draws the panel itself with WPF, using `HostBrushes` resource keys; the panel keys stay the host's. Target `net10.0-windows` with WPF. |
+| `IPanelView` (`HabilisTerminal.Plugins.Sdk.Avalonia`) | the panel | SDK 1.2: the plugin draws the panel itself on the host's Avalonia, using `HostBrushes` resource keys; the panel keys stay the host's. |
 | `IQuickViewEntry` | Ctrl+Q | SDK 1.1: text for the other panel's quick view (monospace; block characters draw charts). Asked on every cursor move and refresh. |
 | `IPanelCommands` | plugin keys, F9 > Panel, F11 | Commands with a title and an optional key: purge, filter, switch profile, show the full record. |
 
@@ -475,7 +475,7 @@ The host's own commands are hidden for what a provider does not support: Copy ne
 
 ### Recipe: a panel you draw yourself
 
-Target `net10.0-windows` with `<UseWPF>true</UseWPF>`, reference `HabilisTerminal.Plugins.Sdk.Wpf` as well, and implement `IPanelView` on the provider. Use `HostBrushes` keys so the view follows the theme, and keep elements non-focusable: the keyboard belongs to the panel. See `plugins/Habilis.Gpu`.
+Reference `HabilisTerminal.Plugins.Sdk.Avalonia` and `Avalonia` (the host's version) as well, both with `PrivateAssets="all" ExcludeAssets="runtime"`, and implement `IPanelView` on the provider; the host shares its own Avalonia with the plugin. Use `HostBrushes` keys so the view follows the theme, and keep elements non-focusable: the keyboard belongs to the panel. See `plugins/Habilis.Gpu`.
 
 ## 9. Lifecycle
 

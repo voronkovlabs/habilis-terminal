@@ -159,7 +159,7 @@ public sealed class GpuTests
         await using var panel = (LocalGpuPanel)(await plugin.OpenAddressAsync("gpu:", CancellationToken.None))!;
         await Listing.AllAsync(panel);
 
-        Assert.IsAssignableFrom<HabilisTerminal.Plugins.Wpf.IPanelView>(panel);
+        Assert.IsAssignableFrom<HabilisTerminal.Plugins.Avalonia.IPanelView>(panel);
         var sample = panel.LastSample!;
         Assert.Equal(37, sample.System.CpuPercent);
         Assert.Equal(50, sample.System.RamPercent);

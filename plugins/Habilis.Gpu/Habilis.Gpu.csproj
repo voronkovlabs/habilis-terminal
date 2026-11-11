@@ -1,14 +1,15 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
-    <!-- The local view draws itself with WPF (issue #79) and reads Windows performance counters. -->
+    <!-- The local view draws itself on the host's Avalonia (issues #79, #253) and reads Windows performance counters. -->
     <TargetFramework>net10.0-windows</TargetFramework>
-    <UseWPF>true</UseWPF>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <Description>Habilis Terminal plugin: a GPU monitor like nvtop, for this computer's NVIDIA GPUs and SageMaker training jobs (read-only).</Description>
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="HabilisTerminal.Plugins.Sdk" PrivateAssets="all" ExcludeAssets="runtime" />
-    <PackageReference Include="HabilisTerminal.Plugins.Sdk.Wpf" PrivateAssets="all" ExcludeAssets="runtime" />
+    <PackageReference Include="HabilisTerminal.Plugins.Sdk.Avalonia" PrivateAssets="all" ExcludeAssets="runtime" />
+    <PackageReference Include="Avalonia" PrivateAssets="all" ExcludeAssets="runtime" />
+    <PackageReference Include="System.Diagnostics.PerformanceCounter" />
     <PackageReference Include="AWSSDK.SageMaker" />
     <PackageReference Include="AWSSDK.CloudWatch" />
   </ItemGroup>

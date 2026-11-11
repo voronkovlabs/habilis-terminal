@@ -131,7 +131,7 @@ internal static class PanelPalette
             resources["Habi.SecondaryButtonForeground"] = Freeze(Opaque("button.secondaryForeground"));
             resources["Habi.Error"] = ErrorForeground;
             resources["Habi.Background"] = Background;
-            // For plugins' own WPF views (issue #78, HabilisTerminal.Plugins.Wpf.HostBrushes).
+            // For plugins' own views (issue #78, HabilisTerminal.Plugins.Avalonia.HostBrushes).
             resources["Habi.Border"] = Border;
             resources["Habi.ToneAccent"] = s_tones[1];
             resources["Habi.ToneGood"] = s_tones[2];

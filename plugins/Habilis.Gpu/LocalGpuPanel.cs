@@ -2,9 +2,9 @@ using System.Globalization;
 using System.IO;
 using System.Runtime.CompilerServices;
 using System.Text;
-using System.Windows;
 using HabilisTerminal.Plugins;
-using HabilisTerminal.Plugins.Wpf;
+using Avalonia.Controls;
+using HabilisTerminal.Plugins.Avalonia;
 
 namespace Habilis.Gpu;
 
@@ -138,7 +138,7 @@ internal sealed class LocalGpuPanel : IPanelProvider, IQuickViewEntry, IViewEntr
         return Task.FromResult(true);
     }
 
-    public FrameworkElement CreateView(IPanelViewHost host)
+    public Control CreateView(IPanelViewHost host)
     {
         _view = new NvtopView();
         ShowInView();
@@ -280,7 +280,7 @@ internal sealed class LocalGpuPanel : IPanelProvider, IQuickViewEntry, IViewEntr
         var cpu = _cpu.Values;
         var ram = _ram.Values;
         var paused = Paused;
-        _ = view.Dispatcher.BeginInvoke(() => view.Show(sample, charts, cpu, ram, paused));
+        Avalonia.Threading.Dispatcher.UIThread.Post(() => view.Show(sample, charts, cpu, ram, paused));
     }
 
     private void Record(GpuSnapshot snapshot)

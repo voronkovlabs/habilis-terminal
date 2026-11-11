@@ -1,21 +1,21 @@
-using System.Windows;
+using Avalonia.Controls;
 
-namespace HabilisTerminal.Plugins.Wpf;
+namespace HabilisTerminal.Plugins.Avalonia;
 
 /// <summary>
-/// A plugin panel drawn by the plugin (SDK 1.2, issue #78): an <see cref="IPanelProvider"/> that also implements this
-/// shows its own WPF element in place of the listing. The host still lists the provider for the title, the info panel
-/// (Ctrl+L) and folder history, and keeps the panel keys (Tab, Ctrl+O, Ctrl+P, F10...).
+/// A plugin panel drawn by the plugin (SDK 1.2, issue #78; on Avalonia since issue #253): an <see cref="IPanelProvider"/>
+/// that also implements this shows its own control in place of the listing. The host still lists the provider for the
+/// title, the info panel (Ctrl+L) and folder history, and keeps the panel keys (Tab, Ctrl+O, Ctrl+P, F10...).
 /// </summary>
 public interface IPanelView
 {
     /// <summary>
-    /// The element for the panel. Called on the UI thread once each time the provider is shown in a panel; the element
-    /// is dropped when the panel leaves the provider, which is then disposed (stop timers in DisposeAsync). Use the
-    /// <see cref="HostBrushes"/> keys with DynamicResource so the view follows the colour theme. Keep elements
-    /// non-focusable: the keyboard belongs to the panel.
+    /// The control for the panel. Called on the UI thread once each time the provider is shown in a panel; the control
+    /// is dropped when the panel leaves the provider, which is then disposed (stop timers in DisposeAsync). Read the
+    /// <see cref="HostBrushes"/> keys as resources so the view follows the colour theme. Keep controls non-focusable:
+    /// the keyboard belongs to the panel.
     /// </summary>
-    FrameworkElement CreateView(IPanelViewHost host);
+    Control CreateView(IPanelViewHost host);
 }
 
 /// <summary>What the host offers a plugin view.</summary>
@@ -28,7 +28,7 @@ public interface IPanelViewHost
     void FocusPanel();
 }
 
-/// <summary>Resource keys of the host's themed brushes, for <c>SetResourceReference</c> / DynamicResource.</summary>
+/// <summary>Resource keys of the host's themed brushes, in the application's resources.</summary>
 public static class HostBrushes
 {
     public const string Background = "Habi.Background";

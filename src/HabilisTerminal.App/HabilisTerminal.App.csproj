@@ -52,6 +52,7 @@
   <ItemGroup>
     <ProjectReference Include="..\HabilisTerminal.Core\HabilisTerminal.Core.csproj" />
     <ProjectReference Include="..\HabilisTerminal.Plugins.Sdk\HabilisTerminal.Plugins.Sdk.csproj" />
+    <ProjectReference Include="..\HabilisTerminal.Plugins.Sdk.Avalonia\HabilisTerminal.Plugins.Sdk.Avalonia.csproj" />
     <ProjectReference Include="..\HabilisTerminal.Shell\HabilisTerminal.Shell.csproj" />
     <ProjectReference Include="..\HabilisTerminal.Terminal\HabilisTerminal.Terminal.csproj" />
     <ProjectReference Include="..\HabilisTerminal.Themes\HabilisTerminal.Themes.csproj" />

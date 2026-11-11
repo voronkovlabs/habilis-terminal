@@ -1,56 +1,61 @@
 using System.Globalization;
-using System.Windows;
-using System.Windows.Media;
-using HabilisTerminal.Plugins.Wpf;
+using Avalonia;
+using Avalonia.Controls;
+using Avalonia.Input;
+using Avalonia.Media;
+using Avalonia.Threading;
+using HabilisTerminal.Plugins.Avalonia;
 
 namespace Habilis.Gpu;
 
 /// <summary>
 /// The GPU monitor drawn like nvtop (issue #79): per GPU a header and bars for load and memory, CPU and RAM bars, a
 /// chart of the recent values, and the processes using the GPU with their GPU load, GPU memory, CPU load and RAM.
-/// Drawn in one pass in the host's colours; never takes the keyboard.
+/// Drawn in one pass in the host's colours on Avalonia (issue #253); never takes the keyboard.
 /// </summary>
-internal sealed class NvtopView : FrameworkElement
+internal sealed class NvtopView : Control
 {
     private const double Gap = 8;
-    private static readonly Typeface Mono = new(new FontFamily("Cascadia Mono, Consolas"), FontStyles.Normal, FontWeights.Normal, FontStretches.Normal);
-    private static readonly Typeface MonoBold = new(new FontFamily("Cascadia Mono, Consolas"), FontStyles.Normal, FontWeights.SemiBold, FontStretches.Normal);
 
-    private LocalSample? _sample;
-    private IReadOnlyDictionary<string, (IReadOnlyList<double?> Load, IReadOnlyList<double?> Memory)> _gpuHistory = new Dictionary<string, (IReadOnlyList<double?>, IReadOnlyList<double?>)>();
     /// <summary>A chart bar and the gap after it, in pixels.</summary>
     private const double ChartBarSlot = 4;
 
+    private static readonly Typeface Mono = new(new FontFamily("Cascadia Mono, Consolas"), FontStyle.Normal, FontWeight.Normal);
+    private static readonly Typeface MonoBold = new(new FontFamily("Cascadia Mono, Consolas"), FontStyle.Normal, FontWeight.SemiBold);
+
+    private LocalSample? _sample;
+    private IReadOnlyDictionary<string, (IReadOnlyList<double?> Load, IReadOnlyList<double?> Memory)> _gpuHistory = new Dictionary<string, (IReadOnlyList<double?>, IReadOnlyList<double?>)>();
     private IReadOnlyList<double?> _cpuHistory = [];
     private IReadOnlyList<double?> _ramHistory = [];
     private bool _paused;
     private readonly List<(Rect Cell, string Text)> _commands = [];
-    private readonly System.Windows.Controls.ToolTip _tip = new() { MaxWidth = 900, Placement = System.Windows.Controls.Primitives.PlacementMode.Mouse };
-    private readonly System.Windows.Threading.DispatcherTimer _hover = new() { Interval = TimeSpan.FromMilliseconds(400) };
+    private readonly DispatcherTimer _hover = new() { Interval = TimeSpan.FromMilliseconds(400) };
     private string? _pending;
 
     public NvtopView()
     {
         Focusable = false;
         ClipToBounds = true;
+        ToolTip.SetPlacement(this, PlacementMode.Pointer);
 
         // Hovering a process's COMMAND cell shows its full command line (issue #80). The tooltip is opened by hand:
-        // the cells change with every sample, which WPF's own tooltip handling does not follow.
-        _tip.PlacementTarget = this;
+        // the cells change with every sample, which the framework's own tooltip handling does not follow.
         _hover.Tick += (_, _) =>
         {
             _hover.Stop();
             if (_pending is { } text)
             {
-                _tip.Content = new System.Windows.Controls.TextBlock { Text = text, TextWrapping = TextWrapping.Wrap };
-                _tip.IsOpen = true;
+                ToolTip.SetTip(this, new TextBlock { Text = text, TextWrapping = TextWrapping.Wrap, MaxWidth = 900 });
+                ToolTip.SetIsOpen(this, true);
             }
         };
     }
 
-    protected override void OnMouseMove(System.Windows.Input.MouseEventArgs e)
+    public double FontSize { get; set; } = 13;
+
+    protected override void OnPointerMoved(PointerEventArgs e)
     {
-        base.OnMouseMove(e);
+        base.OnPointerMoved(e);
         var text = TipAt(e.GetPosition(this));
         if (text == _pending)
         {
@@ -59,7 +64,7 @@ internal sealed class NvtopView : FrameworkElement
 
         // Another cell or none: the open tooltip closes and the new one waits for the hover delay.
         _pending = text;
-        _tip.IsOpen = false;
+        ToolTip.SetIsOpen(this, false);
         _hover.Stop();
         if (text is not null)
         {
@@ -67,15 +72,13 @@ internal sealed class NvtopView : FrameworkElement
         }
     }
 
-    protected override void OnMouseLeave(System.Windows.Input.MouseEventArgs e)
+    protected override void OnPointerExited(PointerEventArgs e)
     {
-        base.OnMouseLeave(e);
+        base.OnPointerExited(e);
         _pending = null;
         _hover.Stop();
-        _tip.IsOpen = false;
+        ToolTip.SetIsOpen(this, false);
     }
-
-    public double FontSize { get; set; } = 13;
 
     public void Show(
         LocalSample sample,
@@ -94,11 +97,13 @@ internal sealed class NvtopView : FrameworkElement
 
     private string? TipAt(Point point) => _commands.FirstOrDefault(c => c.Cell.Contains(point)).Text;
 
-    protected override void OnRender(DrawingContext dc)
+    public override void Render(DrawingContext context)
     {
+        var dc = context;
         _commands.Clear();
+        var size = Bounds.Size;
         var background = Brush(HostBrushes.Background, Brushes.Black);
-        dc.DrawRectangle(background, null, new Rect(RenderSize));
+        dc.FillRectangle(background, new Rect(size));
         if (_sample is not { } sample)
         {
             Text(dc, "Sampling…", Gap, Gap, Brush(HostBrushes.Muted, Brushes.Gray));
@@ -106,7 +111,7 @@ internal sealed class NvtopView : FrameworkElement
         }
 
         var line = Math.Ceiling(FontSize * 1.45);
-        var width = Math.Max(0, ActualWidth - (2 * Gap));
+        var width = Math.Max(0, size.Width - (2 * Gap));
         var y = Gap;
         var foreground = Brush(HostBrushes.Foreground, Brushes.White);
         var muted = Brush(HostBrushes.Muted, Brushes.Gray);
@@ -131,7 +136,7 @@ internal sealed class NvtopView : FrameworkElement
 
         // Separate charts in a grid of two columns (GPU load and memory per GPU, CPU, RAM); they take about half of
         // what is left, the processes the rest.
-        var charts = new List<(string Title, IReadOnlyList<double?> Values, double? Now, Brush Colour)>();
+        var charts = new List<(string Title, IReadOnlyList<double?> Values, double? Now, IBrush Colour)>();
         foreach (var gpu in sample.Gpus.Gpus)
         {
             var history = _gpuHistory.TryGetValue(gpu.Uuid, out var h) ? h : ([], []);
@@ -142,7 +147,7 @@ internal sealed class NvtopView : FrameworkElement
         charts.Add(("CPU", _cpuHistory, sample.System.CpuPercent, colours[2]));
         charts.Add(("RAM", _ramHistory, sample.System.RamPercent, colours[3]));
         var rows = (charts.Count + 1) / 2;
-        var gridHeight = Math.Max(rows * line * 3, (ActualHeight - y) * 0.5);
+        var gridHeight = Math.Max(rows * line * 3, (size.Height - y) * 0.5);
         var cellWidth = (width - Gap) / 2;
         var cellHeight = (gridHeight - ((rows - 1) * Gap)) / rows;
         for (var i = 0; i < charts.Count; i++)
@@ -160,13 +165,13 @@ internal sealed class NvtopView : FrameworkElement
     private static string Gib(double? mib) => mib is { } v ? (v / 1024).ToString("0.0", CultureInfo.InvariantCulture) : "n/a";
 
     /// <summary>One chart: its title and current value above a framed 0–100 plot with grid lines at 25, 50 and 75.</summary>
-    private void Chart(DrawingContext dc, string title, IReadOnlyList<double?> values, double? now, Brush colour, Rect cell, double line, Brush muted)
+    private void Chart(DrawingContext dc, string title, IReadOnlyList<double?> values, double? now, IBrush colour, Rect cell, double line, IBrush muted)
     {
         Text(dc, title, cell.Left, cell.Top, muted);
         TextRight(dc, TextChart.Value(now, "%"), cell.Right, cell.Top, colour, bold: true);
         var area = new Rect(cell.Left, cell.Top + line, cell.Width, Math.Max(0, cell.Height - line));
         dc.DrawRectangle(null, new Pen(Brush(HostBrushes.Border, Brushes.DimGray), 1), area);
-        var grid = new Pen(Brush(HostBrushes.ProgressTrack, Brushes.DimGray), 0.5) { DashStyle = DashStyles.Dot };
+        var grid = new Pen(Brush(HostBrushes.ProgressTrack, Brushes.DimGray), 0.5) { DashStyle = DashStyle.Dot };
         foreach (var level in new[] { 25, 50, 75 })
         {
             var y = area.Bottom - (area.Height * level / 100);
@@ -177,27 +182,28 @@ internal sealed class NvtopView : FrameworkElement
     }
 
     /// <summary>A series of 0–100 values as bars (issue #98), newest at the right edge, as many of the latest samples as fit; a missing value leaves a gap.</summary>
-    private static void Bars(DrawingContext dc, IReadOnlyList<double?> values, Rect area, Brush colour)
+    private static void Bars(DrawingContext dc, IReadOnlyList<double?> values, Rect area, IBrush colour)
     {
-        dc.PushClip(new RectangleGeometry(area));
-        var x = Math.Floor(area.Right) - ChartBarSlot;
-        for (var i = values.Count - 1; i >= 0 && x >= area.Left; i--, x -= ChartBarSlot)
+        using (dc.PushClip(area))
         {
-            if (values[i] is { } value && value > 0)
+            var x = Math.Floor(area.Right) - ChartBarSlot;
+            for (var i = values.Count - 1; i >= 0 && x >= area.Left; i--, x -= ChartBarSlot)
             {
-                var height = Math.Ceiling(area.Height * Math.Clamp(value, 0, 100) / 100);
-                dc.DrawRectangle(colour, null, new Rect(x, area.Bottom - height, ChartBarSlot - 1, height));
+                if (values[i] is { } value && value > 0)
+                {
+                    var height = Math.Ceiling(area.Height * Math.Clamp(value, 0, 100) / 100);
+                    dc.FillRectangle(colour, new Rect(x, area.Bottom - height, ChartBarSlot - 1, height));
+                }
             }
         }
-
-        dc.Pop();
     }
 
-    private void Processes(DrawingContext dc, LocalSample sample, double y, double width, double line, Brush foreground, Brush muted)
+    private void Processes(DrawingContext dc, LocalSample sample, double y, double width, double line, IBrush foreground, IBrush muted)
     {
         var header = new Rect(Gap, y, width, line);
-        dc.DrawRectangle(Brush(HostBrushes.WidgetBackground, Brushes.DimGray), null, header);
+        dc.FillRectangle(Brush(HostBrushes.WidgetBackground, Brushes.DimGray), header);
         var columns = Columns();
+
         // Paused, the header says so in the command column (the panel's status line says it too).
         Row(dc, columns, ["PID", "TYPE", "GPU%", "GPU MEM", "CPU%", "RAM", _paused ? "COMMAND · PAUSED" : "COMMAND"], y, _paused ? Brush(HostBrushes.Warning, Brushes.Gold) : foreground, bold: true);
 
@@ -205,7 +211,7 @@ internal sealed class NvtopView : FrameworkElement
         var shown = 0;
         foreach (var process in sample.Processes)
         {
-            if (y + line > ActualHeight - Gap)
+            if (y + line > Bounds.Height - Gap)
             {
                 Text(dc, $"+{sample.Processes.Count - shown} more", Gap, y, muted);
                 return;
@@ -250,7 +256,7 @@ internal sealed class NvtopView : FrameworkElement
         return starts;
     }
 
-    private void Row(DrawingContext dc, double[] columns, string[] cells, double y, Brush brush, bool bold = false)
+    private void Row(DrawingContext dc, double[] columns, string[] cells, double y, IBrush brush, bool bold = false)
     {
         var cell = CharWidth();
         for (var i = 0; i < cells.Length; i++)
@@ -269,34 +275,38 @@ internal sealed class NvtopView : FrameworkElement
     private void Bar(DrawingContext dc, string label, double? percent, string value, double x, double y, double width, double height)
     {
         var labelWidth = Text(dc, label, x, y, Brush(HostBrushes.Highlight, Brushes.DeepSkyBlue), bold: true) + 6;
-        var track = new Rect(x + labelWidth, y + 2, Math.Max(0, width - labelWidth), height - 4);
-        dc.DrawRectangle(Brush(HostBrushes.ProgressTrack, Brushes.DimGray), null, track);
+        var track = new Rect(x + labelWidth, y + 2, Math.Max(0, width - labelWidth), Math.Max(0, height - 4));
+        dc.FillRectangle(Brush(HostBrushes.ProgressTrack, Brushes.DimGray), track);
         if (percent is { } p)
         {
             var fill = p >= 90 ? Brush(HostBrushes.Bad, Brushes.OrangeRed) : p >= 60 ? Brush(HostBrushes.Warning, Brushes.Gold) : Brush(HostBrushes.Good, Brushes.LimeGreen);
-            dc.DrawRectangle(fill, null, new Rect(track.X, track.Y, track.Width * Math.Clamp(p, 0, 100) / 100, track.Height));
+            dc.FillRectangle(fill, new Rect(track.X, track.Y, track.Width * Math.Clamp(p, 0, 100) / 100, track.Height));
         }
 
         TextRight(dc, value, track.Right - 4, y, Brush(HostBrushes.Foreground, Brushes.White), bold: true);
     }
 
-    private double CharWidth() => Formatted("0", Brushes.White, false, false).WidthIncludingTrailingWhitespace;
+    private double CharWidth() => Formatted("0", Brushes.White, false).WidthIncludingTrailingWhitespace;
 
-    private double Text(DrawingContext dc, string text, double x, double y, Brush brush, bool bold = false, bool small = false)
+    private double Text(DrawingContext dc, string text, double x, double y, IBrush brush, bool bold = false)
     {
-        var formatted = Formatted(text, brush, bold, small);
+        var formatted = Formatted(text, brush, bold);
         dc.DrawText(formatted, new Point(x, y));
         return formatted.WidthIncludingTrailingWhitespace;
     }
 
-    private void TextRight(DrawingContext dc, string text, double right, double y, Brush brush, bool bold = false)
+    private void TextRight(DrawingContext dc, string text, double right, double y, IBrush brush, bool bold = false)
     {
-        var formatted = Formatted(text, brush, bold, false);
+        var formatted = Formatted(text, brush, bold);
         dc.DrawText(formatted, new Point(right - formatted.WidthIncludingTrailingWhitespace, y));
     }
 
-    private FormattedText Formatted(string text, Brush brush, bool bold, bool small) =>
-        new(text, CultureInfo.InvariantCulture, FlowDirection.LeftToRight, bold ? MonoBold : Mono, small ? FontSize * 0.8 : FontSize, brush, VisualTreeHelper.GetDpi(this).PixelsPerDip);
+    private FormattedText Formatted(string text, IBrush brush, bool bold) =>
+        new(text, CultureInfo.InvariantCulture, FlowDirection.LeftToRight, bold ? MonoBold : Mono, FontSize, brush);
 
-    private Brush Brush(string key, Brush fallback) => TryFindResource(key) as Brush ?? fallback;
+    /// <summary>A host brush (the application's resources), or the fallback outside the host.</summary>
+    private static IBrush Brush(string key, IBrush fallback) =>
+        Application.Current is { } application && application.TryGetResource(key, application.ActualThemeVariant, out var value) && value is IBrush brush
+            ? brush
+            : fallback;
 }

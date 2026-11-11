@@ -1,9 +1,9 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
-    <!-- Plugins that draw their own panel with WPF (issue #78); the core SDK stays UI-framework free. -->
-    <TargetFramework>net10.0-windows</TargetFramework>
-    <UseWPF>true</UseWPF>
-    <RootNamespace>HabilisTerminal.Plugins.Wpf</RootNamespace>
+    <!-- Plugins that draw their own panel (issue #78), on Avalonia like the host (issue #253); the core SDK stays
+         UI-framework free. -->
+    <TargetFramework>net10.0</TargetFramework>
+    <RootNamespace>HabilisTerminal.Plugins.Avalonia</RootNamespace>
     <!-- Its own version, the SDK's, never the app's (issue #60). -->
     <SdkVersion>1.8.0</SdkVersion>
     <AssemblyVersion>$(SdkVersion).0</AssemblyVersion>
@@ -14,12 +14,14 @@
     <!-- A plugin's author, and their tools, read the contracts' comments from the package. -->
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
     <NoWarn>$(NoWarn);CS1591</NoWarn>
-    <PackageId>HabilisTerminal.Plugins.Sdk.Wpf</PackageId>
-    <Description>WPF views for Habilis Terminal plugin panels: a plugin draws its panel itself.</Description>
+    <PackageId>HabilisTerminal.Plugins.Sdk.Avalonia</PackageId>
+    <Description>Avalonia views for Habilis Terminal plugin panels: a plugin draws its panel itself.</Description>
     <PackageReadmeFile>README.md</PackageReadmeFile>
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="..\HabilisTerminal.Plugins.Sdk\HabilisTerminal.Plugins.Sdk.csproj" />
+    <!-- The host's Avalonia: a plugin compiles against it and gets the host's copy at run time. -->
+    <PackageReference Include="Avalonia" />
   </ItemGroup>
   <ItemGroup>
     <None Include="README.md" Pack="true" PackagePath="\" />

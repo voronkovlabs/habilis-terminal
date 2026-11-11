@@ -3,7 +3,7 @@
     <Project Path="src/HabilisTerminal.App/HabilisTerminal.App.csproj" />
     <Project Path="src/HabilisTerminal.Core/HabilisTerminal.Core.csproj" />
     <Project Path="src/HabilisTerminal.Plugins.Sdk/HabilisTerminal.Plugins.Sdk.csproj" />
-    <Project Path="src/HabilisTerminal.Plugins.Sdk.Wpf/HabilisTerminal.Plugins.Sdk.Wpf.csproj" />
+    <Project Path="src/HabilisTerminal.Plugins.Sdk.Avalonia/HabilisTerminal.Plugins.Sdk.Avalonia.csproj" />
     <Project Path="src/HabilisTerminal.Shell/HabilisTerminal.Shell.csproj" />
     <Project Path="src/HabilisTerminal.Terminal/HabilisTerminal.Terminal.csproj" />
     <Project Path="src/HabilisTerminal.Themes/HabilisTerminal.Themes.csproj" />

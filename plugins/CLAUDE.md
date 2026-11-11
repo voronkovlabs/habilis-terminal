@@ -26,7 +26,7 @@ A plugin in this folder is built by `tools/plugins/Build-Plugins.ps1` instead, a
 - `Habilis.Samples.FileFormat`: a whole file format in one file. Start here for "looks like going inside an archive".
 - `Habilis.Samples.Demo`: every panel feature.
 - `Habilis.Archives`: a real format with native code, writing and passwords.
-- `Habilis.Gpu`: a panel drawn with WPF.
+- `Habilis.Gpu`: a panel drawn on Avalonia (`HabilisTerminal.Plugins.Sdk.Avalonia`).
 
 ## Testing here
 Tests run without network, in temporary folders. Never use the owner's AWS profiles: AWS plugins are tested with fakes. A test copy (`tools/ui/New-TestCopy.ps1`) gets no AWS plugins by default; keep it that way.

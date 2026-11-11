@@ -187,7 +187,7 @@ public static class PluginLoader
     {
         private static readonly Assembly SdkAssembly = typeof(Plugin).Assembly;
         private static readonly string SdkName = SdkAssembly.GetName().Name!;
-        private const string SdkWpfName = "HabilisTerminal.Plugins.Sdk.Wpf";
+        private const string SdkViewName = "HabilisTerminal.Plugins.Sdk.Avalonia";
         private readonly AssemblyDependencyResolver _resolver = new(assemblyPath);
 
         protected override Assembly? Load(AssemblyName assemblyName)
@@ -201,10 +201,17 @@ public static class PluginLoader
                 return SdkAssembly;
             }
 
-            // The WPF part of the SDK (issue #78) is shared the same way: the host's copy, by name.
-            if (assemblyName.Name == SdkWpfName)
+            // The view part of the SDK (issue #78) and the UI framework under it (Avalonia, issue #253) are shared the same
+            // way: the host's copies, by name, so a plugin's controls are the window's own types.
+            if (assemblyName.Name is { } name && (name == SdkViewName || name.StartsWith("Avalonia", StringComparison.Ordinal)) &&
+                Default.Assemblies.FirstOrDefault(a => a.GetName().Name == name) is { } shared)
             {
-                return Default.LoadFromAssemblyName(new AssemblyName(SdkWpfName));
+                return shared;
+            }
+
+            if (assemblyName.Name == SdkViewName)
+            {
+                return Default.LoadFromAssemblyName(new AssemblyName(SdkViewName));
             }
 
             return _resolver.ResolveAssemblyToPath(assemblyName) is { } path ? LoadFromAssemblyPath(path) : null;
