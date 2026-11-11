@@ -54,8 +54,10 @@ public sealed class ThreadStacks : IDisposable
             return;
         }
 
+        // Without "invade": listing the process's modules here failed now and then while it was loading one (issue #243).
+        // Walk refreshes the module list before every stack anyway.
         _ = SymSetOptions(OptionsNoNetwork);
-        if (!SymInitializeW(process, symbolFolder ?? string.Empty, true))
+        if (!SymInitializeW(process, symbolFolder ?? string.Empty, false))
         {
             _ = CloseHandle(process);
             return;
@@ -86,7 +88,11 @@ public sealed class ThreadStacks : IDisposable
         var symbol = Marshal.AllocHGlobal(SymbolHeader + (SymbolNameMax * 2));
         try
         {
-            _ = SymRefreshModuleList(_process);
+            // Listing the modules fails now and then while the process loads one (issue #243): a few tries.
+            for (var attempt = 0; attempt < 5 && !SymRefreshModuleList(_process); attempt++)
+            {
+                Thread.Sleep(20);
+            }
             var context = new IntPtr((raw.ToInt64() + 15) & ~15L);
             Clear(context, ContextSize);
             Marshal.WriteInt32(context, ContextFlagsOffset, ContextFull);

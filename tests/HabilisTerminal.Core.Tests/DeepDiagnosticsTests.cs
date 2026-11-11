@@ -22,7 +22,7 @@ public class DeepDiagnosticsTests
     [Fact]
     public void A_sleeping_thread_is_seen_waiting()
     {
-        using var thread = new BlockedThread(Thread.Sleep);
+        using var thread = new BlockedThread();
 
         var state = NativeThreads.StateOf(Environment.ProcessId, thread.NativeId);
 
@@ -45,7 +45,7 @@ public class DeepDiagnosticsTests
     [Fact]
     public void The_stack_of_a_waiting_thread_names_modules_and_functions_but_no_paths()
     {
-        using var thread = new BlockedThread(Thread.Sleep);
+        using var thread = new BlockedThread();
         using var stacks = new ThreadStacks(Environment.ProcessId);
 
         var stack = stacks.Walk(thread.NativeId);
@@ -67,7 +67,7 @@ public class DeepDiagnosticsTests
     [Fact]
     public void The_helper_answers_each_line_and_ends_with_its_input()
     {
-        using var thread = new BlockedThread(Thread.Sleep);
+        using var thread = new BlockedThread();
         var output = new StringWriter();
 
         ThreadStacks.RunHelper(Environment.ProcessId, new StringReader($"{thread.NativeId}\nnot a number\n"), output);
@@ -194,12 +194,23 @@ public class DeepDiagnosticsTests
         private readonly Thread _thread;
         private int _nativeId;
 
-        public BlockedThread(Action<int> wait)
+        /// <summary>
+        /// Asleep until released (issue #243): a fixed sleep of 1.5 s ran out under load before the symbols were loaded,
+        /// and the walk then found no thread.
+        /// </summary>
+        public BlockedThread()
         {
             _thread = new Thread(() =>
             {
                 Volatile.Write(ref _nativeId, (int)GetCurrentThreadId());
-                wait(1500);
+                try
+                {
+                    Thread.Sleep(Timeout.Infinite);
+                }
+                catch (ThreadInterruptedException)
+                {
+                    // Released.
+                }
             }) { IsBackground = true };
             _thread.Start();
             SpinWait.SpinUntil(() => Volatile.Read(ref _nativeId) != 0, 5000);
@@ -208,8 +219,17 @@ public class DeepDiagnosticsTests
 
         public int NativeId => Volatile.Read(ref _nativeId);
 
-        public bool IsRunningAfterTheWalk() => _thread.Join(5000);
+        /// <summary>A thread left suspended would not wake to be released.</summary>
+        public bool IsRunningAfterTheWalk()
+        {
+            _thread.Interrupt();
+            return _thread.Join(5000);
+        }
 
-        public void Dispose() => _thread.Join();
+        public void Dispose()
+        {
+            _thread.Interrupt();
+            _thread.Join();
+        }
     }
 }
