@@ -95,6 +95,7 @@ public sealed class TopMenu
             StaysOpen = false,
             Focusable = true,
         };
+        UiZoom.Apply(_popup);
         _popup.Closed += (_, _) => _result.TrySetResult(null);
         _popup.Opened += (_, _) => Keyboard.Focus(_root);
     }

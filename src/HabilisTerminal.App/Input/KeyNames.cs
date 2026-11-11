@@ -53,6 +53,8 @@ public static class KeyNames
             "\\" => Key.Oem5,
             "[" => Key.OemOpenBrackets,
             "]" => Key.Oem6,
+            "=" => Key.OemPlus,
+            "-" or "−" => Key.OemMinus,
             { Length: 1 } single when char.IsAsciiDigit(single[0]) => Key.D0 + (single[0] - '0'),
             _ => Enum.TryParse<Key>(name, ignoreCase: true, out var parsed) ? parsed : Key.None,
         };

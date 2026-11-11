@@ -175,6 +175,6 @@ public partial class CommandCatalogTests
     public void What_does_not_apply_is_not_found() =>
         Assert.DoesNotContain(Rank("edit", new CommandContext { Cursor = CursorKind.Parent }), r => r.Command.Id == "files.edit");
 
-    [GeneratedRegex(@"^(Gray [+−*]|((Ctrl|Alt|Shift)\+)*(F\d{1,2}|[A-Z0-9]|Enter|Tab|Up|Down|Left|Right|PgUp|PgDn|Del|Ins|Esc|\\|\[|\]))$")]
+    [GeneratedRegex(@"^(Gray [+−*]|((Ctrl|Alt|Shift)\+)*(F\d{1,2}|[A-Z0-9]|Enter|Tab|Up|Down|Left|Right|PgUp|PgDn|Del|Ins|Esc|\\|\[|\]|=|−))$")]
     private static partial Regex KeyPattern();
 }

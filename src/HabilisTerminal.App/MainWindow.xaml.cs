@@ -61,6 +61,7 @@ public partial class MainWindow : Window
         Loaded += (_, _) => ApplyInset(); // a restored maximized placement raises no StateChanged
 
         var state = App.State?.Load() ?? new Core.Settings.AppState();
+        InstallZoom(state);
         RestoreWindowPlacement(state);
         _themes.Changed += OnThemeChanged;
         ApplySettings(_settings);
@@ -666,7 +667,10 @@ public partial class MainWindow : Window
         });
     }
 
-    /// <summary>Estimates the terminal cell size so the layout can snap to whole rows and columns.</summary>
+    /// <summary>
+    /// Estimates the terminal cell size so the layout can snap to whole rows and columns. The console draws its zoomed
+    /// font in device pixels, while the layout is scaled by the zoom, so the cell is given in unzoomed units.
+    /// </summary>
     private void UpdateCellSize()
     {
         var dpi = VisualTreeHelper.GetDpi(this);
@@ -675,9 +679,10 @@ public partial class MainWindow : Window
         var text = new FormattedText("0", CultureInfo.InvariantCulture, FlowDirection.LeftToRight, typeface, emSize, Brushes.White, dpi.PixelsPerDip);
         var lineHeight = new FontFamily(TerminalFontFamily).LineSpacing * emSize;
 
+        var zoom = Widgets.UiZoom.Factor;
         Workspace.CellSize = new Size(
-            Math.Round(text.WidthIncludingTrailingWhitespace * dpi.DpiScaleX) / dpi.DpiScaleX,
-            Math.Round(lineHeight * dpi.DpiScaleY) / dpi.DpiScaleY);
+            Math.Round(text.WidthIncludingTrailingWhitespace * dpi.DpiScaleX) / (dpi.DpiScaleX * zoom),
+            Math.Round(lineHeight * dpi.DpiScaleY) / (dpi.DpiScaleY * zoom));
     }
 
     private const int DWMWA_USE_IMMERSIVE_DARK_MODE = 20;

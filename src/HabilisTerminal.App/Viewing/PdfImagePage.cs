@@ -52,6 +52,8 @@ public sealed class PdfImagePage : DockPanel, IPage, IDisposable
 
         _content.Children.Add(_image);
         _content.SizeChanged += (_, _) => _ = RenderAsync();
+        Widgets.UiZoom.Changed += OnZoomChanged;
+        Widgets.UiZoom.SnapToPixels(_image);
         Children.Add(_content);
         _ = OpenAsync(path);
     }
@@ -70,6 +72,7 @@ public sealed class PdfImagePage : DockPanel, IPage, IDisposable
     public void Dispose()
     {
         _closed = true;
+        Widgets.UiZoom.Changed -= OnZoomChanged;
         _request++;
         _pdf?.Dispose();
         _pdf = null;
@@ -179,9 +182,12 @@ public sealed class PdfImagePage : DockPanel, IPage, IDisposable
         _info.Text = $"Page {index + 1} of {pdf.PageCount}";
         try
         {
-            var bitmap = await pdf.RenderAsync(index, _content.ActualWidth * scale.DpiScaleX, _content.ActualHeight * scale.DpiScaleY).ConfigureAwait(true);
+            // In the interface zoom (issue #237) the page is drawn at the pixels it covers, not enlarged from a smaller one.
+            var zoom = Widgets.UiZoom.Factor;
+            var bitmap = await pdf.RenderAsync(index, _content.ActualWidth * scale.DpiScaleX * zoom, _content.ActualHeight * scale.DpiScaleY * zoom).ConfigureAwait(true);
             if (request == _request)
             {
+                Widgets.UiZoom.Unscale(_image);
                 _image.Source = bitmap;
             }
         }
@@ -193,6 +199,8 @@ public sealed class PdfImagePage : DockPanel, IPage, IDisposable
             }
         }
     }
+
+    private void OnZoomChanged() => _ = RenderAsync();
 
     private static bool IsFailure(Exception ex) =>
         ex is IOException or UnauthorizedAccessException or ArgumentException or ObjectDisposedException or COMException;

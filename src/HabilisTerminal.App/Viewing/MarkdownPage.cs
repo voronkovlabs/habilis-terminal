@@ -24,6 +24,7 @@ public sealed class MarkdownPage : DockPanel, IPage, IDisposable
     private static readonly HashSet<string> Extensions = new(StringComparer.OrdinalIgnoreCase) { ".md", ".markdown", ".mdown", ".mkd" };
 
     private readonly WebView2 _web = new();
+    private readonly Action _unzoom;
     private readonly TextBlock _title = new();
     private readonly TextBlock _info = new();
     private readonly ColorTheme _theme;
@@ -61,6 +62,7 @@ public sealed class MarkdownPage : DockPanel, IPage, IDisposable
         _web.DefaultBackgroundColor = System.Drawing.ColorTranslator.FromHtml(theme.GetOpaque("editor.background").ToString());
         Children.Add(_web);
         _title.Text = path;
+        _unzoom = Widgets.UiZoom.Follow(_web);
         _ = InitializeAsync();
     }
 
@@ -80,7 +82,11 @@ public sealed class MarkdownPage : DockPanel, IPage, IDisposable
 
     public void FocusContent() => _web.Focus();
 
-    public void Dispose() => _web.Dispose();
+    public void Dispose()
+    {
+        _unzoom();
+        _web.Dispose();
+    }
 
     protected override void OnPreviewKeyDown(KeyEventArgs e)
     {

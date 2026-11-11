@@ -25,7 +25,8 @@ public partial class MainWindow
 
     private string TerminalFontFamily => _settings.TerminalFontFamily;
 
-    private int TerminalFontSize => Math.Clamp(_settings.TerminalFontSize + _terminalZoom, 6, 48);
+    /// <summary><c>terminal.fontSize</c> in the interface zoom (issue #237): the console is native, so it is not scaled.</summary>
+    private int TerminalFontSize => Math.Clamp(Core.Settings.ZoomSteps.FontSize(_settings.TerminalFontSize, Widgets.UiZoom.Factor), 6, 96);
 
     /// <summary>Applies settings that can change while running; the shell settings apply on the next start.</summary>
     private void ApplySettings(AppSettings settings)
@@ -267,6 +268,7 @@ public partial class MainWindow
             SplitRatio = Workspace.SplitRatio,
             SinglePanelRatio = Workspace.SinglePanelRatio,
             Window = CaptureWindowPlacement(),
+            Zoom = Widgets.UiZoom.Factor,
             FolderHistory = _history.RecentFirst,
             FileHistory = [.. _fileHistory],
             PluginHotkeys = _pluginHotkeys.Snapshot(),

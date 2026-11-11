@@ -23,6 +23,11 @@ public partial class MainWindow
     {
         using var measure = Core.Diagnostics.Perf.Measure("key");
         Trace($"key {modifiers}+{key} focusedPanel={FocusedPanel()?.Side ?? "-"} wpfLeft={_left.IsKeyboardFocused} wpfRight={_right.IsKeyboardFocused} win32={GetFocus():X}");
+        if (HandleZoomKey(key, modifiers))
+        {
+            return true;
+        }
+
         switch (key)
         {
             // The console grown over the panels (issue #82): Esc at the prompt only collapses it.

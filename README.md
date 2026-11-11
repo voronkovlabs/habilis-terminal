@@ -10,7 +10,7 @@ A two-panel file manager for Windows with a real PowerShell 7 terminal underneat
 - **Viewer and editor:** F3 opens files of any size instantly as text or hex (memory-mapped), Alt+F3 shows pictures, PDF and Markdown; F4 edits text with AvalonEdit and saves
   byte-for-byte (encoding, BOM, line endings).
 - **Looks:** VS Code Dark / Light Modern following the Windows mode and accent colour, Seti or Material file icons,
-  any VS Code colour theme from the `themes` folder.
+  any VS Code colour theme from the `themes` folder. Ctrl+mouse wheel zooms the whole interface; Ctrl+Alt+0 resets.
 - **Settings:** `settings.json` with a schema and live reload, plus a VS Code-style Settings page (F9 → Options).
 
 ## Install

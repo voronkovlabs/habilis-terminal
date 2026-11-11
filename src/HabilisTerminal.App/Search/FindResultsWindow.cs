@@ -68,8 +68,8 @@ internal sealed class FindResultsWindow : Window
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         FontFamily = new FontFamily("Segoe UI");
         UseLayoutRounding = true;
-        Width = 820;
-        Height = 560;
+        Width = 820 * Widgets.UiZoom.Factor;
+        Height = 560 * Widgets.UiZoom.Factor;
 
         var title = new TextBlock { Text = TitleOf(session.Options), FontWeight = FontWeights.SemiBold, Margin = new Thickness(0, 0, 0, 10), TextTrimming = TextTrimming.CharacterEllipsis };
         title.SetResourceReference(StyleProperty, "Habi.LabelStyle");
@@ -131,6 +131,7 @@ internal sealed class FindResultsWindow : Window
             }
         };
         Content = frame;
+        Widgets.UiZoom.Attach(this);
 
         PreviewKeyDown += OnKey;
         _timer = new DispatcherTimer(DispatcherPriority.Background) { Interval = TimeSpan.FromMilliseconds(200) };

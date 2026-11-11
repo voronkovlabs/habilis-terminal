@@ -100,6 +100,9 @@ public partial class MainWindow
         WireCommandLine(tab);
 
         WorkspaceLayout.SetRole(tab.Terminal, WorkspaceRole.Terminal);
+
+        // The control turns its own size into console columns and rows: it must see the real pixels (issue #237).
+        Widgets.UiZoom.Unscale(tab.Terminal);
         Workspace.Children.Insert(0, tab.Terminal);
         _tabs.Add(tab);
         return tab;

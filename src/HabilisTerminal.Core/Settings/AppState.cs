@@ -63,6 +63,9 @@ public sealed record AppState
 
     public WindowPlacement? Window { get; init; }
 
+    /// <summary>The interface zoom, 1 for 100% (issue #237).</summary>
+    public double? Zoom { get; init; }
+
     public IReadOnlyList<string> FolderHistory { get; init; } = [];
 
     public IReadOnlyList<FileHistoryEntry> FileHistory { get; init; } = [];

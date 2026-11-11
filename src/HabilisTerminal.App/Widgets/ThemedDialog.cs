@@ -62,6 +62,7 @@ internal sealed class DialogWindow<T> : Window
         frame.SetResourceReference(Border.BackgroundProperty, "Habi.WidgetBackground");
         frame.SetResourceReference(Border.BorderBrushProperty, "Habi.WidgetBorder");
         Content = frame;
+        UiZoom.Attach(this);
 
         // Access keys without Alt, as in Far dialogs (only when focus is not in a text box).
         PreviewKeyDown += (_, e) =>

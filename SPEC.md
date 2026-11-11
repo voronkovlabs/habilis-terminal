@@ -157,6 +157,8 @@ Far Manager defaults unless noted.
 | Shift+F12 | Selected first (toggle) |
 | Ctrl+A | Attributes |
 | Ctrl+Up/Down, Ctrl+Left/Right | Resize terminal height / single-panel width |
+| Ctrl+mouse wheel, Ctrl+Alt+= / Ctrl+Alt+− | Zoom the whole interface, from anywhere (issue #237): 50 % to 300 % in a browser's steps; panels, menus, dialogs, terminal, viewer, editor and web pages together. Remembered in state.json. A badge with the percentage and Reset shows for a moment after each change |
+| Ctrl+Alt+0 | Zoom back to 100 % (also F9 > Options > Reset zoom); Ctrl+0 stays Far's Alternative full view |
 | F1 | Help (keyboard map) |
 | F3 / F4 | View / edit (§9) |
 | Alt+F3 | Pictures, PDF pages and rendered Markdown in the program (§9); any other file in its associated program, as Far's external viewer (issues #57, #231) |
@@ -489,7 +491,7 @@ Approach:
 - Right click: copy and clear if there is a selection, otherwise paste.
 - Ctrl+Shift+C / Ctrl+Shift+V copy / paste at terminal level. Ctrl+C and Ctrl+Insert copy and clear a selection in the console; with none they go to the shell, as does Ctrl+V.
 - Multi-line paste warning ("Paste N lines?"), can be disabled; bracketed paste passed through when enabled by the shell.
-- Scrollback 9001 lines; mouse wheel scrolls the buffer; Ctrl+wheel changes the terminal font size.
+- Scrollback 9001 lines; mouse wheel scrolls the buffer; Ctrl+wheel zooms the whole interface, the terminal's font with it (issue #237).
 
 ## 13. DPI and multiple monitors
 

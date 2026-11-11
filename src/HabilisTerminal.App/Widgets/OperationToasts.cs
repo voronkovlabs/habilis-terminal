@@ -34,6 +34,7 @@ public sealed class OperationToasts
             AllowsTransparency = true,
             StaysOpen = true,
         };
+        UiZoom.Apply(_popup);
         _stack.SizeChanged += (_, _) => Reposition();
         target.SizeChanged += (_, _) => Reposition();
         owner.LocationChanged += (_, _) => Reposition();

@@ -19,9 +19,6 @@ public partial class MainWindow
     private const int MK_CONTROL = 0x0008;
     private const int MaxPreviewLines = 6;
 
-    /// <summary>Ctrl+wheel steps for this session, on top of <c>terminal.fontSize</c>.</summary>
-    private int _terminalZoom;
-
     /// <summary>Zero until the first tab exists: restoring the layout activates a panel before that.</summary>
     private IntPtr TerminalHandle => _tab is { } tab ? FindHwndHost(tab.Terminal)?.Handle ?? IntPtr.Zero : IntPtr.Zero;
 
@@ -47,9 +44,10 @@ public partial class MainWindow
 
                 return false;
 
+            // The whole interface zooms (issue #237); the console's font follows UiZoom.Changed.
             case WM_MOUSEWHEEL when ((long)msg.wParam & MK_CONTROL) != 0:
                 var delta = (short)(((long)msg.wParam >> 16) & 0xFFFF);
-                ZoomTerminal(Math.Sign(delta));
+                Widgets.UiZoom.Step(Math.Sign(delta));
                 return true;
 
             case WM_RBUTTONDOWN:
@@ -63,20 +61,6 @@ public partial class MainWindow
             default:
                 return false;
         }
-    }
-
-    private void ZoomTerminal(int direction)
-    {
-        var before = TerminalFontSize;
-        _terminalZoom += direction;
-        if (TerminalFontSize == before)
-        {
-            _terminalZoom -= direction;
-            return;
-        }
-
-        ApplyTerminalTheme(_themes.Current);
-        UpdateCellSize();
     }
 
     /// <summary>Copies the console's selection and clears it. False when nothing is selected.</summary>

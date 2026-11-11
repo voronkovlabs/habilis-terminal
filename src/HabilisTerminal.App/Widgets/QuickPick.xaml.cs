@@ -86,6 +86,7 @@ public sealed partial class QuickPick : UserControl
             StaysOpen = false,
             Focusable = true,
         };
+        UiZoom.Apply(popup);
 
         // Centered horizontally near the top of the target, like the VS Code quick pick.
         if (options.OverTarget)

@@ -147,6 +147,9 @@ public partial class MainWindow
     {
         "panels.toggle" => TogglePanels,
         "window.maximize" => _titleBar.ToggleMaximize,
+        "window.zoomIn" => () => Widgets.UiZoom.Step(1),
+        "window.zoomOut" => () => Widgets.UiZoom.Step(-1),
+        "window.zoomReset" => () => Widgets.UiZoom.Reset(),
         "window.help" => ShowHelp,
         "window.menu" => () => Fire(ShowTopMenuAsync()),
         "window.exit" => Close,

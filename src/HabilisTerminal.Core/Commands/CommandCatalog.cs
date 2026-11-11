@@ -134,6 +134,9 @@ public static class CommandCatalog
         new("panels.narrower", Layout, "Make the single panel narrower", "Ctrl+Left", HasPanel),
         new("panels.wider", Layout, "Make the single panel wider", "Ctrl+Right", HasPanel),
         new("window.maximize", Layout, "Maximize or restore the window", "Alt+F9", Anywhere),
+        new("window.zoomIn", Layout, "Zoom in", "Ctrl+Alt+=", Anywhere) { Help = "Everything larger; Ctrl+mouse wheel too" },
+        new("window.zoomOut", Layout, "Zoom out", "Ctrl+Alt+−", Anywhere) { Help = "Everything smaller; Ctrl+mouse wheel too" },
+        new("window.zoomReset", Layout, "Reset zoom", "Ctrl+Alt+0", Anywhere) { Help = "Back to 100%" },
 
         // Navigation
         new("go.open", Navigation, "Open", "Enter", c => HasPanel(c) && c.Cursor is CursorKind.File or CursorKind.Folder or CursorKind.Parent)

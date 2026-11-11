@@ -109,6 +109,7 @@ internal sealed class ReportDialog : Window
             }
         };
         Content = frame;
+        Widgets.UiZoom.Attach(this);
 
         PreviewKeyDown += OnPreviewKeyDown;
         ShowEditing();

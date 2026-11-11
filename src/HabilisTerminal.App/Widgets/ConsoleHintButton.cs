@@ -70,6 +70,7 @@ internal sealed class ConsoleHintButton
             StaysOpen = true,
             Focusable = false,
         };
+        UiZoom.Apply(_popup);
         owner.Activated += (_, _) => Apply();
         owner.Deactivated += (_, _) => _popup.IsOpen = false;
         owner.StateChanged += (_, _) => Apply();

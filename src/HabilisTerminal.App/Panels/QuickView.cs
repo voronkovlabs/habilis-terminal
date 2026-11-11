@@ -65,6 +65,7 @@ public sealed class QuickView : Grid, IDisposable
         _editor.TextArea.Focusable = false; // the keyboard stays in the panels
         Children.Add(_editor);
         Children.Add(_image);
+        Widgets.UiZoom.SnapToPixels(_image);
         Children.Add(_message);
         _plainScroll.Content = _plain;
         Children.Add(_plainScroll);
@@ -125,6 +126,7 @@ public sealed class QuickView : Grid, IDisposable
                 image.UriSource = new Uri(path);
                 image.EndInit();
                 image.Freeze();
+                _image.LayoutTransform = Transform.Identity;
                 _image.Source = image;
                 _image.Visibility = Visibility.Visible;
                 return;
@@ -281,14 +283,15 @@ public sealed class QuickView : Grid, IDisposable
         // The newest request wins: the cursor or the wheel may have moved on while this page was rendering.
         var request = ++_pdfRequest;
         var scale = VisualTreeHelper.GetDpi(this);
-        var width = Math.Max(1, ActualWidth - (2 * _image.Margin.Left)) * scale.DpiScaleX;
-        var height = Math.Max(1, ActualHeight - (2 * _image.Margin.Top)) * scale.DpiScaleY;
+        var width = Math.Max(1, ActualWidth - (2 * _image.Margin.Left)) * scale.DpiScaleX * Widgets.UiZoom.Factor;
+        var height = Math.Max(1, ActualHeight - (2 * _image.Margin.Top)) * scale.DpiScaleY * Widgets.UiZoom.Factor;
         var index = _pdfIndex;
         try
         {
             var bitmap = await pdf.RenderAsync(index, width, height).ConfigureAwait(true);
             if (request == _pdfRequest)
             {
+                Widgets.UiZoom.Unscale(_image); // drawn for the zoomed pixels (issue #237)
                 _image.Source = bitmap;
                 _image.Visibility = Visibility.Visible;
                 _pdfPage.Text = $"Page {index + 1} of {pdf.PageCount}";

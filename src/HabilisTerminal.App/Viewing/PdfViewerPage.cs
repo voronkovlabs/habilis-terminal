@@ -20,6 +20,7 @@ namespace HabilisTerminal.App.Viewing;
 public sealed class PdfViewerPage : DockPanel, IPage, IDisposable
 {
     private readonly WebView2 _web = new();
+    private readonly Action _unzoom;
     private readonly TextBlock _info = new();
     private readonly TextBox _search = new();
     private readonly TextBlock _matches = new();
@@ -82,6 +83,7 @@ public sealed class PdfViewerPage : DockPanel, IPage, IDisposable
 
         _web.DefaultBackgroundColor = System.Drawing.ColorTranslator.FromHtml(theme.GetOpaque("editor.background").ToString());
         Children.Add(_web);
+        _unzoom = Widgets.UiZoom.Follow(_web);
         _ = InitializeAsync();
     }
 
@@ -108,6 +110,7 @@ public sealed class PdfViewerPage : DockPanel, IPage, IDisposable
     public void Dispose()
     {
         _findRequest++;
+        _unzoom();
         _web.Dispose();
     }
 
