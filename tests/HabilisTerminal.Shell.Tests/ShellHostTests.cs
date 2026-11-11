@@ -252,6 +252,41 @@ public class ShellHostTests
     }
 
     [Fact]
+    public async Task Cd_with_a_variable_or_to_a_file_is_reported_as_in_far()
+    {
+        // Issue #245: PowerShell expands no %VARIABLES% and cannot cd to a file.
+        using var shell = new TestShell();
+        var paths = new System.Collections.Concurrent.ConcurrentQueue<string>();
+        shell.Host.CdEntered += paths.Enqueue;
+        await shell.WaitIdleAsync();
+        var folder = Path.Combine(shell.WorkingDirectory, "sub dir");
+        Directory.CreateDirectory(folder);
+        var file = Path.Combine(folder, "notes.txt");
+        File.WriteAllText(file, "x");
+        var temp = Path.GetFullPath(Environment.GetEnvironmentVariable("TEMP")!).TrimEnd('\\');
+
+        foreach (var (line, expected) in new[]
+        {
+            (@"cd 'sub dir\notes.txt'", file),
+            ("cd %TEMP%", temp),
+            (@"Set-Location ""%TEMP%""", temp),
+        })
+        {
+            shell.Host.Write(line + "\r");
+            await TestShell.WaitUntilAsync(() => !paths.IsEmpty, "cd message for: " + line);
+            Assert.True(paths.TryDequeue(out var path));
+            Assert.Equal(expected, path.TrimEnd('\\'), ignoreCase: true);
+        }
+
+        // A folder without variables, or a place that is not there, is cd as ever.
+        shell.Host.Write("cd 'sub dir'\r");
+        await TestShell.WaitUntilAsync(() => string.Equals(shell.Host.CurrentDirectory, folder, StringComparison.OrdinalIgnoreCase), "plain cd");
+        shell.Host.Write("cd %HABI_NO_SUCH_245%\r");
+        await shell.WaitForTextAsync("HABI_NO_SUCH_245");
+        Assert.Empty(paths);
+    }
+
+    [Fact]
     public async Task Goto_reports_what_follows_it_instead_of_running_it()
     {
         using var shell = new TestShell();

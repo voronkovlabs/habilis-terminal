@@ -141,10 +141,11 @@ public static class PerfReport
         {
             var share = operation.CpuMs is { } cpu ? Share(cpu, operation.WallMs) : "-";
             var kind = operation.CpuMs is { } used ? Kind(used, operation.WallMs) : "asynchronous";
-            text.AppendLine(culture, $"| {Cell(operation.Name)} | {Cell(operation.Detail ?? string.Empty)} | {operation.Count} | {operation.WallMs:0} | {operation.WallMs / Math.Max(1, operation.Count):0.0} | {Percentile95(operation):0} | {operation.MaxWallMs:0} | {share} | {kind} |");
+            var detail = operation.Name.StartsWith("plugin.", StringComparison.Ordinal) ? Reporting.ReportMasking.Plugin(operation.Detail) : operation.Detail ?? string.Empty;
+            text.AppendLine(culture, $"| {Cell(operation.Name)} | {Cell(detail)} | {operation.Count} | {operation.WallMs:0} | {operation.WallMs / Math.Max(1, operation.Count):0.0} | {Percentile95(operation):0} | {operation.MaxWallMs:0} | {share} | {kind} |");
         }
 
-        return new IssueDraft($"Performance report {version}", text.ToString(), ["performance"]);
+        return new IssueDraft($"Performance report {version}", Reporting.ReportMasking.HidePaths(text.ToString()), ["performance"]);
     }
 
     /// <summary>Average weighted by the periods' length, and the highest.</summary>

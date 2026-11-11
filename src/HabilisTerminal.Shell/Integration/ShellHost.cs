@@ -88,6 +88,12 @@ public sealed class ShellHost : IDisposable
     public event Action<string>? GotoEntered;
 
     /// <summary>
+    /// Enter on "cd" with a path that has %VARIABLES% or leads to a file (issue #245): the full path, which exists and
+    /// which the shell did not run. Background thread.
+    /// </summary>
+    public event Action<string>? CdEntered;
+
+    /// <summary>
     /// A command was accepted: the console row its output starts at and the console's rows and columns (issue #82).
     /// Raised from the output thread before the command's output reaches <see cref="Output"/>.
     /// </summary>
@@ -351,6 +357,18 @@ public sealed class ShellHost : IDisposable
 
             case ShellEvent.Message { Name: "focus-panel" }:
                 FocusPanelRequested?.Invoke();
+                break;
+
+            case ShellEvent.Message { Name: "cd-path" } cd when cd.Arguments.Count == 1:
+                try
+                {
+                    CdEntered?.Invoke(System.Text.Encoding.UTF8.GetString(Convert.FromBase64String(cd.Arguments[0])));
+                }
+                catch (FormatException)
+                {
+                    // A garbled message: nowhere to go.
+                }
+
                 break;
 
             case ShellEvent.Message { Name: "goto" } go when go.Arguments.Count == 1:

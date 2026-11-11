@@ -71,7 +71,7 @@ public class ReportingTests
         var issue = IssueText.Crash(report, Masking);
 
         Assert.Equal(["crash"], issue.Labels);
-        Assert.Equal(@"Crash: UnauthorizedAccessException: Access to %USERPROFILE%\secret.txt is denied", issue.Title);
+        Assert.Equal(@"Crash: UnauthorizedAccessException: Access to <path>\secret.txt is denied", issue.Title); // paths hidden, #248
         Assert.Contains("| Version | 0.1.1 |", issue.Body, StringComparison.Ordinal);
         Assert.Contains("| Windows | Windows 11 24H2 |", issue.Body, StringComparison.Ordinal);
         Assert.Contains(IssueText.SignatureMarker("abc123abc123"), issue.Body, StringComparison.Ordinal);

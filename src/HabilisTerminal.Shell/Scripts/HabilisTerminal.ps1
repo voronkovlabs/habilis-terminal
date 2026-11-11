@@ -164,6 +164,26 @@ function global:__HabiEnter($key, $arg) {
         return
     }
 
+    # "cd" as in Far (issue #245): %VARIABLES% are expanded, as cmd and Far do, and a file's path goes to its folder
+    # with the file under the cursor. Only a place that exists is taken; any other cd runs as before.
+    if ($line -match '^\s*(?:cd|chdir|sl|Set-Location)\s+(["'']?)([^"'']+?)\1\s*$') {
+        $target = $Matches[2]
+        $expanded = [Environment]::ExpandEnvironmentVariables($target)
+        $isFile = $false
+        $exists = $false
+        try {
+            $isFile = Test-Path -LiteralPath $expanded -PathType Leaf
+            $exists = $isFile -or (Test-Path -LiteralPath $expanded -PathType Container)
+        }
+        catch {
+        }
+
+        if ($exists -and ($isFile -or $expanded -ne $target)) {
+            __HabiSendLine $line 'cd-path' (Resolve-Path -LiteralPath $expanded).ProviderPath
+            return
+        }
+    }
+
     $prefixes = Join-Path $state.Channel 'prefixes'
     # "sqs:" alone counts too (the plugin's default location).
     if ($line -match '^\s*([A-Za-z][A-Za-z0-9]*):(\S|\s*$)' -and (Test-Path -LiteralPath $prefixes)) {

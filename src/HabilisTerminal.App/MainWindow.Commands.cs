@@ -877,6 +877,17 @@ public partial class MainWindow
         await NavigateOrOpenAsync(panel, path);
     }
 
+    /// <summary>
+    /// "cd %USERPROFILE%\x" or "cd" to a file in the console (issue #245), as in Far: the active panel goes to the folder,
+    /// a file under its cursor, and the shell follows. The keys stay in the console.
+    /// </summary>
+    private async Task OnShellCdAsync(string path)
+    {
+        LeaveOtherContent(_active);
+        await OpenPastedLocationAsync(_active, path);
+        SyncShellDirectory();
+    }
+
     /// <summary>"goto" in the console (issue #152): the active panel goes there, as a paste into the drive menu does.</summary>
     private void OnGoto(string text, string? shellFolder)
     {

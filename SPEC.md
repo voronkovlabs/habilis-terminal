@@ -105,6 +105,9 @@ All keys are handled by the panels, except:
   and F8 work on the real files, Ctrl+R checks them again, `..` leaves), Stop ends the search. Not searched: inside
   archives and plugin panels.
 
+### cd, as in Far
+`cd` (also `chdir`, `sl`, `Set-Location`) whose path has `%VARIABLES%` or leads to a file (#245) is taken by Habilis Terminal: the variables are expanded, the active panel goes to the folder with the file under its cursor, and the shell follows; the keys stay in the console. Only a place that exists is taken; any other `cd` reaches the shell as typed.
+
 ### goto
 `goto <path or address>` typed at the prompt (#152) does what a paste into the drive menu does: a folder opens, a file's path opens its folder with the cursor on it, a plugin's address opens the plugin. It is also taken relative to the shell's folder, with `~` and `%VARIABLES%`. The line does not reach the shell, and goes into its history. A program waiting for input gets the line as usual.
 

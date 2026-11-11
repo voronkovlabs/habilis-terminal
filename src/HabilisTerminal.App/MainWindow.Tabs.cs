@@ -85,6 +85,13 @@ public partial class MainWindow
                 OnPluginAddress(address);
             }
         });
+        host.CdEntered += path => Dispatcher.BeginInvoke(() =>
+        {
+            if (tab == _tab)
+            {
+                Fire(OnShellCdAsync(path));
+            }
+        });
         host.GotoEntered += text => Dispatcher.BeginInvoke(() =>
         {
             if (tab == _tab)

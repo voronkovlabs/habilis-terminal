@@ -29,8 +29,21 @@ public static class DirectorySize
 
         public Walk(string path)
         {
+            // Gone or shut since the panel listed it (issue #235, a crash of the folder sizes thread): counted as one
+            // folder that could not be read.
+            FileAttributes attributes;
+            try
+            {
+                attributes = File.GetAttributes(path);
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                _inaccessible = 1;
+                return;
+            }
+
             // A link counted by itself holds nothing of its own.
-            if (!IsLink(path, File.GetAttributes(path)))
+            if (!IsLink(path, attributes))
             {
                 _pending.Push(path);
             }

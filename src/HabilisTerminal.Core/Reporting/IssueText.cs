@@ -21,7 +21,7 @@ public static class IssueText
 
     public static IssueDraft Crash(CrashReport report, ReportMasking masking)
     {
-        var title = masking.Mask($"Crash: {ShortType(report.ExceptionType)}: {FirstLine(report.Message)}");
+        var title = ReportMasking.HidePaths(masking.Mask($"Crash: {ShortType(report.ExceptionType)}: {FirstLine(report.Message)}"));
         var body = new StringBuilder()
             .AppendLine("Habilis Terminal crashed. This report was sent from the app after the user reviewed it.")
             .AppendLine()
@@ -101,7 +101,7 @@ public static class IssueText
                 .AppendLine("````");
         }
 
-        return masking.Mask(text.ToString());
+        return ReportMasking.HidePaths(masking.Mask(text.ToString()));
     }
 
     private static string ShortType(string type) => type[(type.LastIndexOf('.') + 1)..];

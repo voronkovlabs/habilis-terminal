@@ -65,6 +65,29 @@ public class FolderSizeResumeTests
     }
 
     [Fact]
+    public void A_folder_gone_before_its_count_is_one_that_could_not_be_read() =>
+        Assert.Equal(new DirectorySize.Result(0, 0, 0, 1), DirectorySize.Compute(Path.Combine(Path.GetTempPath(), "habi-tests", "gone-" + Guid.NewGuid().ToString("N"))));
+
+    [Fact]
+    public void Worker_survives_a_folder_deleted_before_its_turn_and_counts_the_next()
+    {
+        // Issue #235: the folder sizes thread threw on a folder the panel had listed and then lost, and took the app down.
+        using var sandbox = new TestSandbox();
+        var gone = MakeTree(sandbox.Path, "gone", 1);
+        var kept = MakeTree(sandbox.Path, "kept", 2);
+        Directory.Delete(gone, recursive: true);
+
+        var cache = new FolderSizeCache();
+        using var worker = new FolderSizeWorker(cache, backgroundMode: false);
+        worker.Request(new object(), [gone, kept]);
+        WaitUntil(() => cache.HasFinal(kept));
+
+        Assert.True(cache.TryGet(gone, out var size) && size.IsFinal);
+        Assert.Equal(1, size.Totals.Inaccessible);
+        Assert.Equal(DirectorySize.Compute(kept), cache.TryGet(kept, out var counted) ? counted.Totals : null);
+    }
+
+    [Fact]
     public void Worker_pauses_a_long_count_for_the_other_panels_visible_folder_and_resumes_it()
     {
         using var sandbox = new TestSandbox();
