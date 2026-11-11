@@ -24,7 +24,16 @@ public partial class MainWindow
             if (Keyboard.Modifiers == ModifierKeys.Control && e.Delta != 0)
             {
                 e.Handled = true;
-                UiZoom.Step(Math.Sign(e.Delta));
+
+                // A picture or a PDF page zooms itself (issue #241).
+                if (ContentZoom is { } view)
+                {
+                    view.ZoomAt(e.GetPosition(view), Math.Sign(e.Delta));
+                }
+                else
+                {
+                    UiZoom.Step(Math.Sign(e.Delta));
+                }
             }
         };
 
@@ -42,27 +51,46 @@ public partial class MainWindow
         };
     }
 
-    /// <summary>Ctrl+Alt+= / Ctrl+Alt+− / Ctrl+Alt+0, from any focus; the gray keys too.</summary>
-    private static bool HandleZoomKey(Key key, KeyModifiers modifiers)
+    /// <summary>The open page's own zoom (a picture, a PDF page), if it has one.</summary>
+    private Viewing.ZoomPanView? ContentZoom => IsPageOpen && PageHost.Content is Viewing.IContentZoom page ? page.ZoomView : null;
+
+    /// <summary>Ctrl+Alt+= / Ctrl+Alt+− / Ctrl+Alt+0, from any focus; the gray keys too. A picture zooms itself.</summary>
+    private bool HandleZoomKey(Key key, KeyModifiers modifiers)
     {
         if (modifiers != (KeyModifiers.Control | KeyModifiers.Alt))
         {
             return false;
         }
 
+        var view = ContentZoom;
         switch (key)
         {
             case Key.OemPlus or Key.Add:
-                UiZoom.Step(1);
+                Step(1);
                 return true;
             case Key.OemMinus or Key.Subtract:
-                UiZoom.Step(-1);
+                Step(-1);
+                return true;
+            case Key.D0 or Key.NumPad0 when view is not null:
+                view.Fit();
                 return true;
             case Key.D0 or Key.NumPad0:
                 UiZoom.Reset();
                 return true;
             default:
                 return false;
+        }
+
+        void Step(int direction)
+        {
+            if (view is not null)
+            {
+                view.ZoomCenter(direction);
+            }
+            else
+            {
+                UiZoom.Step(direction);
+            }
         }
     }
 

@@ -12,16 +12,22 @@ namespace HabilisTerminal.App.Viewing;
 /// Alt+F3 on a PDF (issues #114, #231): one page at a time through <see cref="PdfPreview"/>. The Edge viewer starts a browser process
 /// and reads the whole file, about 60 ms per MB, so it comes only on Ctrl+F, for search and text selection.
 /// PgUp / PgDn, arrows and the wheel turn pages, Home / End go to the ends, F3 the text viewer, Esc / F10 / Alt+F3 close.
+/// Ctrl+wheel zooms the page (issue #241); it is drawn again at the zoomed pixels, so it stays sharp.
 /// </summary>
-public sealed class PdfImagePage : DockPanel, IPage, IDisposable
+public sealed class PdfImagePage : DockPanel, IPage, IDisposable, IContentZoom
 {
-    private readonly Image _image = new() { Stretch = Stretch.Uniform, StretchDirection = StretchDirection.DownOnly };
-    private readonly Grid _content = new();
+    /// <summary>A zoomed page is drawn at most this many pixels on its long side, to keep memory in bounds.</summary>
+    private const double MaxRenderPixels = 8000;
+
+    private readonly ZoomPanView _view = new(enlargeToFit: true);
     private readonly TextBlock _info = new();
+    private readonly System.Windows.Threading.DispatcherTimer _sharpen;
     private PdfPreview? _pdf;
     private int _index;
     private int _request;
     private bool _closed;
+    private Size _rendered;
+    private Size _pagePixels;
 
     public PdfImagePage(string path)
     {
@@ -31,7 +37,7 @@ public sealed class PdfImagePage : DockPanel, IPage, IDisposable
         LastChildFill = true;
 
         var title = new TextBlock { Text = path, FontWeight = FontWeights.SemiBold };
-        var hint = new TextBlock { Text = "PgUp PgDn page · Home End · Ctrl+F find, select text · F3 as text · Esc close" };
+        var hint = new TextBlock { Text = "PgUp PgDn page · Ctrl+wheel zoom · Ctrl+F find, select text · F3 as text · Esc close" };
         foreach (var text in new[] { title, _info, hint })
         {
             text.FontFamily = new FontFamily("Segoe UI");
@@ -50,11 +56,14 @@ public sealed class PdfImagePage : DockPanel, IPage, IDisposable
         DockPanel.SetDock(headerBorder, Dock.Top);
         Children.Add(headerBorder);
 
-        _content.Children.Add(_image);
-        _content.SizeChanged += (_, _) => _ = RenderAsync();
-        Widgets.UiZoom.Changed += OnZoomChanged;
-        Widgets.UiZoom.SnapToPixels(_image);
-        Children.Add(_content);
+        Children.Add(_view);
+        _sharpen = new System.Windows.Threading.DispatcherTimer(TimeSpan.FromMilliseconds(120), System.Windows.Threading.DispatcherPriority.Background, (_, _) => Sharpen(), Dispatcher);
+        _view.ViewChanged += () =>
+        {
+            ShowInfo();
+            _sharpen.Stop();
+            _sharpen.Start();
+        };
         _ = OpenAsync(path);
     }
 
@@ -67,12 +76,14 @@ public sealed class PdfImagePage : DockPanel, IPage, IDisposable
     /// <summary>Ctrl+F: the same file in the Edge viewer, at this zero-based page.</summary>
     public event Action<int>? SearchRequested;
 
+    public ZoomPanView ZoomView => _view;
+
     public void FocusContent() => Focus();
 
     public void Dispose()
     {
         _closed = true;
-        Widgets.UiZoom.Changed -= OnZoomChanged;
+        _sharpen.Stop();
         _request++;
         _pdf?.Dispose();
         _pdf = null;
@@ -128,11 +139,15 @@ public sealed class PdfImagePage : DockPanel, IPage, IDisposable
         }
     }
 
-    protected override void OnPreviewMouseWheel(MouseWheelEventArgs e)
+    /// <summary>Fitted, the wheel turns pages; zoomed, the view has scrolled with it already.</summary>
+    protected override void OnMouseWheel(MouseWheelEventArgs e)
     {
-        base.OnPreviewMouseWheel(e);
-        e.Handled = true;
-        GoTo(_index + (e.Delta < 0 ? 1 : -1));
+        base.OnMouseWheel(e);
+        if (!e.Handled && Keyboard.Modifiers == ModifierKeys.None)
+        {
+            e.Handled = true;
+            GoTo(_index + (e.Delta < 0 ? 1 : -1));
+        }
     }
 
     private void GoTo(int index)
@@ -168,9 +183,10 @@ public sealed class PdfImagePage : DockPanel, IPage, IDisposable
         }
     }
 
+    /// <summary>A new page, fitted: drawn at the pixels it will cover, then shown.</summary>
     private async Task RenderAsync()
     {
-        if (_pdf is not { PageCount: > 0 } pdf || _content.ActualWidth < 1 || _content.ActualHeight < 1)
+        if (_pdf is not { PageCount: > 0 } pdf || _view.ActualWidth < 1 || _view.ActualHeight < 1)
         {
             return;
         }
@@ -178,17 +194,18 @@ public sealed class PdfImagePage : DockPanel, IPage, IDisposable
         // The newest request wins: pages can be turned faster than they render.
         var request = ++_request;
         var index = _index;
-        var scale = VisualTreeHelper.GetDpi(this);
-        _info.Text = $"Page {index + 1} of {pdf.PageCount}";
         try
         {
-            // In the interface zoom (issue #237) the page is drawn at the pixels it covers, not enlarged from a smaller one.
-            var zoom = Widgets.UiZoom.Factor;
-            var bitmap = await pdf.RenderAsync(index, _content.ActualWidth * scale.DpiScaleX * zoom, _content.ActualHeight * scale.DpiScaleY * zoom).ConfigureAwait(true);
+            var dpi = VisualTreeHelper.GetDpi(this);
+            var size = pdf.PageSize(index);
+            var pixels = new Size(size.Width * dpi.DpiScaleX, size.Height * dpi.DpiScaleY);
+            var fitted = _view.FittedPixels(pixels);
+            var bitmap = await pdf.RenderAsync(index, fitted.Width, fitted.Height).ConfigureAwait(true);
             if (request == _request)
             {
-                Widgets.UiZoom.Unscale(_image);
-                _image.Source = bitmap;
+                _pagePixels = pixels;
+                _rendered = new Size(bitmap.PixelWidth, bitmap.PixelHeight);
+                _view.Show(bitmap, pixels);
             }
         }
         catch (Exception ex) when (IsFailure(ex))
@@ -200,7 +217,61 @@ public sealed class PdfImagePage : DockPanel, IPage, IDisposable
         }
     }
 
-    private void OnZoomChanged() => _ = RenderAsync();
+    /// <summary>After a zoom or a resize settles: the page again at the pixels it covers now, the view kept.</summary>
+    private async void Sharpen()
+    {
+        _sharpen.Stop();
+        if (_pdf is not { PageCount: > 0 } pdf)
+        {
+            return;
+        }
+
+        // Opened before the view had a size: the first page is still to be drawn.
+        if (_pagePixels.Width < 1)
+        {
+            await RenderAsync().ConfigureAwait(true);
+            return;
+        }
+
+        var wanted = _view.DisplayPixels;
+        var longSide = Math.Max(wanted.Width, wanted.Height);
+        if (longSide > MaxRenderPixels)
+        {
+            wanted = new Size(wanted.Width * MaxRenderPixels / longSide, wanted.Height * MaxRenderPixels / longSide);
+        }
+
+        if (Math.Abs(wanted.Width - _rendered.Width) < 2 && Math.Abs(wanted.Height - _rendered.Height) < 2)
+        {
+            return;
+        }
+
+        var request = ++_request;
+        var index = _index;
+        try
+        {
+            var bitmap = await pdf.RenderAsync(index, wanted.Width, wanted.Height).ConfigureAwait(true);
+            if (request == _request && index == _index)
+            {
+                _rendered = new Size(bitmap.PixelWidth, bitmap.PixelHeight);
+                _view.Replace(bitmap);
+            }
+        }
+        catch (Exception ex) when (IsFailure(ex))
+        {
+            if (request == _request)
+            {
+                _info.Text = $"Page {index + 1} cannot be shown: {ex.Message}";
+            }
+        }
+    }
+
+    private void ShowInfo()
+    {
+        if (_pdf is { PageCount: > 0 } pdf)
+        {
+            _info.Text = $"Page {_index + 1} of {pdf.PageCount}  ·  {_view.PercentText}";
+        }
+    }
 
     private static bool IsFailure(Exception ex) =>
         ex is IOException or UnauthorizedAccessException or ArgumentException or ObjectDisposedException or COMException;

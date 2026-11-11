@@ -37,6 +37,13 @@ public sealed class PdfPreview : IDisposable
         }
     });
 
+    /// <summary>The page's size at 100%, in device-independent units (1/96 inch).</summary>
+    public System.Windows.Size PageSize(int index)
+    {
+        using var page = _document.GetPage((uint)index);
+        return new System.Windows.Size(page.Size.Width, page.Size.Height);
+    }
+
     /// <summary>The page fitted into the given pixels, keeping its proportions.</summary>
     public Task<BitmapSource> RenderAsync(int index, double width, double height) => Task.Run<BitmapSource>(async () =>
     {

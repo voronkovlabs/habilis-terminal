@@ -397,7 +397,15 @@ F6 switches between viewer and editor, as in Far. One page at a time (no F12 scr
   there, as in Far (issue #75).
 
 ### Alt+F3: pictures, PDF, Markdown (issues #57, #231)
-- Pictures (png, jpg, gif, bmp, ico, webp, tif) through the WPF decoders, fitted to the window and never enlarged.
+- Pictures (png, jpg, gif, bmp, ico, webp, tif) through the WPF decoders, fitted to the window and never enlarged to
+  fit. Left / Right, PgUp / PgDn, the wheel and the round arrows on the edges go to the previous / next picture of the
+  folder in the panel's order, Home / End to the first / last; closed, the panel cursor stands on the last one shown
+  (issue #242).
+- Pictures and PDF pages have their own zoom (issue #241), as in Windows Photos: Ctrl+wheel zooms around the pointer,
+  Ctrl+Alt+= / − around the middle; a zoomed picture is dragged with the mouse and scrolled with the wheel (Shift+wheel
+  sideways); double click switches between fitted and 100 %, Ctrl+Alt+0 fits. The header shows "Fit 37%" or the
+  percentage, 100 % being one content pixel per screen pixel. A zoomed PDF page is drawn again at its new size (at most
+  8000 pixels on the long side), so it stays sharp. The interface zoom does not change in these views.
 - PDF one page at a time (PgUp / PgDn, arrows, wheel, Home / End); Ctrl+F opens the Edge viewer for finding and
   selecting text.
 - In all three, F3 shows the same file in the viewer, and Esc / F10 / Alt+F3 close. In a plugin panel Alt+F3 works on a

@@ -118,14 +118,29 @@ public partial class MainWindow
         return true;
     }
 
+    /// <summary>
+    /// The pictures of the panel's folder in its order (issue #242), so Left / Right step through them; a copy from a
+    /// plugin, or a file elsewhere, is shown alone. Closed, the cursor stands on the last picture shown, as in Far.
+    /// </summary>
     private void OpenImage(string path, FilePanel returnTo)
     {
-        var page = new ImagePage(path);
+        List<string> files = [path];
+        var folder = Path.GetDirectoryName(path)?.TrimEnd('\\');
+        if (!returnTo.IsPlugin && string.Equals(folder, returnTo.CurrentPath.TrimEnd('\\'), StringComparison.OrdinalIgnoreCase))
+        {
+            var pictures = returnTo.State.Entries.Where(e => !e.IsDirectory && ImagePage.IsImage(e.Name)).Select(e => Path.Combine(returnTo.CurrentPath, e.Name)).ToList();
+            if (pictures.Exists(p => string.Equals(p, path, StringComparison.OrdinalIgnoreCase)))
+            {
+                files = pictures;
+            }
+        }
+
+        var page = new ImagePage(files, files.FindIndex(p => string.Equals(p, path, StringComparison.OrdinalIgnoreCase)));
         RememberFile(path, edited: false);
         page.CloseRequested += () =>
         {
             ClosePage();
-            returnTo.State.TrySetCursor(Path.GetFileName(path));
+            returnTo.State.TrySetCursor(Path.GetFileName(page.FilePath));
             returnTo.Refresh();
         };
         page.ViewRequested += file => OpenViewer(file, returnTo);
