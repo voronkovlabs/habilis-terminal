@@ -360,7 +360,7 @@ The plugin `plugins/Habilis.GitHub`, read-only, at `gh:` (F11, the drive menu, t
 - F3 views, F5 copies out; F9 > Panel: Open in browser, Clone address, Refresh from GitHub, Sign out of GitHub.
 - Sign-in: GitHub's device flow with the project's OAuth App (client ID in the plugin, replaceable in its settings).
   The token is kept in Windows Credential Manager (`HabilisTerminal:github`). Straight HTTPS to `api.github.com`,
-  REST and GraphQL; no gh CLI.
+  REST and GraphQL. Sign-in also through the GitHub CLI's token or a personal access token (#224).
 
 ## 9. Viewer (F3) and editor (F4)
 

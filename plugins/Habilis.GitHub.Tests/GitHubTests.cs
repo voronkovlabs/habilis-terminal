@@ -304,6 +304,7 @@ public sealed class GitHubTests : IDisposable
         var handler = new ScriptedHandler(
             """{"device_code":"dc","user_code":"ABCD-1234","verification_uri":"https://github.com/login/device","expires_in":900,"interval":5}""");
         var host = new FakeHost();
+        host.ChooseAnswers.Enqueue("With a code in the browser");
         host.ConfirmAnswers.Enqueue(false);
         var tokens = new MemoryTokens();
         var plugin = new GitHubPlugin { Tokens = tokens, Http = new HttpClient(handler) };
@@ -320,7 +321,9 @@ public sealed class GitHubTests : IDisposable
     public async Task An_app_without_device_flow_says_what_to_tick()
     {
         var plugin = new GitHubPlugin { Tokens = new MemoryTokens(), Http = new HttpClient(new ScriptedHandler("""{"error":"device_flow_disabled"}""")) };
-        plugin.Initialize(new FakeHost());
+        var host = new FakeHost();
+        host.ChooseAnswers.Enqueue("With a code in the browser");
+        plugin.Initialize(host);
         var error = await Assert.ThrowsAsync<PluginException>(() => plugin.OpenAddressAsync("gh:", CancellationToken.None));
         Assert.Contains("Enable Device Flow", error.Message, StringComparison.Ordinal);
     }
@@ -338,6 +341,94 @@ public sealed class GitHubTests : IDisposable
 
         await plugin.Commands.Single().Run(CancellationToken.None);
         Assert.Null(tokens.Token);
+    }
+
+    [Fact]
+    public async Task The_github_cli_sign_in_is_used_as_it_is_and_never_kept()
+    {
+        var host = new FakeHost();
+        host.ChooseAnswers.Enqueue("With the GitHub CLI's sign-in (gh)");
+        var tokens = new MemoryTokens();
+        var asked = 0;
+        var used = new List<string>();
+        var plugin = new GitHubPlugin
+        {
+            Tokens = tokens,
+            GitHubCli = _ => { asked++; return Task.FromResult<string?>("gho_cli\n"); },
+            Connect = token => { used.Add(token); return new FakeApi(); },
+        };
+        plugin.Initialize(host);
+
+        Assert.NotNull(await plugin.OpenAddressAsync("gh:", CancellationToken.None));
+        Assert.Null(tokens.Token);
+        Assert.Equal("gh", host.Load()["signIn"]!.GetValue<string>());
+
+        // The next time no question: the CLI is asked again, so its own sign-in changes follow.
+        Assert.NotNull(await plugin.OpenAddressAsync("gh:me", CancellationToken.None));
+        Assert.Equal(2, asked);
+        Assert.All(used, t => Assert.Equal("gho_cli", t));
+
+        host.ConfirmAnswers.Enqueue(true);
+        await plugin.Commands.Single().Run(CancellationToken.None);
+        Assert.Null(host.Load()["signIn"]);
+    }
+
+    [Fact]
+    public async Task A_github_cli_that_is_not_signed_in_says_what_to_run()
+    {
+        var host = new FakeHost();
+        host.ChooseAnswers.Enqueue("With the GitHub CLI's sign-in (gh)");
+        var plugin = new GitHubPlugin { Tokens = new MemoryTokens(), GitHubCli = _ => Task.FromResult<string?>(null) };
+        plugin.Initialize(host);
+        var error = await Assert.ThrowsAsync<PluginException>(() => plugin.OpenAddressAsync("gh:", CancellationToken.None));
+        Assert.Contains("gh auth login", error.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task A_personal_access_token_is_checked_and_kept()
+    {
+        var host = new FakeHost();
+        host.ChooseAnswers.Enqueue("With a personal access token");
+        host.InputAnswers.Enqueue("  ghp_pasted  ");
+        var tokens = new MemoryTokens();
+        var plugin = new GitHubPlugin { Tokens = tokens, Connect = _ => new FakeApi() };
+        plugin.Initialize(host);
+
+        Assert.NotNull(await plugin.OpenAddressAsync("gh:", CancellationToken.None));
+        Assert.Equal("ghp_pasted", tokens.Token);
+    }
+
+    [Fact]
+    public async Task A_token_github_refuses_is_not_kept()
+    {
+        var host = new FakeHost();
+        host.ChooseAnswers.Enqueue("With a personal access token");
+        host.InputAnswers.Enqueue("ghp_wrong");
+        var tokens = new MemoryTokens();
+        var plugin = new GitHubPlugin { Tokens = tokens, Connect = _ => new FakeApi { Refuse = true } };
+        plugin.Initialize(host);
+
+        var error = await Assert.ThrowsAsync<PluginException>(() => plugin.OpenAddressAsync("gh:", CancellationToken.None));
+        Assert.Contains("does not accept", error.Message, StringComparison.Ordinal);
+        Assert.Null(tokens.Token);
+    }
+
+    [Fact]
+    public async Task What_github_left_out_is_told()
+    {
+        var handler = new ScriptedHandler(
+            """{"data":{"viewer":{"login":"me","repositories":{"pageInfo":{"hasNextPage":false,"endCursor":null},"nodes":[]}}},"errors":[{"type":"FORBIDDEN","message":"Resource protected by organization SAML enforcement."}]}""");
+        var api = new GitHubApi(new HttpClient(handler), "t");
+        var (login, repos) = await api.RepositoriesAsync(CancellationToken.None);
+        Assert.Equal("me", login);
+        Assert.Empty(repos);
+        Assert.Contains("SAML", api.Warning, StringComparison.Ordinal);
+
+        var host = new FakeHost();
+        var panel = new GitHubPanel(host, new FakeApi { Warning = "GitHub left some out: SAML" }, GitHubLocation.Top, () => { });
+        await Listing.AllAsync(panel);
+        Assert.Contains(host.Messages, m => m.Message.Contains("SAML", StringComparison.Ordinal));
+        Assert.Contains(panel.Info, l => l.Label == "Missing repositories?");
     }
 
     private sealed class MemoryTokens : ITokenStore
@@ -376,6 +467,8 @@ public sealed class GitHubTests : IDisposable
         public int TreeCalls { get; private set; }
 
         public (int Remaining, DateTime Reset)? RateLimit => (4000, Day2);
+
+        public string? Warning { get; init; }
 
         public Task<(string Login, IReadOnlyList<RepoInfo> Repos)> RepositoriesAsync(CancellationToken cancellationToken)
         {

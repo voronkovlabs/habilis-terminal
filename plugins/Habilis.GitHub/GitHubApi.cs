@@ -47,6 +47,12 @@ internal interface IGitHubApi
 
     /// <summary>Requests left this hour and when the count resets, from the last answer; null before any.</summary>
     (int Remaining, DateTime Reset)? RateLimit { get; }
+
+    /// <summary>
+    /// What GitHub said it left out of the last answer that still had data, such as repositories of an organization
+    /// with single sign-on the token is not authorized for; null when nothing was.
+    /// </summary>
+    string? Warning { get; }
 }
 
 /// <summary>The token was refused: it was revoked or expired. The plugin forgets it and asks to sign in again.</summary>
@@ -62,6 +68,8 @@ internal sealed class GitHubApi(HttpClient http, string token) : IGitHubApi
     public const int PathsPerQuery = 40;
 
     public (int Remaining, DateTime Reset)? RateLimit { get; private set; }
+
+    public string? Warning { get; private set; }
 
     public async Task<(string Login, IReadOnlyList<RepoInfo> Repos)> RepositoriesAsync(CancellationToken cancellationToken)
     {
@@ -252,12 +260,17 @@ internal sealed class GitHubApi(HttpClient http, string token) : IGitHubApi
         };
         using var response = await SendAsync(request, HttpCompletionOption.ResponseContentRead, cancellationToken).ConfigureAwait(false);
         var json = await ReadJsonAsync(response, cancellationToken).ConfigureAwait(false);
-        if (json.RootElement.TryGetProperty("errors", out var errors) && errors.GetArrayLength() > 0
-            && (!json.RootElement.TryGetProperty("data", out var data) || data.ValueKind != JsonValueKind.Object))
+        if (json.RootElement.TryGetProperty("errors", out var errors) && errors.GetArrayLength() > 0)
         {
             var message = Text(errors[0], "message") ?? "an error";
-            json.Dispose();
-            throw new PluginException($"GitHub: {message}");
+            if (!json.RootElement.TryGetProperty("data", out var data) || data.ValueKind != JsonValueKind.Object)
+            {
+                json.Dispose();
+                throw new PluginException($"GitHub: {message}");
+            }
+
+            // Data with errors: what could be read, and why the rest was left out (issue #224).
+            Warning = $"GitHub left some out: {message}";
         }
 
         return json;

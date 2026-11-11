@@ -107,6 +107,17 @@ internal sealed class GitHubPanel : IPanelProvider, IPanelCommands, IGetFiles
                 lines.Add(new("Requests left", $"{limit.Remaining:N0} until {limit.Reset.ToLocalTime():t}"));
             }
 
+            if (_api.Warning is { } warning)
+            {
+                lines.Add(new("Left out", warning));
+            }
+
+            if (_location.IsTop || _location.IsOwner)
+            {
+                // Issue #224: what GitHub hides from a code sign-in, and the ways around it.
+                lines.Add(new("Missing repositories?", "An organization that restricts OAuth apps hides its repositories, and private forks of them, from a sign-in with a code. Sign out, then sign in with the GitHub CLI or a personal access token."));
+            }
+
             return lines;
         }
     }
@@ -329,6 +340,11 @@ internal sealed class GitHubPanel : IPanelProvider, IPanelCommands, IGetFiles
         if (place.IsTop || place.IsOwner)
         {
             var (login, repos) = _repos ??= await _api.RepositoriesAsync(cancellationToken).ConfigureAwait(false);
+            if (_api.Warning is { } warning)
+            {
+                _host.ShowStatus(warning);
+            }
+
             if (place.IsTop)
             {
                 // You first, then the organizations and other owners by name.

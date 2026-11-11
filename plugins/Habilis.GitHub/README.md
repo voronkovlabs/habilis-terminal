@@ -15,13 +15,23 @@ repository's branches, and a branch's folders and files.
 - **F9 > Panel:** Open in browser, Clone address, Refresh from GitHub, Sign out of GitHub.
 
 ## Signing in
-The first time the panel opens it shows a short code and opens `github.com/login/device` in your browser. Enter the
-code there and approve; the panel then opens. The program never sees your password. The token is kept in Windows
-Credential Manager as `HabilisTerminal:github`; "Sign out of GitHub" removes it.
+The first time the panel opens it asks how:
 
-It asks GitHub for `repo` (private repositories; GitHub has no read-only scope for them, though the plugin only reads)
-and `read:org`. An organization that restricts OAuth apps shows its repositories only after an owner of it approves
-the Habilis Terminal app.
+- **With a code in the browser.** It shows a short code and opens `github.com/login/device`; enter the code there and
+  approve. The program never sees your password. It asks GitHub for `repo` (private repositories; GitHub has no
+  read-only scope for them, though the plugin only reads) and `read:org`.
+- **With the GitHub CLI's sign-in.** It asks `gh auth token` each time the panel opens and keeps nothing itself, so
+  `gh auth login` or `gh auth switch` are followed. Needs the GitHub CLI on PATH.
+- **With a personal access token.** A classic token with `repo` and `read:org`, pasted into the dialog. For an
+  organization with single sign-on, authorize the token for it on GitHub too.
+
+A token from the first or the last way is kept in Windows Credential Manager as `HabilisTerminal:github`. "Sign out of
+GitHub" forgets it, or stops using the CLI's sign-in.
+
+**Missing repositories?** An organization that restricts OAuth apps hides its repositories, and private forks of
+them, from the first way until an owner of the organization approves Habilis Terminal. The CLI's sign-in or a token
+are not held back like that, unless the organization restricts them too. When GitHub leaves something out and says so
+(single sign-on, for example), the status line and Ctrl+L show its words.
 
 The OAuth App's client ID is built in; F9 > Options > Plugins > GitHub can replace it.
 
