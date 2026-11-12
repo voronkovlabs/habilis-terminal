@@ -48,6 +48,7 @@ public sealed class TerminalView : Control
     private (long Line, int Column)? _anchor;
     private (long Line, int Column) _caret;
     private bool _selecting;
+    private double _wheelRest;
 
     public TerminalView(TerminalEmulator emulator)
     {
@@ -558,7 +559,11 @@ public sealed class TerminalView : Control
 
         lock (_emulator.SyncRoot)
         {
-            _scroll = Math.Clamp(_scroll + (Math.Sign(e.Delta.Y) * WheelLines), 0, _emulator.ScrollbackCount);
+            // A notch is 1; a fast wheel or a touchpad sends more, or fractions, in one event.
+            _wheelRest += e.Delta.Y * WheelLines;
+            var lines = (int)Math.Truncate(_wheelRest);
+            _wheelRest -= lines;
+            _scroll = Math.Clamp(_scroll + lines, 0, _emulator.ScrollbackCount);
         }
 
         InvalidateVisual();

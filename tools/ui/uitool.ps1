@@ -1,5 +1,5 @@
 param(
-    [Parameter(Mandatory)][ValidateSet('shot', 'screen', 'keys', 'text', 'rect', 'click', 'dblclick', 'move')] [string]$Action,
+    [Parameter(Mandatory)][ValidateSet('shot', 'screen', 'keys', 'text', 'rect', 'click', 'dblclick', 'rclick', 'drag', 'wheel', 'move')] [string]$Action,
     [string]$Process = 'habi',
     [string]$Out,
     [string]$Arg
@@ -115,6 +115,38 @@ public static class UiTool
         Thread.Sleep(150);
     }
 
+    // Right click at window-relative physical pixels.
+    public static void RightClick(IntPtr h, int x, int y)
+    {
+        var r = Bounds(h);
+        SetCursorPos(r.Left + x, r.Top + y);
+        Thread.Sleep(120);
+        mouse_event(8, 0, 0, 0, IntPtr.Zero); mouse_event(16, 0, 0, 0, IntPtr.Zero);
+        Thread.Sleep(150);
+    }
+
+    // Left button down at one point, moved in steps, up at another.
+    public static void Drag(IntPtr h, int x1, int y1, int x2, int y2)
+    {
+        var r = Bounds(h);
+        SetCursorPos(r.Left + x1, r.Top + y1);
+        Thread.Sleep(120);
+        mouse_event(2, 0, 0, 0, IntPtr.Zero);
+        for (int i = 1; i <= 10; i++) { SetCursorPos(r.Left + x1 + (x2 - x1) * i / 10, r.Top + y1 + (y2 - y1) * i / 10); Thread.Sleep(30); }
+        mouse_event(4, 0, 0, 0, IntPtr.Zero);
+        Thread.Sleep(150);
+    }
+
+    // Wheel notches (positive: away from the user) at window-relative physical pixels.
+    public static void Wheel(IntPtr h, int x, int y, int notches)
+    {
+        var r = Bounds(h);
+        SetCursorPos(r.Left + x, r.Top + y);
+        Thread.Sleep(120);
+        mouse_event(0x0800, 0, 0, (uint)(notches * 120), IntPtr.Zero);
+        Thread.Sleep(150);
+    }
+
     public static void Text(string s)
     {
         foreach (char c in s)
@@ -160,4 +192,9 @@ switch ($Action) {
     'click' { [UiTool]::Focus($h); $xy = $Arg -split ','; [UiTool]::Mouse($h, [int]$xy[0], [int]$xy[1], 1) }
     'dblclick' { [UiTool]::Focus($h); $xy = $Arg -split ','; [UiTool]::Mouse($h, [int]$xy[0], [int]$xy[1], 2) }
     'move' { [UiTool]::Focus($h); $xy = $Arg -split ','; [UiTool]::Mouse($h, [int]$xy[0], [int]$xy[1], 0) }
+    'rclick' { [UiTool]::Focus($h); $xy = $Arg -split ','; [UiTool]::RightClick($h, [int]$xy[0], [int]$xy[1]) }
+    # -Arg x1,y1,x2,y2
+    'drag' { [UiTool]::Focus($h); $xy = $Arg -split ','; [UiTool]::Drag($h, [int]$xy[0], [int]$xy[1], [int]$xy[2], [int]$xy[3]) }
+    # -Arg x,y,notches (negative: towards the user, scrolling down)
+    'wheel' { [UiTool]::Focus($h); $xy = $Arg -split ','; [UiTool]::Wheel($h, [int]$xy[0], [int]$xy[1], [int]$xy[2]) }
 }
