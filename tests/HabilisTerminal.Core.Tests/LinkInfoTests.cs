@@ -117,7 +117,7 @@ public sealed class LinkInfoTests : IDisposable
         Assert.Null(LinkInfo.Parse(Surrogate(0xA0001234, 0, "x", "x")).Target);
     }
 
-    [Fact]
+    [WindowsFact]
     public void A_junction_tells_where_it_leads()
     {
         var target = Folder("target");
