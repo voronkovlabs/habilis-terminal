@@ -44,6 +44,12 @@
     <None Include="..\..\tools\plugins\habi-plugin.ps1" Link="habi-plugin.ps1" CopyToOutputDirectory="PreserveNewest" />
     <None Include="..\..\tools\plugins\New-Plugin.ps1" Link="New-Plugin.ps1" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
+  <!-- Skia's and HarfBuzz's native symbols (100 MB) stay out of the published app (issue #253). -->
+  <Target Name="DropNativeSymbols" AfterTargets="ComputeResolvedFilesToPublishList">
+    <ItemGroup>
+      <ResolvedFileToPublish Remove="@(ResolvedFileToPublish)" Condition="'%(Extension)' == '.pdb' And ('%(Filename)' == 'libSkiaSharp' Or '%(Filename)' == 'libHarfBuzzSharp')" />
+    </ItemGroup>
+  </Target>
   <ItemGroup Condition="'$(CrashReportToken)' != ''">
     <!-- The release workflow passes the crash and feedback report token (CRASH_REPORT_TOKEN, base64 of the reversed
          token); it is never committed. Without it reports open the new-issue page in the browser. -->
