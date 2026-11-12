@@ -89,7 +89,7 @@ public class FolderSizeTests
     public void Invalidate_drops_the_path_its_ancestors_and_descendants_only()
     {
         var cache = new FolderSizeCache();
-        foreach (var path in new[] { @"C:\a", @"C:\a\b", @"C:\a\b\c", @"C:\a\bb", @"C:\x" })
+        foreach (var path in new[] { P(@"C:\a"), P(@"C:\a\b"), P(@"C:\a\b\c"), P(@"C:\a\bb"), P(@"C:\x") })
         {
             cache.Set(path, Some);
         }
@@ -97,14 +97,14 @@ public class FolderSizeTests
         var announced = new List<string>();
         cache.Invalidated += announced.Add;
 
-        cache.Invalidate(@"C:\a\b\");
+        cache.Invalidate(P(@"C:\a\b\"));
 
-        Assert.Equal([@"C:\a\b"], announced);
-        Assert.False(cache.TryGet(@"C:\a", out _));
-        Assert.False(cache.TryGet(@"C:\a\b", out _));
-        Assert.False(cache.TryGet(@"C:\a\b\c", out _));
-        Assert.True(cache.TryGet(@"C:\a\bb", out _));
-        Assert.True(cache.TryGet(@"C:\X", out _));
+        Assert.Equal([P(@"C:\a\b")], announced);
+        Assert.False(cache.TryGet(P(@"C:\a"), out _));
+        Assert.False(cache.TryGet(P(@"C:\a\b"), out _));
+        Assert.False(cache.TryGet(P(@"C:\a\b\c"), out _));
+        Assert.True(cache.TryGet(P(@"C:\a\bb"), out _));
+        Assert.True(cache.TryGet(P(@"C:\X"), out _));
     }
 
     [Fact]
@@ -112,11 +112,11 @@ public class FolderSizeTests
     {
         var cache = new FolderSizeCache();
         var stamp = cache.Stamp;
-        cache.Invalidate(@"C:\a\b\file.txt");
+        cache.Invalidate(P(@"C:\a\b\file.txt"));
 
-        Assert.False(cache.Set(@"C:\a", Some, startStamp: stamp));
-        Assert.True(cache.Set(@"C:\other", Some, startStamp: stamp));
-        Assert.True(cache.Set(@"C:\a", Some, startStamp: cache.Stamp));
+        Assert.False(cache.Set(P(@"C:\a"), Some, startStamp: stamp));
+        Assert.True(cache.Set(P(@"C:\other"), Some, startStamp: stamp));
+        Assert.True(cache.Set(P(@"C:\a"), Some, startStamp: cache.Stamp));
     }
 
     [Fact]
@@ -221,4 +221,8 @@ public class FolderSizeTests
             Thread.Sleep(10);
         }
     }
+
+    /// <summary>A Windows path of the cases as this system writes it: <c>C:\a\b</c> is <c>/a/b</c> off Windows (#259).</summary>
+    private static string P(string windowsPath) =>
+        OperatingSystem.IsWindows() ? windowsPath : windowsPath[2..].Replace('\\', '/');
 }
