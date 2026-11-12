@@ -11,7 +11,7 @@ public class DeepDiagnosticsTests
     private static PerfPeriod Period(params PerfStall[] stalls) =>
         new(At, At.AddMinutes(1), [], stalls, 0, 0);
 
-    [Theory]
+    [WindowsTheory]
     [InlineData(2, 0, "running")]
     [InlineData(1, 0, "ready")]
     [InlineData(5, 0, "wait: Executive")]
@@ -20,7 +20,7 @@ public class DeepDiagnosticsTests
     public void Raw_wait_reasons_get_their_names(int state, int reason, string expected) =>
         Assert.Equal(expected, NativeThreads.Describe(state, reason));
 
-    [Fact]
+    [WindowsFact]
     public void A_sleeping_thread_is_seen_waiting()
     {
         using var thread = new BlockedThread();
@@ -30,11 +30,11 @@ public class DeepDiagnosticsTests
         Assert.Equal("wait: DelayExecution", state);
     }
 
-    [Fact]
+    [WindowsFact]
     public void A_thread_that_is_not_there_has_no_state() =>
         Assert.Null(NativeThreads.StateOf(Environment.ProcessId, 1));
 
-    [Fact]
+    [WindowsFact]
     public void States_are_summed_up_with_shares()
     {
         var seen = new Dictionary<string, int> { ["ready"] = 1, ["wait: Executive"] = 3 };
@@ -43,7 +43,7 @@ public class DeepDiagnosticsTests
         Assert.Null(NativeThreads.Summarize(new Dictionary<string, int>()));
     }
 
-    [Fact]
+    [WindowsFact]
     public void The_stack_of_a_waiting_thread_names_modules_and_functions_but_no_paths()
     {
         using var thread = new BlockedThread();
@@ -57,7 +57,7 @@ public class DeepDiagnosticsTests
         Assert.True(thread.IsRunningAfterTheWalk(), "the thread was left suspended");
     }
 
-    [Fact]
+    [WindowsFact]
     public void A_thread_that_is_not_there_has_no_stack()
     {
         using var stacks = new ThreadStacks(Environment.ProcessId);
@@ -65,7 +65,7 @@ public class DeepDiagnosticsTests
         Assert.Null(stacks.Walk(1));
     }
 
-    [Fact]
+    [WindowsFact]
     public void The_helper_answers_each_line_and_ends_with_its_input()
     {
         using var thread = new BlockedThread();
@@ -78,7 +78,7 @@ public class DeepDiagnosticsTests
         Assert.Equal(string.Empty, lines[1]);
     }
 
-    [Fact]
+    [WindowsFact]
     public void A_wait_chain_names_a_critical_section_and_its_holder()
     {
         var section = Marshal.AllocHGlobal(64);
@@ -121,7 +121,7 @@ public class DeepDiagnosticsTests
         Assert.Equal("critical section < thread \"Holder\"", chain);
     }
 
-    [Fact]
+    [WindowsFact]
     public void Busy_percent_compares_two_moments()
     {
         Assert.Equal(75, MachineLoad.BusyPercent((1000, 500), (2000, 750)));
@@ -130,7 +130,7 @@ public class DeepDiagnosticsTests
         Assert.NotNull(MachineLoad.ProcessorTimes());
     }
 
-    [Fact]
+    [WindowsFact]
     public void The_report_says_how_busy_the_machine_was_and_warns_about_wall_clock_times()
     {
         var body = PerfReport.Build([Period() with { MachineCpu = 90 }, Period() with { MachineCpu = 100 }], "1", "W", 1).Body;
@@ -139,7 +139,7 @@ public class DeepDiagnosticsTests
         Assert.Contains("wall-clock times", body, StringComparison.Ordinal);
     }
 
-    [Fact]
+    [WindowsFact]
     public void Stalls_are_grouped_by_stack_with_the_new_figures_in_the_longest_table()
     {
         var stack = "ntdll!NtWaitForSingleObject < dwrite!Something";
@@ -158,7 +158,7 @@ public class DeepDiagnosticsTests
         Assert.Contains("| 99% | 12 | 45.5 | wait: Executive 100% | ALPC < process MsMpEng |", body, StringComparison.Ordinal);
     }
 
-    [Fact]
+    [WindowsFact]
     public void Busy_stacks_add_up_by_thread_and_stack()
     {
         var period = Period() with { BusyStacks = [new PerfBusyThread("unnamed, ntdll.dll", "a!b", 1000), new PerfBusyThread("unnamed, ntdll.dll", "a!b", 500)] };
@@ -167,7 +167,7 @@ public class DeepDiagnosticsTests
         Assert.Contains("- unnamed, ntdll.dll, 1.5 s: `a!b`", body, StringComparison.Ordinal);
     }
 
-    [Fact]
+    [WindowsFact]
     public void Data_from_an_older_version_still_makes_a_report()
     {
         var body = PerfReport.Build([Period(new PerfStall(At, 200, 100, 0, "key", null))], "1", "W", 1).Body;

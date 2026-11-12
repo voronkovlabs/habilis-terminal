@@ -53,7 +53,7 @@ public class DirectoryReaderTests
     }
 
     [System.Runtime.Versioning.SupportedOSPlatform("windows")]
-    [Fact]
+    [WindowsFact]
     public void Directory_without_list_permission_is_reported_as_access_denied()
     {
         using var sandbox = new TestSandbox();
