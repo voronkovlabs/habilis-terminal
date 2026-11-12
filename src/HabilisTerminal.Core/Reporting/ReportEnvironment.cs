@@ -12,9 +12,14 @@ public static class ReportEnvironment
         assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion.Split('+')[0]
         ?? assembly.GetName().Version?.ToString() ?? "?";
 
-    /// <summary>For example "Windows 11 24H2 (10.0.26100), x64".</summary>
+    /// <summary>For example "Windows 11 24H2 (10.0.26100), x64"; elsewhere the runtime's description, such as "Darwin 25.0.0, arm64".</summary>
     public static string Windows()
     {
+        if (!OperatingSystem.IsWindows())
+        {
+            return $"{RuntimeInformation.OSDescription}, {RuntimeInformation.OSArchitecture.ToString().ToLowerInvariant()}";
+        }
+
         var version = Environment.OSVersion.Version;
         var name = version.Major != 10 ? $"Windows {version.Major}.{version.Minor}" : version.Build >= 22000 ? "Windows 11" : "Windows 10";
         string? release = null;

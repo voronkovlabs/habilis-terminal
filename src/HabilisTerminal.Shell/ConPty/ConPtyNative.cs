@@ -3,6 +3,7 @@ using Microsoft.Win32.SafeHandles;
 
 namespace HabilisTerminal.Shell.ConPty;
 
+[System.Runtime.Versioning.SupportedOSPlatform("windows")]
 internal static class ConPtyNative
 {
     // Pseudo console creation flags, as used by Windows Terminal.

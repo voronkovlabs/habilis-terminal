@@ -1,4 +1,4 @@
-using System.Runtime.InteropServices;
+using HabilisTerminal.Core.Platform;
 
 namespace HabilisTerminal.Core.Drives;
 
@@ -63,7 +63,7 @@ public static class DriveCatalog
             ("Desktop", Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory)),
         };
 
-        if (KnownFolderPath(new Guid("374DE290-123F-4565-9164-39C4925E467B")) is { } downloads)
+        if (Platforms.Current.Drives.DownloadsFolder() is { } downloads)
         {
             places.Add(("Downloads", downloads));
         }
@@ -73,38 +73,5 @@ public static class DriveCatalog
     }
 
     /// <summary>Disconnects a mapped network drive (Del in the drive menu).</summary>
-    public static void DisconnectNetworkDrive(string root)
-    {
-        var name = root.TrimEnd('\\');
-        var result = WNetCancelConnection2(name, ConnectUpdateProfile, true);
-        if (result != 0)
-        {
-            throw new IOException(new System.ComponentModel.Win32Exception(result).Message);
-        }
-    }
-
-    private const int ConnectUpdateProfile = 0x1;
-
-    private static string? KnownFolderPath(Guid id)
-    {
-        if (SHGetKnownFolderPath(id, 0, IntPtr.Zero, out var pointer) != 0)
-        {
-            return null;
-        }
-
-        try
-        {
-            return Marshal.PtrToStringUni(pointer);
-        }
-        finally
-        {
-            Marshal.FreeCoTaskMem(pointer);
-        }
-    }
-
-    [DllImport("shell32.dll")]
-    private static extern int SHGetKnownFolderPath([MarshalAs(UnmanagedType.LPStruct)] Guid rfid, uint dwFlags, IntPtr hToken, out IntPtr ppszPath);
-
-    [DllImport("mpr.dll", CharSet = CharSet.Unicode)]
-    private static extern int WNetCancelConnection2(string lpName, int dwFlags, [MarshalAs(UnmanagedType.Bool)] bool fForce);
+    public static void DisconnectNetworkDrive(string root) => Platforms.Current.Drives.DisconnectNetworkDrive(root);
 }

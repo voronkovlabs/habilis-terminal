@@ -21,6 +21,11 @@ public static class WaitChain
     /// <param name="threadName">The name of a thread of this process; null when it has none.</param>
     public static string? Describe(int threadId, Func<int, string?> threadName)
     {
+        if (!OperatingSystem.IsWindows())
+        {
+            return null;
+        }
+
         var session = OpenThreadWaitChainSession(0, IntPtr.Zero);
         if (session == IntPtr.Zero)
         {

@@ -43,6 +43,12 @@ public partial class App : Application
 
     public override void OnFrameworkInitializationCompleted()
     {
+        if (!OperatingSystem.IsWindows())
+        {
+            // Light or dark mode and the accent colour from the system, through Avalonia (#259).
+            SystemAppearance.Current = new Platform.AvaloniaSystemAppearance();
+        }
+
         base.OnFrameworkInitializationCompleted();
         if (ApplicationLifetime is not IClassicDesktopStyleApplicationLifetime desktop)
         {
@@ -92,7 +98,7 @@ public partial class App : Application
             return true;
         }
 
-        PanelPalette.Apply(ThemeLoader.LoadBuiltIn(WindowsAppearance.BuiltInThemeFor(WindowsAppearance.IsHighContrast())));
+        PanelPalette.Apply(ThemeLoader.LoadBuiltIn(SystemAppearance.BuiltInThemeFor(SystemAppearance.IsHighContrast())));
         while (true)
         {
             var body = new StackPanel { MaxWidth = 480 };

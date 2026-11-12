@@ -1,11 +1,11 @@
 name: macos-screens
 
-# Screenshots from a macOS runner (issue #258): the cross-platform parts build and test there, and a small Avalonia
-# probe window is started, typed into and photographed. Habilis itself does not run on macOS yet (#253).
+# Screenshots from a macOS runner (issue #258): the app and its tests build there (the portable build, #259), the
+# tests run, and a small Avalonia probe window and Habilis itself are started and photographed (#253).
 on:
   push:
     branches: [experiment/avalonia]
-    paths: ['tools/MacProbe/**', 'src/HabilisTerminal.Terminal/**', '.github/workflows/macos-screens.yml']
+    paths: ['tools/MacProbe/**', 'src/**', 'tests/**', 'Directory.Build.props', '.github/workflows/macos-screens.yml']
   workflow_dispatch:
 
 permissions:
@@ -21,8 +21,23 @@ jobs:
           global-json-file: global.json
       - name: System
         run: sw_vers; uname -m; system_profiler SPDisplaysDataType | sed -n '1,30p'
-      - name: Terminal emulator tests
-        run: dotnet test tests/HabilisTerminal.Terminal.Tests -c Release
+      - name: Build the app and the tests
+        # Not the whole solution: tools/IconBuilder is a WPF tool.
+        run: |
+          set -e
+          dotnet build src/HabilisTerminal.App -c Release
+          for t in tests/HabilisTerminal.*.Tests; do dotnet build "$t" -c Release; done
+      - name: Portable tests
+        run: |
+          dotnet test --project tests/HabilisTerminal.Terminal.Tests -c Release --no-build
+          dotnet test --project tests/HabilisTerminal.Themes.Tests -c Release --no-build
+          dotnet test --project tests/HabilisTerminal.Core.Tests -c Release --no-build --filter-class "*PortablePlatformTests"
+      - name: All tests (what still assumes Windows)
+        continue-on-error: true
+        run: |
+          for t in Core Shell App; do
+            dotnet test --project tests/HabilisTerminal.$t.Tests -c Release --no-build 2>&1 | tee "tests-$t.log" | grep -E "^failed|Test run summary|total:|failed:|succeeded:|skipped:" || true
+          done
       - name: Build the probe
         run: dotnet build tools/MacProbe -c Release -o probe
       - name: Start, type, photograph
@@ -43,8 +58,22 @@ jobs:
           screencapture -x screens/4-terminal-app.png
           kill %1 || true
           cat probe.log
+      - name: Start Habilis
+        run: |
+          ./src/HabilisTerminal.App/bin/Release/net10.0/habi > habi.log 2>&1 &
+          pid=$!
+          sleep 25
+          osascript -e 'tell application "System Events" to set frontmost of (first process whose unix id is '"$pid"') to true' || true
+          sleep 2
+          screencapture -x screens/5-habilis.png
+          kill $pid || true
+          echo "--- habi output"; cat habi.log
+          echo "--- crash or trace files"; find ~/Library/Application\ Support ~/.config ~/.local/share -path '*Habilis*' -type f 2>/dev/null | head -20
       - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: macos-screens
-          path: screens/
+          path: |
+            screens/
+            tests-*.log
+            habi.log

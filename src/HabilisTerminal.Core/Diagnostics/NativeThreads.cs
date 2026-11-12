@@ -32,7 +32,7 @@ public static class NativeThreads
     /// <summary>"running", "ready", or "wait: reason"; null when it cannot be told.</summary>
     public static string? StateOf(int processId, int threadId)
     {
-        if (!Environment.Is64BitProcess)
+        if (!Environment.Is64BitProcess || !OperatingSystem.IsWindows())
         {
             return null;
         }

@@ -1,4 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+  </PropertyGroup>
   <ItemGroup>
     <!-- VS Code default themes (MIT, microsoft/vscode extensions/theme-defaults). -->
     <EmbeddedResource Include="Assets\themes\*.json" />

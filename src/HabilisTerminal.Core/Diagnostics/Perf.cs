@@ -180,7 +180,7 @@ public static class Perf
     }
 
     public static double ThreadCpuMs(IntPtr thread) =>
-        GetThreadTimes(thread, out _, out _, out var kernel, out var user) ? (kernel + user) / 10_000.0 : 0;
+        OperatingSystem.IsWindows() && GetThreadTimes(thread, out _, out _, out var kernel, out var user) ? (kernel + user) / 10_000.0 : 0;
 
     private static void Reset()
     {
@@ -233,7 +233,7 @@ public static class Perf
             _name = name;
             _detail = detail;
             _withCpu = withCpu;
-            _startCpu = withCpu ? ThreadCpuMs(GetCurrentThread()) : 0;
+            _startCpu = withCpu ? ThreadCpuMs(OperatingSystem.IsWindows() ? GetCurrentThread() : IntPtr.Zero) : 0;
             _onUiThread = withCpu && Environment.CurrentManagedThreadId == _uiThreadId;
             if (_onUiThread)
             {
@@ -252,7 +252,7 @@ public static class Perf
             }
 
             var wall = Stopwatch.GetElapsedTime(_startTicks).TotalMilliseconds;
-            Add(_name, _detail, wall, _withCpu ? ThreadCpuMs(GetCurrentThread()) - _startCpu : null);
+            Add(_name, _detail, wall, _withCpu ? ThreadCpuMs(OperatingSystem.IsWindows() ? GetCurrentThread() : IntPtr.Zero) - _startCpu : null);
             if (_onUiThread)
             {
                 _uiOperation = _outerOperation;

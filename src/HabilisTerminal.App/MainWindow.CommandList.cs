@@ -202,33 +202,8 @@ public partial class MainWindow
             return;
         }
 
-        Avalonia.Threading.Dispatcher.UIThread.Post(() =>
-        {
-            byte[] held =
-            [
-                .. modifiers.HasFlag(KeyModifiers.Control) ? new byte[] { 0x11 } : [],
-                .. modifiers.HasFlag(KeyModifiers.Shift) ? new byte[] { 0x10 } : [],
-                .. modifiers.HasFlag(KeyModifiers.Alt) ? new byte[] { 0x12 } : [],
-            ];
-            foreach (var code in held)
-            {
-                keybd_event(code, 0, 0, IntPtr.Zero);
-            }
-
-            var virtualKey = (byte)(Hosting.TerminalKeys.VirtualKey(key) ?? 0);
-            keybd_event(virtualKey, 0, 0, IntPtr.Zero);
-            keybd_event(virtualKey, 0, KeyEventKeyUp, IntPtr.Zero);
-            foreach (var code in held.Reverse())
-            {
-                keybd_event(code, 0, KeyEventKeyUp, IntPtr.Zero);
-            }
-        }, Avalonia.Threading.DispatcherPriority.Background);
+        Avalonia.Threading.Dispatcher.UIThread.Post(() => Platform.Desktop.Current.PressKey(key, modifiers), Avalonia.Threading.DispatcherPriority.Background);
     }
-
-    private const int KeyEventKeyUp = 2;
-
-    [DllImport("user32.dll")]
-    private static extern void keybd_event(byte key, byte scan, int flags, IntPtr extra);
 
     /// <summary>A menu row: its title and key from the catalog.</summary>
     private MenuCommand MenuRow(string id, Action? run = null, bool isChecked = false)

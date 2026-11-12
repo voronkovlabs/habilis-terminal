@@ -172,7 +172,7 @@ public partial class MainWindow
 
     /// <summary>
     /// Window placement in physical pixels of the monitor it was on (SPEC §13). Applied once the window handle exists and
-    /// before it is shown: <c>SetWindowPlacement</c> keeps the window on its monitor (re-scaled when that monitor's DPI
+    /// before it is shown: on Windows <c>SetWindowPlacement</c> keeps the window on its monitor (re-scaled when that monitor's DPI
     /// differs), maximises it there, and moves it into view when that monitor is gone.
     /// </summary>
     private void RestoreWindowPlacement(AppState state)
@@ -183,41 +183,10 @@ public partial class MainWindow
         }
 
         WindowStartupLocation = WindowStartupLocation.Manual;
-        Opened += (_, _) =>
-        {
-            if (TryGetPlatformHandle()?.Handle is not { } handle)
-            {
-                return;
-            }
-
-            var native = new WINDOWPLACEMENT
-            {
-                length = Marshal.SizeOf<WINDOWPLACEMENT>(),
-                showCmd = placement.Maximized ? SW_SHOWMAXIMIZED : SW_SHOWNORMAL,
-                rcNormalPosition = new RECT
-                {
-                    Left = (int)placement.Left,
-                    Top = (int)placement.Top,
-                    Right = (int)(placement.Left + placement.Width),
-                    Bottom = (int)(placement.Top + placement.Height),
-                },
-            };
-            SetWindowPlacement(handle, ref native);
-        };
+        Platform.Desktop.Current.RestorePlacement(this, placement);
     }
 
-    private WindowPlacement? CaptureWindowPlacement()
-    {
-        var handle = TryGetPlatformHandle()?.Handle ?? IntPtr.Zero;
-        var native = new WINDOWPLACEMENT { length = Marshal.SizeOf<WINDOWPLACEMENT>() };
-        if (handle == IntPtr.Zero || !GetWindowPlacement(handle, ref native))
-        {
-            return null;
-        }
-
-        var bounds = native.rcNormalPosition;
-        return new WindowPlacement(bounds.Left, bounds.Top, bounds.Right - bounds.Left, bounds.Bottom - bounds.Top, WindowPlacement.IsMaximized(native.showCmd, native.flags));
-    }
+    private WindowPlacement? CaptureWindowPlacement() => Platform.Desktop.Current.CapturePlacement(this);
 
     private void RestoreLayout(AppState state)
     {
@@ -347,42 +316,4 @@ public partial class MainWindow
             _fileHistory.RemoveAt(_fileHistory.Count - 1);
         }
     }
-
-    private const int SW_SHOWNORMAL = 1;
-    private const int SW_SHOWMAXIMIZED = 3;
-
-    [StructLayout(LayoutKind.Sequential)]
-    private struct RECT
-    {
-        public int Left;
-        public int Top;
-        public int Right;
-        public int Bottom;
-    }
-
-    [StructLayout(LayoutKind.Sequential)]
-    private struct POINT
-    {
-        public int X;
-        public int Y;
-    }
-
-    [StructLayout(LayoutKind.Sequential)]
-    private struct WINDOWPLACEMENT
-    {
-        public int length;
-        public int flags;
-        public int showCmd;
-        public POINT ptMinPosition;
-        public POINT ptMaxPosition;
-        public RECT rcNormalPosition;
-    }
-
-    [DllImport("user32.dll")]
-    [return: MarshalAs(UnmanagedType.Bool)]
-    private static extern bool GetWindowPlacement(IntPtr hWnd, ref WINDOWPLACEMENT placement);
-
-    [DllImport("user32.dll")]
-    [return: MarshalAs(UnmanagedType.Bool)]
-    private static extern bool SetWindowPlacement(IntPtr hWnd, ref WINDOWPLACEMENT placement);
 }

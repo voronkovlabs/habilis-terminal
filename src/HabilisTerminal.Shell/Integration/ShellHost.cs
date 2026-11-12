@@ -1,6 +1,7 @@
 using System.Text;
 using System.Text.Json;
 using HabilisTerminal.Shell.ConPty;
+using HabilisTerminal.Shell.Pty;
 
 namespace HabilisTerminal.Shell.Integration;
 
@@ -44,7 +45,7 @@ public sealed class ShellHost : IDisposable
     private readonly BracketedPasteTracker _modes = new();
     private readonly LinkedList<Request> _queue = new();
     private readonly Timer _timeoutTimer;
-    private ConPtySession? _session;
+    private IPseudoTerminal? _session;
     private Request? _inFlight;
     private DateTime _inFlightSince;
     private int _nextId;
@@ -187,8 +188,9 @@ public sealed class ShellHost : IDisposable
     public void Start(int columns, int rows)
     {
         Directory.CreateDirectory(ChannelDirectory);
-        var startInfo = new ConPtyStartInfo(
-            BuildCommandLine(),
+        var startInfo = new PtyStartInfo(
+            _options.PwshPath,
+            BuildArguments(),
             _options.WorkingDirectory,
             columns,
             rows,
@@ -200,7 +202,7 @@ public sealed class ShellHost : IDisposable
                 ["HABI_PID"] = Environment.ProcessId.ToString(System.Globalization.CultureInfo.InvariantCulture),
             });
 
-        _session = ConPtySession.Start(startInfo, OnOutput, OnExited);
+        _session = PseudoTerminal.Start(startInfo, OnOutput, OnExited);
     }
 
     /// <summary>Input from the terminal control (keys, replies to terminal queries).</summary>
@@ -248,7 +250,7 @@ public sealed class ShellHost : IDisposable
         }
     }
 
-    private string BuildCommandLine()
+    private string BuildArguments()
     {
         var script = new StringBuilder();
         if (!string.IsNullOrWhiteSpace(_options.InitCommand))
@@ -265,11 +267,11 @@ public sealed class ShellHost : IDisposable
         var extra = string.IsNullOrWhiteSpace(_options.ExtraArguments) ? string.Empty : " " + _options.ExtraArguments.Trim();
         if (script.Length == 0)
         {
-            return $"\"{_options.PwshPath}\" -NoLogo{noProfile}{extra}";
+            return $"-NoLogo{noProfile}{extra}";
         }
 
         var encoded = Convert.ToBase64String(Encoding.Unicode.GetBytes(script.ToString()));
-        return $"\"{_options.PwshPath}\" -NoLogo{noProfile}{extra} -NoExit -EncodedCommand {encoded}";
+        return $"-NoLogo{noProfile}{extra} -NoExit -EncodedCommand {encoded}";
     }
 
     /// <summary>The shell asked for bracketed paste (DECSET 2004): pasted text is wrapped in ESC[200~ … ESC[201~.</summary>

@@ -9,6 +9,7 @@ namespace HabilisTerminal.Core.Diagnostics;
 /// suspending a thread from inside its own process can deadlock with a garbage collection. Frames of code compiled at run
 /// time have no names and may end the walk; what a wait is waiting in sits above them. x64 only.
 /// </summary>
+[System.Runtime.Versioning.SupportedOSPlatform("windows")]
 public sealed class ThreadStacks : IDisposable
 {
     public const int MaxFrames = 32;

@@ -74,14 +74,7 @@ public sealed class AttributesOperation : FileOperation
             // Encryption and compression change attributes themselves; do them before the plain flags.
             if (_change.Encrypted is { } encrypt && encrypt != ((attributes & FileAttributes.Encrypted) != 0) && !isLink)
             {
-                if (encrypt)
-                {
-                    File.Encrypt(path);
-                }
-                else
-                {
-                    File.Decrypt(path);
-                }
+                Platform.Platforms.Current.FileSystem.SetEncryption(path, encrypt);
             }
 
             if (_change.Compressed is { } compress && compress != ((attributes & FileAttributes.Compressed) != 0) && !isLink)

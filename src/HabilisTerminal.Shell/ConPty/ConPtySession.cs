@@ -1,26 +1,20 @@
 using System.ComponentModel;
 using System.Diagnostics;
 using System.Runtime.InteropServices;
+using System.Runtime.Versioning;
 using System.Text;
+using HabilisTerminal.Shell.Pty;
 using static HabilisTerminal.Shell.ConPty.ConPtyNative;
 
 namespace HabilisTerminal.Shell.ConPty;
-
-/// <summary>What to start inside a pseudo console.</summary>
-/// <param name="Environment">Variables added to (or overriding) the inherited environment.</param>
-public sealed record ConPtyStartInfo(
-    string CommandLine,
-    string? WorkingDirectory,
-    int Columns,
-    int Rows,
-    IReadOnlyDictionary<string, string>? Environment = null);
 
 /// <summary>
 /// A child process attached to a pseudo console. Created with the same flags as Windows Terminal
 /// (resize quirk and win32-input-mode), so the terminal control owns reflow on resize and receives
 /// full key records.
 /// </summary>
-public sealed class ConPtySession : IDisposable
+[SupportedOSPlatform("windows")]
+public sealed class ConPtySession : IPseudoTerminal
 {
     private readonly object _sync = new();
     private readonly Action<string> _onOutput;
@@ -42,7 +36,7 @@ public sealed class ConPtySession : IDisposable
 
     /// <param name="onOutput">Called on a background thread with decoded output (VT sequences included).</param>
     /// <param name="onExited">Called once on a background thread when the child process exits.</param>
-    public static ConPtySession Start(ConPtyStartInfo startInfo, Action<string> onOutput, Action<int> onExited)
+    public static ConPtySession Start(PtyStartInfo startInfo, Action<string> onOutput, Action<int> onExited)
     {
         var session = new ConPtySession(onOutput, onExited);
         try
@@ -125,7 +119,7 @@ public sealed class ConPtySession : IDisposable
         _process?.Dispose();
     }
 
-    private void StartCore(ConPtyStartInfo startInfo)
+    private void StartCore(PtyStartInfo startInfo)
     {
         if (!CreatePipe(out var inputRead, out var inputWrite, IntPtr.Zero, 0) ||
             !CreatePipe(out var outputRead, out var outputWrite, IntPtr.Zero, 0))
@@ -172,7 +166,7 @@ public sealed class ConPtySession : IDisposable
         }
     }
 
-    private PROCESS_INFORMATION CreateAttachedProcess(ConPtyStartInfo startInfo)
+    private PROCESS_INFORMATION CreateAttachedProcess(PtyStartInfo startInfo)
     {
         var attributeListSize = IntPtr.Zero;
         InitializeProcThreadAttributeList(IntPtr.Zero, 1, 0, ref attributeListSize);

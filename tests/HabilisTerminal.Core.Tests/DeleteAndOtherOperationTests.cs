@@ -78,6 +78,7 @@ public class DeleteAndOtherOperationTests
         Assert.NotNull(Assert.Single(handler.Errors).LockingProcesses);
     }
 
+    [System.Runtime.Versioning.SupportedOSPlatform("windows")]
     [Fact]
     public void Access_denied_is_reported_and_skip_all_stops_asking()
     {

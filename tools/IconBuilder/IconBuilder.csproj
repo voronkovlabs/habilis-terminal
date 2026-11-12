@@ -3,6 +3,8 @@
     <OutputType>Exe</OutputType>
     <!-- WPF geometry is used to turn font glyphs and SVG shapes into path data. -->
     <UseWPF>true</UseWPF>
+    <!-- A Windows tool whatever the build (issue #259). -->
+    <TargetFramework>net10.0-windows</TargetFramework>
     <IsPackable>false</IsPackable>
   </PropertyGroup>
 </Project>

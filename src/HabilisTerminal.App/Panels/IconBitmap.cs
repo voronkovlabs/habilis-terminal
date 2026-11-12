@@ -1,3 +1,4 @@
+#if WINDOWS
 using System.Runtime.InteropServices;
 using Avalonia;
 using Avalonia.Media.Imaging;
@@ -110,3 +111,4 @@ internal static class IconBitmap
     [return: MarshalAs(UnmanagedType.Bool)]
     private static extern bool DrawIconEx(IntPtr dc, int x, int y, IntPtr icon, int width, int height, uint step, IntPtr brush, uint flags);
 }
+#endif

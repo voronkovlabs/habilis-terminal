@@ -207,7 +207,7 @@ public sealed class FolderSizeWorker : IDisposable
 
     private void Run()
     {
-        if (_background)
+        if (_background && OperatingSystem.IsWindows())
         {
             SetThreadPriority(GetCurrentThread(), ThreadModeBackgroundBegin);
         }

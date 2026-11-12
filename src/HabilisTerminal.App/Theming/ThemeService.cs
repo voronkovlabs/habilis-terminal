@@ -57,20 +57,20 @@ public sealed class ThemeService : IDisposable
             theme = file is not null ? ThemeLoader.LoadFile(file)
                 : BuiltInName(_requested) is { } builtIn ? ThemeLoader.LoadBuiltIn(builtIn)
                 : string.IsNullOrWhiteSpace(_requested) || _requested.Equals("auto", StringComparison.OrdinalIgnoreCase)
-                    ? ThemeLoader.LoadBuiltIn(WindowsAppearance.BuiltInThemeFor(WindowsAppearance.IsHighContrast()))
+                    ? ThemeLoader.LoadBuiltIn(SystemAppearance.BuiltInThemeFor(SystemAppearance.IsHighContrast()))
                     : throw new ThemeLoadException($"Theme '{_requested}' was not found.");
         }
         catch (ThemeLoadException ex)
         {
             // Invalid theme: fall back to the built-in one and report it.
             LastError = ex.Message;
-            theme = ThemeLoader.LoadBuiltIn(WindowsAppearance.BuiltInThemeFor(WindowsAppearance.IsHighContrast()));
+            theme = ThemeLoader.LoadBuiltIn(SystemAppearance.BuiltInThemeFor(SystemAppearance.IsHighContrast()));
         }
 
         var keepsOwnAccent = file is null && BuiltInName(_requested) is { } fixedPalette && ThemeLoader.KeepsOwnAccent(fixedPalette);
-        if (_useAccent && !keepsOwnAccent && WindowsAppearance.AccentColor is { } accent)
+        if (_useAccent && !keepsOwnAccent && SystemAppearance.AccentColor is { } accent)
         {
-            theme = WindowsAppearance.ApplyAccent(theme, accent);
+            theme = SystemAppearance.ApplyAccent(theme, accent);
         }
 
         Current = theme;

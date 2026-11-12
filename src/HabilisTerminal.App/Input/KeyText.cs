@@ -1,10 +1,11 @@
+#if WINDOWS
 using System.Runtime.InteropServices;
 using Avalonia.Input;
 
 namespace HabilisTerminal.App.Input;
 
 /// <summary>The character a key produces in the current keyboard layout (for Alt+letter quick search).</summary>
-public static class KeyText
+internal static class Win32KeyText
 {
     public static char? CharOf(Key key, bool shift)
     {
@@ -33,3 +34,4 @@ public static class KeyText
     [DllImport("user32.dll", CharSet = CharSet.Unicode)]
     private static extern int ToUnicodeEx(uint wVirtKey, uint wScanCode, byte[] lpKeyState, [Out] char[] pwszBuff, int cchBuff, uint wFlags, IntPtr dwhkl);
 }
+#endif

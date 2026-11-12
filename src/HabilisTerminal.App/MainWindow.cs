@@ -131,8 +131,15 @@ public partial class MainWindow : Window
             Reporting.PerfDiagnostics.RecordStartupMilestone("startup.first-render");
             UpdateTitleBar();
 
-            // Windows mode, high contrast and accent changes repaint everything live (SPEC §10).
-            Win32Properties.AddWndProcHookCallback(this, OnWindowMessage);
+            // Windows mode, high contrast and accent changes repaint everything live (SPEC §10); elsewhere Avalonia tells.
+            if (OperatingSystem.IsWindows())
+            {
+                Win32Properties.AddWndProcHookCallback(this, OnWindowMessage);
+            }
+            else if (Application.Current?.PlatformSettings is { } platform)
+            {
+                platform.ColorValuesChanged += (_, _) => Dispatcher.UIThread.Post(_themes.Reload);
+            }
         };
 
         // Every key of the window passes here first, as the console's keys passed the WPF window's message hook: the
@@ -245,11 +252,7 @@ public partial class MainWindow : Window
     private void UpdateTitleBar()
     {
         RequestedThemeVariant = _themes.Current.IsLight ? Avalonia.Styling.ThemeVariant.Light : Avalonia.Styling.ThemeVariant.Dark;
-        if (TryGetPlatformHandle()?.Handle is { } handle)
-        {
-            var useDarkMode = _themes.Current.IsLight ? 0 : 1;
-            _ = DwmSetWindowAttribute(handle, DWMWA_USE_IMMERSIVE_DARK_MODE, ref useDarkMode, sizeof(int));
-        }
+        Platform.Desktop.Current.SetDarkFrame(this, !_themes.Current.IsLight);
     }
 
     private void OnLoaded()
@@ -623,9 +626,4 @@ public partial class MainWindow : Window
 
     /// <summary>The console's cell size, so the layout can snap to whole rows and columns. The zoom scales it with the rest.</summary>
     private void UpdateCellSize() => Workspace.CellSize = TerminalView.MeasureCell(TerminalFontFamily, TerminalEmSize);
-
-    private const int DWMWA_USE_IMMERSIVE_DARK_MODE = 20;
-
-    [DllImport("dwmapi.dll")]
-    private static extern int DwmSetWindowAttribute(IntPtr hwnd, int attribute, ref int value, int size);
 }

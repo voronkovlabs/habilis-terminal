@@ -3,6 +3,7 @@ using HabilisTerminal.Core.Diagnostics;
 
 namespace HabilisTerminal.Core.Tests;
 
+[System.Runtime.Versioning.SupportedOSPlatform("windows")]
 public class DeepDiagnosticsTests
 {
     private static readonly DateTime At = new(2026, 11, 7, 10, 0, 0, DateTimeKind.Utc);

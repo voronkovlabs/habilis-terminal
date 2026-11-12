@@ -12,10 +12,10 @@ public sealed record TextEncoding(string Name, Encoding Encoding, int UnitSize, 
     public static TextEncoding Utf16BigEndian { get; } = new("UTF-16 BE", new UnicodeEncoding(true, false), 2, true, 2);
 
     /// <summary>The system ANSI code page (GetACP; 1251 on Russian Windows), as Far uses it.</summary>
-    public static TextEncoding Ansi { get; } = CodePage((int)GetACP(), "ANSI");
+    public static TextEncoding Ansi { get; } = CodePage(OperatingSystem.IsWindows() ? (int)GetACP() : 1252, "ANSI");
 
     /// <summary>The system OEM (DOS) code page (GetOEMCP; 866 on Russian Windows).</summary>
-    public static TextEncoding Oem { get; } = CodePage((int)GetOEMCP(), "OEM");
+    public static TextEncoding Oem { get; } = CodePage(OperatingSystem.IsWindows() ? (int)GetOEMCP() : 437, "OEM");
 
     [System.Runtime.InteropServices.DllImport("kernel32.dll")]
     private static extern uint GetACP();

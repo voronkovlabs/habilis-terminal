@@ -4,7 +4,7 @@ namespace HabilisTerminal.Core.Diagnostics;
 
 /// <summary>
 /// How busy the machine is (issue #164). On a machine at full load wall-clock times include waiting for a processor or a
-/// disk, so a report needs these to be read. Failing counters only leave the figures out.
+/// disk, so a report needs these to be read. Failing counters, and systems other than Windows, only leave the figures out.
 /// </summary>
 public sealed class MachineLoad : IDisposable
 {
@@ -15,7 +15,7 @@ public sealed class MachineLoad : IDisposable
 
     public MachineLoad()
     {
-        if (PdhOpenQueryW(null, IntPtr.Zero, out _query) != 0)
+        if (!OperatingSystem.IsWindows() || PdhOpenQueryW(null, IntPtr.Zero, out _query) != 0)
         {
             _query = IntPtr.Zero;
             return;
@@ -48,7 +48,7 @@ public sealed class MachineLoad : IDisposable
 
     /// <summary>Total and idle processor time so far, to compare two moments with <see cref="BusyPercent"/>.</summary>
     public static (long Total, long Idle)? ProcessorTimes() =>
-        GetSystemTimes(out var idle, out var kernel, out var user) ? (kernel + user, idle) : null;
+        OperatingSystem.IsWindows() && GetSystemTimes(out var idle, out var kernel, out var user) ? (kernel + user, idle) : null;
 
     /// <summary>Percent of the machine's processors busy between two moments; kernel time includes idle time.</summary>
     public static int? BusyPercent((long Total, long Idle)? from, (long Total, long Idle)? to)

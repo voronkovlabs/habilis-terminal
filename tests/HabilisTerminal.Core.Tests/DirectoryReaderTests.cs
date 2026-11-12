@@ -52,6 +52,7 @@ public class DirectoryReaderTests
         Assert.Equal(DirectoryReadError.NotFound, ex.Error);
     }
 
+    [System.Runtime.Versioning.SupportedOSPlatform("windows")]
     [Fact]
     public void Directory_without_list_permission_is_reported_as_access_denied()
     {

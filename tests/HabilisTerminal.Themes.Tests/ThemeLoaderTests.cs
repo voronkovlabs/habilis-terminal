@@ -158,13 +158,13 @@ public class ThemeLoaderTests
     public void Accent_tints_focus_and_selection_but_not_high_contrast()
     {
         var accent = ThemeColor.Parse("#E81123");
-        var dark = WindowsAppearance.ApplyAccent(ThemeLoader.LoadBuiltIn(ThemeLoader.DarkModern), accent);
+        var dark = SystemAppearance.ApplyAccent(ThemeLoader.LoadBuiltIn(ThemeLoader.DarkModern), accent);
         var contrast = ThemeLoader.LoadBuiltIn(ThemeLoader.HighContrastDark);
 
         Assert.Equal(accent, dark.Get("focusBorder"));
         Assert.Equal(accent, dark.Get("list.focusOutline"));
         Assert.NotEqual(ThemeColor.Parse("#04395E"), dark.Get("list.activeSelectionBackground"));
-        Assert.Same(contrast, WindowsAppearance.ApplyAccent(contrast, accent));
+        Assert.Same(contrast, SystemAppearance.ApplyAccent(contrast, accent));
     }
 
     [Fact]

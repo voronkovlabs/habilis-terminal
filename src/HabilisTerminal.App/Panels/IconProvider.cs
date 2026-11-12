@@ -99,7 +99,7 @@ internal static class IconProvider
         return true;
     }
 
-    /// <summary>Draws the Windows shell icon of an absolute local path, loading it lazily for visible rows.</summary>
+    /// <summary>Draws the system's icon of an absolute local path, loading it lazily for visible rows.</summary>
     public static bool DrawSystem(DrawingContext dc, string path, double x, double y)
     {
         if (!Path.IsPathFullyQualified(path) || SystemIcon(path) is not { } image)
@@ -209,48 +209,11 @@ internal static class IconProvider
     private static Bitmap? LoadSystemIcon(string path)
     {
         using var measure = Core.Diagnostics.Perf.Enabled ? Core.Diagnostics.Perf.Measure("icon.system", Reporting.PerfDiagnostics.ExtensionKind(path)) : default;
-        var info = new SHFILEINFO();
-        if (SHGetFileInfo(path, 0, ref info, (uint)Marshal.SizeOf<SHFILEINFO>(), SHGFI_ICON | SHGFI_SMALLICON) == IntPtr.Zero || info.hIcon == IntPtr.Zero)
-        {
-            return null;
-        }
-
-        try
-        {
-            return IconBitmap.FromHIcon(info.hIcon, (int)Size);
-        }
-        finally
-        {
-            DestroyIcon(info.hIcon);
-        }
+        return Platform.Desktop.Current.FileIcon(path, (int)Size);
     }
 
     private static Geometry Freeze(Geometry geometry)
     {
         return geometry;
     }
-
-    private const uint SHGFI_ICON = 0x100;
-    private const uint SHGFI_SMALLICON = 0x1;
-
-    [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
-    private struct SHFILEINFO
-    {
-        public IntPtr hIcon;
-        public int iIcon;
-        public uint dwAttributes;
-
-        [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 260)]
-        public string szDisplayName;
-
-        [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 80)]
-        public string szTypeName;
-    }
-
-    [DllImport("shell32.dll", CharSet = CharSet.Unicode)]
-    private static extern IntPtr SHGetFileInfo(string pszPath, uint dwFileAttributes, ref SHFILEINFO psfi, uint cbFileInfo, uint uFlags);
-
-    [DllImport("user32.dll")]
-    [return: MarshalAs(UnmanagedType.Bool)]
-    private static extern bool DestroyIcon(IntPtr hIcon);
 }

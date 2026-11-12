@@ -1,7 +1,8 @@
+#if WINDOWS
 namespace HabilisTerminal.App.Hosting;
 
 /// <summary>Explorer verbs through the Shell.Application automation object.</summary>
-public static class ShellVerbs
+internal static class Win32ShellVerbs
 {
     private const int MyComputerFolder = 17; // ssfDRIVES
 
@@ -19,3 +20,4 @@ public static class ShellVerbs
         item.InvokeVerb("Eject");
     }
 }
+#endif

@@ -1,3 +1,4 @@
+#if WINDOWS
 using System.Runtime.InteropServices;
 
 namespace HabilisTerminal.App.Widgets;
@@ -8,7 +9,7 @@ namespace HabilisTerminal.App.Widgets;
 /// <see cref="ExternalException"/> while another program holds the clipboard, as WPF did.
 /// </summary>
 [System.Diagnostics.CodeAnalysis.SuppressMessage("Usage", "CA2201", Justification = "The callers catch what WPF's clipboard threw.")]
-internal static class Clipboard
+internal static class Win32Clipboard
 {
     private const uint CF_UNICODETEXT = 13;
     private const uint GMEM_MOVEABLE = 0x0002;
@@ -117,3 +118,4 @@ internal static class Clipboard
     [return: MarshalAs(UnmanagedType.Bool)]
     private static extern bool GlobalUnlock(IntPtr memory);
 }
+#endif

@@ -297,7 +297,7 @@ public sealed class CopyOperation : FileOperation
 
             if (_options.CopyAccessRights)
             {
-                new FileInfo(target).SetAccessControl(new FileInfo(source).GetAccessControl());
+                Platform.Platforms.Current.FileSystem.CopySecurity(source, target);
             }
         });
 

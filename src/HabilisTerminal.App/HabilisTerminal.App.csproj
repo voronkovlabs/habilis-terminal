@@ -1,19 +1,32 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
+    <!-- Which build (issue #259): 'windows' on Windows, 'portable' (net10.0, macOS and Linux) elsewhere. On Windows,
+         -p:HabiTarget=portable builds the portable one, so the analyzer shows Windows calls left unguarded. -->
+    <HabiTarget Condition="'$(HabiTarget)' == '' And $([MSBuild]::IsOSPlatform('Windows'))">windows</HabiTarget>
+    <HabiTarget Condition="'$(HabiTarget)' == ''">portable</HabiTarget>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(HabiTarget)' == 'windows'">
     <!-- The Windows version in the framework brings the Windows APIs: Windows.Data.Pdf for quick view (issue #110). -->
     <TargetFramework>net10.0-windows10.0.19041.0</TargetFramework>
     <SupportedOSPlatformVersion>10.0.17763.0</SupportedOSPlatformVersion>
     <OutputType>WinExe</OutputType>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <!-- A concrete RID puts conpty.dll next to habi.exe (Microsoft.Windows.Console.ConPTY). -->
+    <RuntimeIdentifiers>win-x64;win-arm64</RuntimeIdentifiers>
+    <RuntimeIdentifier Condition="'$(RuntimeIdentifier)' == ''">win-x64</RuntimeIdentifier>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(HabiTarget)' == 'portable'">
+    <TargetFramework>net10.0</TargetFramework>
+    <OutputType>Exe</OutputType>
+    <DefineConstants>$(DefineConstants);PORTABLE</DefineConstants>
+  </PropertyGroup>
+  <PropertyGroup>
     <!-- The UI is Avalonia (issue #253): compiled bindings, no WPF. -->
     <AvaloniaUseCompiledBindingsByDefault>true</AvaloniaUseCompiledBindingsByDefault>
     <AssemblyName>habi</AssemblyName>
     <RootNamespace>HabilisTerminal.App</RootNamespace>
-    <ApplicationManifest>app.manifest</ApplicationManifest>
     <StartupObject>HabilisTerminal.App.Program</StartupObject>
     <ApplicationIcon Condition="Exists('Assets\habi.ico')">Assets\habi.ico</ApplicationIcon>
-    <!-- A concrete RID puts conpty.dll next to habi.exe (Microsoft.Windows.Console.ConPTY). -->
-    <RuntimeIdentifiers>win-x64;win-arm64</RuntimeIdentifiers>
-    <RuntimeIdentifier Condition="'$(RuntimeIdentifier)' == ''">win-x64</RuntimeIdentifier>
   </PropertyGroup>
   <PropertyGroup>
     <!-- The ConPTY package derives these from PlatformTarget too early to see the RID;
@@ -31,7 +44,7 @@
     <PackageReference Include="Avalonia.Desktop" />
     <PackageReference Include="Avalonia.Themes.Fluent" />
     <PackageReference Include="Avalonia.AvaloniaEdit" />
-    <PackageReference Include="Microsoft.Windows.Console.ConPTY" />
+    <PackageReference Include="Microsoft.Windows.Console.ConPTY" Condition="'$(HabiTarget)' == 'windows'" />
     <PackageReference Include="Velopack" />
   </ItemGroup>
   <ItemGroup>

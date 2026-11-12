@@ -1,9 +1,9 @@
 namespace HabilisTerminal.Shell;
 
-/// <summary>Finds PowerShell 7+ (pwsh.exe) on this machine (SPEC §7).</summary>
+/// <summary>Finds PowerShell 7+ (pwsh.exe; pwsh on macOS and Linux) on this machine (SPEC §7).</summary>
 public static class PwshLocator
 {
-    public const string ExecutableName = "pwsh.exe";
+    public static string ExecutableName { get; } = OperatingSystem.IsWindows() ? "pwsh.exe" : "pwsh";
 
     public static string? Find()
     {
@@ -24,6 +24,16 @@ public static class PwshLocator
         foreach (var dir in path.Split(Path.PathSeparator, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
         {
             yield return Path.Combine(dir, ExecutableName);
+        }
+
+        if (!OperatingSystem.IsWindows())
+        {
+            // Homebrew (Apple silicon, Intel) and Microsoft's own package; an app started from Finder has a short PATH.
+            yield return "/opt/homebrew/bin/pwsh";
+            yield return "/usr/local/bin/pwsh";
+            yield return "/usr/local/microsoft/powershell/7/pwsh";
+            yield return "/opt/microsoft/powershell/7/pwsh";
+            yield break;
         }
 
         var programFiles = Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles);

@@ -1,3 +1,4 @@
+#if WINDOWS
 using System.IO;
 using Avalonia.Media.Imaging;
 using Windows.Data.Pdf;
@@ -63,3 +64,27 @@ public sealed class PdfPreview : IDisposable
 
     public void Dispose() => _file.Dispose();
 }
+#else
+using Avalonia.Media.Imaging;
+
+namespace HabilisTerminal.App.Viewing;
+
+/// <summary>PDF pages come from Windows' own PDF engine; the portable build has none yet (#259).</summary>
+[System.Diagnostics.CodeAnalysis.SuppressMessage("Performance", "CA1822", Justification = "The same members as the Windows build's.")]
+public sealed class PdfPreview : IDisposable
+{
+    public int PageCount => 0;
+
+    public static Task<PdfPreview> OpenAsync(string path) =>
+        Task.FromException<PdfPreview>(new NotSupportedException("PDF preview is not available on this system yet."));
+
+    public Avalonia.Size PageSize(int index) => default;
+
+    public Task<Bitmap> RenderAsync(int index, double width, double height) =>
+        Task.FromException<Bitmap>(new NotSupportedException("PDF preview is not available on this system yet."));
+
+    public void Dispose()
+    {
+    }
+}
+#endif

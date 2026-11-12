@@ -1,4 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+  </PropertyGroup>
   <ItemGroup>
     <!-- Shipped next to the executable as shell\HabilisTerminal.ps1 (also flows to referencing projects). -->
     <None Include="Scripts\HabilisTerminal.ps1" Link="shell\HabilisTerminal.ps1" CopyToOutputDirectory="PreserveNewest" />

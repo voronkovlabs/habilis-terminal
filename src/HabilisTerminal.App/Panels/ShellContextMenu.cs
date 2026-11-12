@@ -1,3 +1,4 @@
+#if WINDOWS
 using System.Runtime.InteropServices;
 using Avalonia;
 using Avalonia.Controls;
@@ -14,7 +15,7 @@ namespace HabilisTerminal.App.Panels;
 /// folder's background when no item is given. Runs on the UI (STA) thread; owner-drawn submenus such as "Send to" and
 /// "Open with" get their messages through <c>IContextMenu2/3</c> while the menu is open.
 /// </summary>
-public static class ShellContextMenu
+internal static class Win32ShellContextMenu
 {
     /// <summary>Shows the menu at <paramref name="screen"/> (physical pixels) and runs the chosen command.</summary>
     /// <param name="intercept">Gets the chosen command's verb first (e.g. "rename"); returns true when it handled it.</param>
@@ -363,3 +364,4 @@ public static class ShellContextMenu
     [DllImport("user32.dll")]
     private static extern int TrackPopupMenuEx(IntPtr hmenu, uint fuFlags, int x, int y, IntPtr hwnd, IntPtr lptpm);
 }
+#endif
