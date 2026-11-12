@@ -31,10 +31,22 @@ How the project is built, tested and checked by hand. Most of this is not visibl
 dotnet build -c Release
 dotnet test -c Release --no-build
 ```
-- **Expected result:** every test passes and one is skipped (creating a symlink needs a privilege this machine lacks).
+- **Expected result:** every test passes and two are skipped (creating a symlink needs a privilege this machine lacks).
 - **Shell tests** start pwsh with `-NoProfile` and PSReadLine `SaveNothing`, so they never touch the owner's profile or history.
 - **Temporary directories only.** Tests and experiments run in `%TEMP%\habi-tests\...` (UI and test data) or `%TEMP%\habi-bench`. Never touch the owner's real files. Reading metadata of system folders (for example to time a folder count) is fine; writing anything outside these folders is not.
 - **Clipboard.** A test that uses the clipboard saves it first and restores it afterwards.
+
+## Windows and the portable build (#259)
+- **Two flavours.** On Windows the app and its tests target `net10.0-windows10.0.19041.0` / `net10.0-windows`; elsewhere everything is `net10.0`. Core, Shell, Themes and Terminal are `net10.0` everywhere.
+- **Check portability on Windows:** `dotnet build -c Release -p:HabiTarget=portable`. The platform analyzer (CA1416, an error) then flags Windows-only .NET APIs called without an `OperatingSystem.IsWindows()` guard. It does not see P/Invoke: a `DllImport` of a Windows DLL must sit in a Windows implementation.
+- **Where Windows code goes:**
+  - Core: interfaces in `Core/Platform/Platforms.cs` (file calls, Recycle Bin, file locks, drives), Windows code in `Core/Platform/Windows`, plain .NET in `Core/Platform/Portable`. The old static classes (`NativeFile`, `RecycleBin`, ...) forward to `Platforms.Current`.
+  - Shell: `Pty/PseudoTerminal.cs` (ConPTY on Windows).
+  - Themes: `SystemAppearance.Current`.
+  - App: `Platform/IDesktop` with `WindowsDesktop` (`#if WINDOWS`) and `PortableDesktop`.
+- **Paths:** use `FileSystem/PathText` (`TrimEndSeparator`, `WithEndSeparator`, `IsSameOrInside`), not `TrimEnd('\\')`. Fonts: `Theming/Fonts.Mono` has the macOS and Linux fallbacks.
+- **Tests of Windows behaviour** (drive roots, junctions, cmd.exe, ACLs, NTFS attributes) are `[WindowsFact]` / `[WindowsTheory]` (`tests/HabilisTerminal.Core.Tests/WindowsOnly.cs`) and skip elsewhere.
+- **macOS in CI:** `.github/workflows/macos-screens.yml` builds the app and the tests on `macos-latest`, runs them, starts habi and a probe window, and uploads screenshots (artifact `macos-screens`). It runs on pushes to experiment/avalonia that touch `src`, `tests` or the workflow. Download: `gh run download <id> -n macos-screens`.
 
 ## UI checks
 - **Make a test copy:** `tools/ui/New-TestCopy.ps1 -Name v0.1.1-devN`.
