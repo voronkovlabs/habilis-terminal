@@ -60,14 +60,17 @@ jobs:
           cat probe.log
       - name: Start Habilis
         run: |
+          osascript -e 'quit app "Terminal"' || true
           ./src/HabilisTerminal.App/bin/Release/net10.0/habi > habi.log 2>&1 &
           pid=$!
           sleep 25
+          if kill -0 $pid 2>/dev/null; then echo "habi is running"; else echo "habi has ended"; fi
           osascript -e 'tell application "System Events" to set frontmost of (first process whose unix id is '"$pid"') to true' || true
           sleep 2
           screencapture -x screens/5-habilis.png
           kill $pid || true
           echo "--- habi output"; cat habi.log
+          echo "--- crash reports"; find ~/Library/Application\ Support -path '*Habilis*' -name 'crash-*.json' -exec cat {} \; 2>/dev/null | head -c 20000
           echo "--- crash or trace files"; find ~/Library/Application\ Support ~/.config ~/.local/share -path '*Habilis*' -type f 2>/dev/null | head -20
       - uses: actions/upload-artifact@v4
         if: always()
