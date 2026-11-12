@@ -23,7 +23,7 @@ public class LongPathTests
         Assert.Equal(expected, LongPath.ToDisplay(path));
     }
 
-    [Theory]
+    [WindowsTheory]
     [InlineData(@"\\server\share", true)]
     [InlineData(@"\\?\UNC\server\share", true)]
     [InlineData(@"\\?\C:\a", false)]

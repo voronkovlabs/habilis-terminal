@@ -138,7 +138,7 @@ public sealed class FolderSizeCache
     private static bool IsSameOrInside(string path, string root) =>
         root.Length == 0 ||
         (path.StartsWith(root, StringComparison.OrdinalIgnoreCase) &&
-         (path.Length == root.Length || path[root.Length] == '\\' || root[^1] == '\\'));
+         (path.Length == root.Length || PathText.IsSeparator(path[root.Length]) || PathText.IsSeparator(root[^1])));
 
     private bool InvalidatedSince(string path, long stamp)
     {
@@ -156,5 +156,5 @@ public sealed class FolderSizeCache
         return _invalidations.Any(i => i.Stamp > stamp && Related(path, i.Path));
     }
 
-    private static string Normalize(string path) => path.Length > 3 ? path.TrimEnd('\\') : path;
+    private static string Normalize(string path) => path.Length > 3 ? path.TrimEndSeparator() : path;
 }

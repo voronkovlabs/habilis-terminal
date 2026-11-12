@@ -167,7 +167,7 @@ public sealed class PanelState
         }
 
         Path = path;
-        HasParent = hasParent ?? (System.IO.Path.GetDirectoryName(path.TrimEnd('\\')) is not null && !IsUncRoot(path));
+        HasParent = hasParent ?? (System.IO.Path.GetDirectoryName(path.TrimEndSeparator()) is not null && !IsUncRoot(path));
         _raw = rawEntries as FileEntry[] ?? rawEntries.ToArray();
         if (samePath)
         {

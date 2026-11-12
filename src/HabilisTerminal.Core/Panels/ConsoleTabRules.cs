@@ -1,3 +1,4 @@
+using HabilisTerminal.Core.FileSystem;
 namespace HabilisTerminal.Core.Panels;
 
 /// <summary>Which console tab comes next, and when closing needs a question (issue #119).</summary>
@@ -44,7 +45,7 @@ public static class ConsoleTabRules
         }
 
         var homeRoot = home.TrimEnd('\\', '/');
-        if (homeRoot.Length > 0 && parent.StartsWith(homeRoot, StringComparison.OrdinalIgnoreCase) && (parent.Length == homeRoot.Length || parent[homeRoot.Length] == '\\'))
+        if (homeRoot.Length > 0 && parent.StartsWith(homeRoot, StringComparison.OrdinalIgnoreCase) && (parent.Length == homeRoot.Length || PathText.IsSeparator(parent[homeRoot.Length])))
         {
             return "~" + parent[homeRoot.Length..];
         }

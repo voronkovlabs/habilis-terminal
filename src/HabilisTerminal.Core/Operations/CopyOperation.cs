@@ -1,3 +1,4 @@
+using HabilisTerminal.Core.FileSystem;
 using System.ComponentModel;
 using HabilisTerminal.Core.Interop;
 
@@ -48,18 +49,18 @@ public sealed class CopyOperation : FileOperation
     /// </summary>
     public static IReadOnlyList<(string Source, string Target)> ResolveTargets(IReadOnlyList<string> sources, string destination)
     {
-        var endsWithSeparator = destination.EndsWith('\\') || destination.EndsWith('/');
+        var endsWithSeparator = destination.Length > 0 && PathText.IsSeparator(destination[^1]);
         var full = Path.GetFullPath(destination);
-        var lastSegment = Path.GetFileName(full.TrimEnd('\\'));
+        var lastSegment = Path.GetFileName(full.TrimEndSeparator());
         if (lastSegment.AsSpan().IndexOfAny('*', '?') >= 0)
         {
-            var directory = Path.GetDirectoryName(full.TrimEnd('\\'))!;
-            return sources.Select(s => (s, Path.Combine(directory, NameRules.ApplyRenameMask(Path.GetFileName(s.TrimEnd('\\')), lastSegment)))).ToArray();
+            var directory = Path.GetDirectoryName(full.TrimEndSeparator())!;
+            return sources.Select(s => (s, Path.Combine(directory, NameRules.ApplyRenameMask(Path.GetFileName(s.TrimEndSeparator()), lastSegment)))).ToArray();
         }
 
         if (endsWithSeparator || Directory.Exists(full) || sources.Count > 1)
         {
-            return sources.Select(s => (s, Path.Combine(full, Path.GetFileName(s.TrimEnd('\\'))))).ToArray();
+            return sources.Select(s => (s, Path.Combine(full, Path.GetFileName(s.TrimEndSeparator())))).ToArray();
         }
 
         return [(sources[0], full)];
@@ -113,9 +114,7 @@ public sealed class CopyOperation : FileOperation
 
     private static bool IsSameOrInside(string path, string directory)
     {
-        var a = Path.GetFullPath(path).TrimEnd('\\') + '\\';
-        var b = Path.GetFullPath(directory).TrimEnd('\\') + '\\';
-        return a.StartsWith(b, StringComparison.OrdinalIgnoreCase);
+        return PathText.IsSameOrInside(path, directory);
     }
 
     private void MoveWithinVolume(string source, string target)

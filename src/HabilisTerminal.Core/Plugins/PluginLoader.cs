@@ -1,3 +1,4 @@
+using HabilisTerminal.Core.FileSystem;
 using System.Reflection;
 using System.Runtime.Loader;
 using HabilisTerminal.Plugins;
@@ -7,9 +8,9 @@ namespace HabilisTerminal.Core.Plugins;
 /// <summary>A discovered plugin: loaded (<see cref="Instance"/>) or failed (<see cref="Error"/>).</summary>
 public sealed record LoadedPlugin(string Folder, PluginManifest? Manifest, Plugin? Instance, string? Error)
 {
-    public string Id => Manifest?.Id ?? Path.GetFileName(Source.TrimEnd('\\'));
+    public string Id => Manifest?.Id ?? Path.GetFileName(Source.TrimEndSeparator());
 
-    public string Name => Manifest?.Name ?? Path.GetFileName(Source.TrimEnd('\\'));
+    public string Name => Manifest?.Name ?? Path.GetFileName(Source.TrimEndSeparator());
 
     /// <summary>Where a reload reads it from: <see cref="Folder"/> is a temporary copy for a plugin loaded through the API.</summary>
     public string Source { get => field ?? Folder; init; }

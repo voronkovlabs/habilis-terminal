@@ -1,3 +1,4 @@
+using HabilisTerminal.Core.FileSystem;
 using System.IO.Compression;
 using System.Text.Json;
 
@@ -272,7 +273,7 @@ public sealed class PluginStore(string shippedRoot, string userRoot)
     private static Version VersionOf(string? text) => Version.TryParse(text, out var version) ? version : new Version(0, 0);
 
     private static bool IsDirectChild(string folder, string root) =>
-        string.Equals(Path.GetDirectoryName(Path.GetFullPath(folder).TrimEnd('\\')), Path.GetFullPath(root).TrimEnd('\\'), StringComparison.OrdinalIgnoreCase);
+        string.Equals(Path.GetDirectoryName(Path.GetFullPath(folder).TrimEndSeparator()), Path.GetFullPath(root).TrimEndSeparator(), StringComparison.OrdinalIgnoreCase);
 
     private static bool IsInside(string folder, string root) =>
         Path.TrimEndingDirectorySeparator(Path.GetFullPath(folder)).StartsWith(Path.TrimEndingDirectorySeparator(Path.GetFullPath(root)) + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase);
