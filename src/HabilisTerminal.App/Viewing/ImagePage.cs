@@ -170,10 +170,12 @@ public sealed class ImagePage : DockPanel, IPage, IContentZoom
     /// <summary>A round button on the picture's edge, as in Windows Photos.</summary>
     private static Border Arrow(string glyph, HorizontalAlignment side, Action click)
     {
+        // Segoe Fluent Icons exists on Windows only (#261): elsewhere the bundled codicons' chevrons.
+        var windows = OperatingSystem.IsWindows();
         var text = new TextBlock
         {
-            Text = glyph,
-            FontFamily = new FontFamily("Segoe Fluent Icons, Segoe MDL2 Assets"),
+            Text = windows ? glyph : side == HorizontalAlignment.Left ? "" : "",
+            FontFamily = new FontFamily(windows ? "Segoe Fluent Icons, Segoe MDL2 Assets" : "avares://habi/Assets#codicon"),
             FontSize = 16,
             Foreground = Brushes.White,
             HorizontalAlignment = HorizontalAlignment.Center,

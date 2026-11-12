@@ -13,7 +13,8 @@ namespace HabilisTerminal.App.Widgets;
 
 /// <summary>
 /// The window's own title bar, VS Code style: icon and the F9 menu headers on the left, the caption buttons on the right;
-/// the empty rest drags the window like a normal caption. On Avalonia (issue #253) the caption and the buttons carry
+/// the empty rest drags the window like a normal caption. On a Mac (#261), as VS Code there: the system's window
+/// buttons at the left, then the menus, no Windows caption buttons. On Avalonia (issue #253) the caption and the buttons carry
 /// window decoration roles, so Windows treats them as its own: the caption drags and maximizes on a double click, and
 /// the maximize button shows Snap Layouts.
 /// </summary>
@@ -28,6 +29,11 @@ public sealed class TitleBar : DockPanel
     private const double CommandBoxMinWidth = 200;
     private const double CommandBoxHeight = 22;
     private const double ButtonWidth = 46;
+
+    /// <summary>The room of the macOS window buttons (three of 12 px with their gaps, from 8 px in) and a little air.</summary>
+    private const double MacButtonsWidth = 76;
+
+    private static bool IsMac => OperatingSystem.IsMacOS();
 
     // Segoe Fluent Icons (Windows 11) / Segoe MDL2 Assets (Windows 10) caption glyphs.
     private const string MinimizeGlyph = "";
@@ -47,16 +53,20 @@ public sealed class TitleBar : DockPanel
         LastChildFill = true;
         this.SetResourceReference(BackgroundProperty, "Habi.TitleBarBackground");
 
-        var icon = new Image
-        {
-            Width = 16,
-            Height = 16,
-            Margin = new Thickness(10, 0, 6, 0),
-            VerticalAlignment = VerticalAlignment.Center,
-            Source = LoadIcon(),
-        };
-        SetDock(icon, Dock.Left);
-        Children.Add(icon);
+        // On a Mac (#261) the system's red, yellow and green buttons sit at the left and stay: the menus start after them,
+        // and there is no icon, as in Mac apps. In full screen the buttons are gone, and so is their room.
+        Control lead = IsMac
+            ? new Border { Width = MacButtonsWidth, Background = Brushes.Transparent }
+            : new Image
+            {
+                Width = 16,
+                Height = 16,
+                Margin = new Thickness(10, 0, 6, 0),
+                VerticalAlignment = VerticalAlignment.Center,
+                Source = LoadIcon(),
+            };
+        SetDock(lead, Dock.Left);
+        Children.Add(lead);
 
         MenuStrip = new StackPanel { Orientation = Orientation.Horizontal };
         foreach (var title in menus)
@@ -77,12 +87,14 @@ public sealed class TitleBar : DockPanel
         SetDock(MenuStrip, Dock.Left);
         Children.Add(MenuStrip);
 
-        var close = CaptionButton(CloseGlyph, () => _window.Close(), isClose: true);
+        // Windows' caption buttons on the right; a Mac has its own at the left.
         _maximize = CaptionButton(MaximizeGlyph, ToggleMaximize, isClose: false);
         _maximizeGlyph = (TextBlock)_maximize.Child!;
-        var minimize = CaptionButton(MinimizeGlyph, () => _window.WindowState = WindowState.Minimized, isClose: false);
-        var feedback = FeedbackButton();
-        foreach (var button in new[] { close, _maximize, minimize, feedback, ZoomButton() })
+        Control[] right = IsMac
+            ? [FeedbackButton(), ZoomButton()]
+            : [CaptionButton(CloseGlyph, () => _window.Close(), isClose: true), _maximize,
+                CaptionButton(MinimizeGlyph, () => _window.WindowState = WindowState.Minimized, isClose: false), FeedbackButton(), ZoomButton()];
+        foreach (var button in right)
         {
             SetDock(button, Dock.Right);
             Children.Add(button);
@@ -96,12 +108,33 @@ public sealed class TitleBar : DockPanel
         Children.Add(caption);
         caption.SizeChanged += (_, _) => PlaceCommandBox(caption);
         SizeChanged += (_, _) => PlaceCommandBox(caption);
+        if (IsMac)
+        {
+            // Mac windows move by their title bar and zoom on a double click there.
+            caption.PointerPressed += (_, e) =>
+            {
+                if (e.GetCurrentPoint(caption).Properties.IsLeftButtonPressed)
+                {
+                    if (e.ClickCount == 2)
+                    {
+                        ToggleMaximize();
+                    }
+                    else
+                    {
+                        _window.BeginMoveDrag(e);
+                    }
+
+                    e.Handled = true;
+                }
+            };
+        }
 
         _window.PropertyChanged += (_, e) =>
         {
             if (e.Property == Window.WindowStateProperty)
             {
                 UpdateMaximizeGlyph();
+                lead.Width = IsMac ? (_window.WindowState == WindowState.FullScreen ? 8 : MacButtonsWidth) : lead.Width;
             }
         };
         _window.Activated += (_, _) => Opacity = 1;
