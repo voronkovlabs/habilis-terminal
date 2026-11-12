@@ -56,6 +56,9 @@
     <AssemblyMetadata Include="CrashReportToken" Value="$(CrashReportToken)" />
   </ItemGroup>
   <ItemGroup>
+    <InternalsVisibleTo Include="HabilisTerminal.App.Tests" />
+  </ItemGroup>
+  <ItemGroup>
     <ProjectReference Include="..\HabilisTerminal.Core\HabilisTerminal.Core.csproj" />
     <ProjectReference Include="..\HabilisTerminal.Plugins.Sdk\HabilisTerminal.Plugins.Sdk.csproj" />
     <ProjectReference Include="..\HabilisTerminal.Plugins.Sdk.Avalonia\HabilisTerminal.Plugins.Sdk.Avalonia.csproj" />

@@ -9,7 +9,9 @@ How the project is built, tested and checked by hand. Most of this is not visibl
 - **GitHub issues labelled `claude`**: what is open and what is done. See `CLAUDE.md`.
 - **Naming.** The product was renamed on 2026-10-31 from "Terminal Commander" / `tcmd.exe` to **Habilis Terminal** / `habi.exe`. The local folder is still `terminal-commander`.
 - **Projects.**
-  - `src/HabilisTerminal.App`: WPF.
+  - `src/HabilisTerminal.App`: Avalonia (WPF until issue #253).
+  - `src/HabilisTerminal.Terminal`: the VT emulator the console view draws (no UI).
+  - `src/HabilisTerminal.Plugins.Sdk.Avalonia`: plugin panels drawn by the plugin (`IPanelView`).
   - `src/HabilisTerminal.Core`: panels, file system, settings, viewer, editor.
   - `src/HabilisTerminal.Shell`: ConPTY and pwsh integration.
   - `src/HabilisTerminal.Themes`.
@@ -67,12 +69,15 @@ dotnet test -c Release --no-build
 Every command is in `src/HabilisTerminal.Core/Commands/CommandCatalog.cs`: id, section, title, key, when it applies. The F9 menu, F1 help and the command line (Ctrl+Shift+P, `MainWindow.CommandList.cs`) take them from there. A new key needs a line there as well as its `case`; a catalog command runs as its key does, through `PanelKey`, unless `RunFor` says otherwise. In a viewer or editor it presses the real key.
 
 ## Keyboard routing: things learned the hard way
-- **Order of processing.** WPF handles a key message in `HwndSource.ThreadFilterMessage` before `GlobalKeyHook` sees it in `ThreadPreprocessMessage`.
-- **Arrow keys.** An arrow that no element handles runs WPF directional navigation and is marked handled. `DirectionalNavigation="None"` does not stop it, so arrows are taken in the window's `PreviewKeyDown` (`MainWindow.OnPreviewArrowKey`).
-- **Keys typed into the terminal** never reach WPF key events, so the hook handles those. Layout keys typed in the terminal (Ctrl+U, Ctrl+P, Ctrl+F1 / Ctrl+F2) act only while the shell is at the prompt (`ShellState.Idle`).
-- **Popups opened from the terminal.** A WPF popup gets its keys through the main window. Win32 focus must leave the terminal first, or Esc and typing go to the shell. A plain `SetFocus` on the window does not work, because WPF hands focus straight back to the child window it remembers. `MainWindow.TakeFocusFromTerminal` focuses a WPF element instead.
+- **One path for every key (Avalonia, #253).** The console is a control (`Hosting/TerminalView.cs`), not a child window. The window's tunnelling `KeyDown` handler (`MainWindow.OnWindowKeyDown`) offers every key to `OnGlobalKey` first; what it does not take goes on to the focused element, the console mostly, which encodes it (`Hosting/TerminalKeys.cs`: win32-input-mode while ConPTY asks for it, VT otherwise). Text arrives as `TextInput`. The WPF-era `GlobalKeyHook`, `OnPreviewArrowKey` and airspace tricks are gone.
+- **Layout keys typed in the terminal** (Ctrl+U, Ctrl+P, Ctrl+F1 / Ctrl+F2) act only while the shell is at the prompt (`ShellState.Idle`).
+- **Pages** (viewer, editor, settings) take their keys through tunnelling handlers. While one is open the workspace is disabled, so the hidden console cannot keep the focus and the page's keys.
+- **Popups** draw in the window's overlay layer (`ShouldUseOverlayLayer`) and must be in its tree: `Widgets/PopupParking.cs`. Popup windows of their own came white and the wrong size.
+- **Modal dialogs** wait in a dispatcher frame (`Widgets/ModalWindow.ShowModal`), as WPF's `ShowDialog` did; callers ask and act in one go.
+- **WPF spellings** the code-built UI used (`ActualWidth`, `Visibility.Hidden`, `Keyboard.Modifiers`, `Cursors`, `SetResourceReference`) live on in `Widgets/WpfCompat.cs`, `Widgets/Keyboard.cs` and `Theming/ResourceReferences.cs`.
 - **PSReadLine buffer.** Only PSReadLine knows what is in the buffer. Anything that depends on it, like Tab on an empty line, is decided in `Scripts/HabilisTerminal.ps1`, which reports back with `OSC 7731;habi;<message>`. Host-side switches are flag files in the channel directory (`panels-shown`, `panel-mode`); `panel-mode` is on while a panel has the keys: then Enter, Left, Right, Home, End, Del, Backspace, Esc and Tab on an empty line answer `panel-key;<name>` instead of acting in the line (issues #85, #90).
-- **Focus model (issue #90).** The Win32 focus always stays in the console; the active panel "has the keys" as a window state (`FocusedPanel()`, `FilePanel.HasKeys`), not as WPF focus. `GlobalKeyHook` takes the console's keyboard messages in `ComponentDispatcher.ThreadFilterMessage`, before WPF, offers key-downs to `OnGlobalKey` and dispatches the rest to the console itself. Without that, WPF (which has no focused element while a child window has the Win32 focus) runs its keyboard navigation on arrows and focuses the first panel. A panel taking the WPF focus (a click, `panel.Focus()`) means "this panel gets the keys": `OnPanelGotFocus` puts the Win32 focus back into the console. A left click in the console is console mode; Esc on an empty line there comes back. `PutFocusInTerminal` clears WPF's focused element, so activating the window again does not restore a panel.
+- **Focus model (issue #90).** The focus stays in the console; the active panel "has the keys" as a window state (`FocusedPanel()`, `FilePanel.HasKeys`), and the window's key handler routes the keys. A panel taking the focus (a click, `panel.Focus()`) means "this panel gets the keys": `OnPanelGotFocus` puts the focus back into the console. A left click in the console is console mode; Esc on an empty line there comes back.
+- **Tracing.** `HABI_TRACE=<file>`, or a `trace-on` file next to `habi.exe` (test copies start through Explorer and get no environment), writes `trace.log` there.
 
 ## Releases
 - **Only the last two releases are kept** (the owner's wish): a step in `build.yml` deletes older ones after each release. Their git tags stay.
@@ -85,8 +90,8 @@ Every command is in `src/HabilisTerminal.Core/Commands/CommandCatalog.cs`: id, s
 - **Prompt position after hiding panels.** When the terminal grows because panels are hidden, the prompt stays where it was and the space below stays empty, as in Windows Terminal. Far instead shows the console filled up to the prompt (stage 1, issue #15).
 
 ## Console tabs (#119)
-- `Hosting/ConsoleTab.cs` holds what belongs to one shell: `ShellHost`, `ShellConnection`, its own `TerminalControl`, the overflow state, `CommandRunning`. `MainWindow.Tabs.cs` keeps the list and `_tab`, the tab in front; `_shell` and `Terminal` follow it. Events of a tab not in front must not touch panels or the layout: check `tab == _tab`.
-- A tab not in front is `Visibility.Hidden` and `WorkspaceLayout` skips it, so it keeps its last size and its shell gets no resize until it is shown. Its control goes on taking output: 20,000 fast lines took 1.5 s hidden and 1.2 s in front, and all arrived.
+- `Hosting/ConsoleTab.cs` holds what belongs to one shell: `ShellHost`, `ShellConnection`, its own `TerminalView` over a `TerminalEmulator`, the overflow state, `CommandRunning`. `MainWindow.Tabs.cs` keeps the list and `_tab`, the tab in front; `_shell` and `Terminal` follow it. Events of a tab not in front must not touch panels or the layout: check `tab == _tab`.
+- A tab not in front is hidden (`IsVisible = false`) and `WorkspaceLayout` skips it, so it keeps its last size and its shell gets no resize until it is shown. Its control goes on taking output: 20,000 fast lines took 1.5 s hidden and 1.2 s in front, and all arrived.
 - The strip sits below the console, which grows upwards over the panels, and shows only with two or more tabs. With both panels shown its height comes out of the panels, so the console keeps its size.
 - Each tab owns a pair of `FilePanel`s and their layout (#125); only the pair in front is in `Workspace.Children`, and the window's `_left`, `_right`, `_active` and layout are the front tab's. `SavePanels` and `LoadPanels` move them on a switch. Closing a tab or the window saves its configuration: a new tab and the next start open with the last closed one. A plugin stays live in its tab, but a saved configuration keeps only its local folder.
 - The tab's command line comes from the script (`command-line` over OSC 7731), the exit code from OSC 133;D. Without the integration script a tab has no running state, title or finish card.

@@ -26,9 +26,9 @@ recursive / content-based folder compare, mapping network drives.
 | Item | Decision |
 |---|---|
 | Runtime | .NET 10 (LTS, supported until 2028-11-14), C# |
-| UI | WPF |
-| Terminal control | `CI.Microsoft.Terminal.Wpf` 1.25.260303002 (community repack of the Windows Terminal WPF control) + `Microsoft.Windows.Console.ConPTY` 1.25.260930003 (current conpty/OpenConsole) + own ConPTY session layer in `HabilisTerminal.Shell` (flags `RESIZE_QUIRK | WIN32_INPUT_MODE`, as Windows Terminal). `EasyWindowsTerminalControl` was dropped in stage 1, see `docs/stage1-findings.md` |
-| Editor component | `AvalonEdit` 6.3.1.120 (MIT) |
+| UI | Avalonia 12.1.4 (MIT); WPF until issue #253 (branch `experiment/avalonia`) |
+| Terminal | Own VT emulator (`HabilisTerminal.Terminal`, no UI) drawn by `TerminalView` + `Microsoft.Windows.Console.ConPTY` 1.25.260930003 (current conpty/OpenConsole) + own ConPTY session layer in `HabilisTerminal.Shell` (flags `RESIZE_QUIRK | WIN32_INPUT_MODE`, as Windows Terminal). Before #253: `CI.Microsoft.Terminal.Wpf` (the Windows Terminal WPF control) |
+| Editor component | `Avalonia.AvaloniaEdit` 12.0.0 (MIT) |
 | Installer / updates | `Velopack` 1.2.x (MIT) |
 | Tests | xUnit; BenchmarkDotNet for performance |
 
@@ -400,7 +400,7 @@ F6 switches between viewer and editor, as in Far. One page at a time (no F12 scr
   there, as in Far (issue #75).
 
 ### Alt+F3: pictures, PDF, Markdown (issues #57, #231)
-- Pictures (png, jpg, gif, bmp, ico, webp, tif) through the WPF decoders, fitted to the window and never enlarged to
+- Pictures (png, jpg, gif, bmp, ico, webp, tif) through Avalonia's decoders (Skia), fitted to the window and never enlarged to
   fit. Left / Right, PgUp / PgDn, the wheel and the round arrows on the edges go to the previous / next picture of the
   folder in the panel's order, Home / End to the first / last; closed, the panel cursor stands on the last one shown
   (issue #242).
@@ -409,20 +409,20 @@ F6 switches between viewer and editor, as in Far. One page at a time (no F12 scr
   sideways); double click switches between fitted and 100 %, Ctrl+Alt+0 fits. The header shows "Fit 37%" or the
   percentage, 100 % being one content pixel per screen pixel. A zoomed PDF page is drawn again at its new size (at most
   8000 pixels on the long side), so it stays sharp. The interface zoom does not change in these views.
-- PDF one page at a time (PgUp / PgDn, arrows, wheel, Home / End); Ctrl+F opens the Edge viewer for finding and
-  selecting text.
+- PDF one page at a time (PgUp / PgDn, arrows, wheel, Home / End); Ctrl+F opens the file in its associated program
+  for finding and selecting text (the Edge viewer in WebView2 until #253).
 - In all three, F3 shows the same file in the viewer, and Esc / F10 / Alt+F3 close. In a plugin panel Alt+F3 works on a
   temporary copy, as F3 does.
 - Any other file opens in its associated program.
 
 #### Markdown
-- `.md`, `.markdown`, `.mdown`, `.mkd`: Markdig (advanced extensions: tables, task lists, footnotes, autolinks) renders
-  the file to HTML, shown in WebView2 in a GitHub-like style with the colour theme's editor colours.
-- Raw HTML in the file is escaped and the page allows no scripts. The file's folder is served as
-  `https://md.habi.local/`, so relative images load. Links to other Markdown files open in the same view, web links
-  in the browser, other local files in their associated program.
+- `.md`, `.markdown`, `.mdown`, `.mkd`: Markdig (advanced extensions: tables, task lists, autolinks) parses the file
+  and the page draws it with controls (#253; HTML in WebView2 before) in the colour theme's editor colours: headings,
+  emphasis, code, lists and task lists, quotes, code blocks, tables, rules, local images.
+- Raw HTML in the file is not shown. Relative images load from the file's folder. Links to other Markdown files open in
+  the same view, `#anchors` scroll to their heading, web links open in the browser, other local files in their
+  associated program. Text can be selected and copied.
 - F3 plain viewer, F4 / F6 editor, Esc / F10 / Alt+F3 close (the cursor stays on the file).
-- WebView2 keeps its profile in the state folder (`WebView2`); without the WebView2 Runtime the page says so.
 
 ### Editor (F4)
 - Text detection by content (first 64 KB): BOM → text; no NUL bytes and few control characters → text; otherwise binary.
@@ -556,7 +556,8 @@ src/HabilisTerminal.Shell     pwsh launch through a ConPTY abstraction, OSC pars
                                 integration script (.ps1). No UI.
 src/HabilisTerminal.Themes    VS Code color theme loader (JSONC, include, defaults by type), file icon themes,
                                 Windows light/dark and accent colour. No UI.
-src/HabilisTerminal.App       WPF: window, layout, terminal, panels, dialogs, viewer, editor, settings. Builds habi.exe.
+src/HabilisTerminal.Terminal  VT emulator: parser and screen buffer the console view draws. No UI, net10.0.
+src/HabilisTerminal.App       Avalonia: window, layout, console view, panels, dialogs, viewer, editor, settings. Builds habi.exe.
 tests/*.Tests                   xUnit for Core, Shell, Themes.
 tests/Core.Benchmarks           BenchmarkDotNet (100k-file directory).
 tools/IconBuilder               build-time SVG / glyph → XAML Geometry converter.

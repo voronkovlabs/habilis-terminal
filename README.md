@@ -2,12 +2,12 @@
 
 A two-panel file manager for Windows with a real PowerShell 7 terminal underneath — Far Manager keys, VS Code looks.
 
-- **Terminal:** pwsh 7 through ConPTY in the Windows Terminal control, kept in sync with the panels (`cd` moves the
-  active panel, panel navigation moves the shell).
+- **Terminal:** pwsh 7 through ConPTY, drawn by the app's own terminal emulator, kept in sync with the panels (`cd`
+  moves the active panel, panel navigation moves the shell).
 - **Panels:** fast custom-drawn lists (100 000 files: first screen in ~25 ms), Far view modes and sorting, quick search,
   masks, info panel, quick view, drive menu, folder history.
 - **Files:** copy / move / delete / attributes with background progress, conflicts, Recycle Bin, long paths, links.
-- **Viewer and editor:** F3 opens files of any size instantly as text or hex (memory-mapped), Alt+F3 shows pictures, PDF and Markdown; F4 edits text with AvalonEdit and saves
+- **Viewer and editor:** F3 opens files of any size instantly as text or hex (memory-mapped), Alt+F3 shows pictures, PDF and Markdown; F4 edits text with AvaloniaEdit and saves
   byte-for-byte (encoding, BOM, line endings).
 - **Looks:** VS Code Dark / Light Modern following the Windows mode and accent colour, Seti or Material file icons,
   any VS Code colour theme from the `themes` folder. Ctrl+mouse wheel zooms the whole interface; Ctrl+Alt+0 resets.
