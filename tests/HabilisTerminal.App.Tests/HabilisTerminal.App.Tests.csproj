@@ -2,6 +2,9 @@
   <PropertyGroup>
     <OutputType>Exe</OutputType>
     <IsPackable>false</IsPackable>
+  </PropertyGroup>
+  <!-- The same flavour as the app (issue #259). -->
+  <PropertyGroup Condition="$([MSBuild]::IsOSPlatform('Windows')) And '$(HabiTarget)' != 'portable'">
     <TargetFramework>net10.0-windows10.0.19041.0</TargetFramework>
     <SupportedOSPlatformVersion>10.0.17763.0</SupportedOSPlatformVersion>
     <RuntimeIdentifier>win-x64</RuntimeIdentifier>
