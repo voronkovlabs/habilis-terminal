@@ -45,7 +45,7 @@ public sealed class HelpPage : DockPanel, IPage
             {
                 grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
                 var keyText = Text(keys, 13, FontWeight.Normal, "Habi.Accent");
-                keyText.FontFamily = new FontFamily("Cascadia Mono, Consolas");
+                keyText.FontFamily = new FontFamily(Theming.Fonts.Mono);
                 keyText.FontSize = 12;
                 var actionText = Text(action, 13, FontWeight.Normal, "Habi.Foreground");
                 actionText.TextWrapping = TextWrapping.Wrap;

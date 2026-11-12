@@ -67,7 +67,7 @@ internal sealed class FindResultsWindow : Widgets.ModalWindow
         {
             ItemsSource = _rows,
             BorderThickness = new Thickness(1),
-            FontFamily = new FontFamily("Cascadia Mono, Consolas"),
+            FontFamily = new FontFamily(Theming.Fonts.Mono),
             FontSize = 13,
         };
         _list.Styles.Add(ItemStyle());

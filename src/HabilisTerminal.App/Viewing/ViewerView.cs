@@ -24,7 +24,7 @@ public sealed class ViewerView : Control
     private const double Padding = 8;
     private const int TabSize = 8;
 
-    private static Typeface Mono = new(new FontFamily("Cascadia Mono, Consolas"), FontStyle.Normal, FontWeight.Normal, FontStretch.Normal);
+    private static Typeface Mono = new(new FontFamily(Theming.Fonts.Mono), FontStyle.Normal, FontWeight.Normal, FontStretch.Normal);
     private int _cellFontVersion;
     private ViewerDocument? _document;
     private Size _cell;
@@ -59,7 +59,7 @@ public sealed class ViewerView : Control
     /// <summary>The <c>viewer.fontFamily</c> / <c>viewer.fontSize</c> settings (also used by quick view).</summary>
     public static void SetFont(string family, double size)
     {
-        Mono = new Typeface(new FontFamily(string.IsNullOrWhiteSpace(family) ? "Cascadia Mono, Consolas" : family + ", Consolas"), FontStyle.Normal, FontWeight.Normal, FontStretch.Normal);
+        Mono = new Typeface(new FontFamily(Theming.Fonts.MonoWith(family)), FontStyle.Normal, FontWeight.Normal, FontStretch.Normal);
         FontSize = size;
         FontVersion++;
     }

@@ -300,7 +300,7 @@ public sealed class MarkdownPage : DockPanel, IPage
         var code = new SelectableTextBlock
         {
             Text = text.ToString().TrimEnd('\r', '\n'),
-            FontFamily = new FontFamily("Cascadia Mono, Consolas"),
+            FontFamily = new FontFamily(Theming.Fonts.Mono),
             FontSize = 13,
             Foreground = _colors.Foreground,
             SelectionBrush = PanelPalette.ActiveSelectionBackground,
@@ -386,7 +386,7 @@ public sealed class MarkdownPage : DockPanel, IPage
                 case CodeInline code:
                     result.Add(new Run(code.Content)
                     {
-                        FontFamily = new FontFamily("Cascadia Mono, Consolas"),
+                        FontFamily = new FontFamily(Theming.Fonts.Mono),
                         FontSize = 13,
                         Background = _colors.CodeBackground,
                     });

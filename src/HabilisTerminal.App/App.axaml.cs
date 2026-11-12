@@ -109,7 +109,7 @@ public partial class App : Application
                 TextWrapping = TextWrapping.Wrap,
             };
             text.Classes.Add("label");
-            var command = new TextBox { Text = "winget install Microsoft.PowerShell", IsReadOnly = true, Margin = new Thickness(0, 12, 0, 0), FontFamily = new FontFamily("Cascadia Mono, Consolas") };
+            var command = new TextBox { Text = "winget install Microsoft.PowerShell", IsReadOnly = true, Margin = new Thickness(0, 12, 0, 0), FontFamily = new FontFamily(Theming.Fonts.Mono) };
             body.Children.Add(text);
             body.Children.Add(command);
 

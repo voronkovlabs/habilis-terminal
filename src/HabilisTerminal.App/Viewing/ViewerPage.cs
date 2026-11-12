@@ -418,7 +418,7 @@ public sealed class ViewerPage : DockPanel, IDisposable, IPage
         var editor = new TextEditor
         {
             IsReadOnly = true,
-            FontFamily = new FontFamily(settings.ViewerFontFamily + ", Consolas"),
+            FontFamily = new FontFamily(Theming.Fonts.MonoWith(settings.ViewerFontFamily)),
             FontSize = settings.ViewerFontSize,
             ShowLineNumbers = true,
             WordWrap = settings.ViewerWrap,

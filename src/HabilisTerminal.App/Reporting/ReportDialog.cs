@@ -77,7 +77,7 @@ internal sealed class ReportDialog : Widgets.ModalWindow
         };
         if (!isFeedback)
         {
-            _text.FontFamily = new FontFamily("Cascadia Mono, Consolas");
+            _text.FontFamily = new FontFamily(Theming.Fonts.Mono);
             _text.FontSize = 12;
         }
 

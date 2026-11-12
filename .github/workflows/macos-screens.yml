@@ -69,6 +69,14 @@ jobs:
           osascript -e 'tell application "System Events" to set frontmost of (first process whose unix id is '"$pid"') to true' || true
           sleep 2
           screencapture -x screens/5-habilis.png
+          # Keys go to the window in front: three rows down, then the F9 menu (key codes: Down 125, F9 101, Esc 53).
+          osascript -e 'tell application "System Events" to repeat 3 times' -e 'key code 125' -e 'end repeat' || true
+          sleep 1
+          screencapture -x screens/6-habilis-cursor.png
+          osascript -e 'tell application "System Events" to key code 101' || true
+          sleep 2
+          screencapture -x screens/7-habilis-f9.png
+          osascript -e 'tell application "System Events" to key code 53' || true
           kill $pid || true
           echo "--- habi output"; cat habi.log
           echo "--- crash reports"; find ~/Library/Application\ Support -path '*Habilis*' -name 'crash-*.json' -exec cat {} \; 2>/dev/null | head -c 20000

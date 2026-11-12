@@ -99,7 +99,7 @@ public partial class MainWindow
             var sample = new TextBlock
             {
                 Text = preview,
-                FontFamily = new FontFamily(TerminalFontFamily + ", Consolas"),
+                FontFamily = new FontFamily(Theming.Fonts.MonoWith(TerminalFontFamily)),
                 Margin = new Thickness(0, 8, 0, 0),
                 MaxWidth = 520,
                 TextTrimming = TextTrimming.CharacterEllipsis,

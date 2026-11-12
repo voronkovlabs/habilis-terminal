@@ -57,7 +57,7 @@ public sealed class EditorPage : DockPanel, IPage
         DockPanel.SetDock(Header, Dock.Top);
         Children.Add(Header);
 
-        _editor.FontFamily = new FontFamily(settings.EditorFontFamily + ", Consolas");
+        _editor.FontFamily = new FontFamily(Theming.Fonts.MonoWith(settings.EditorFontFamily));
         _editor.FontSize = settings.EditorFontSize;
         _editor.Options.IndentationSize = settings.EditorTabSize;
         _editor.ShowLineNumbers = true;

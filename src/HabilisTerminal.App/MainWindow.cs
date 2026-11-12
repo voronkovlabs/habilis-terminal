@@ -56,6 +56,16 @@ public partial class MainWindow : Window
         Title = "Habilis Terminal (Avalonia)";
         Width = 1200;
         Height = 800;
+
+        // A first start on a small screen (a 1024×768 Mac, #259): the window fits, centred.
+        if (Screens.Primary is { } screen)
+        {
+            var area = screen.WorkingArea.Size.ToSize(screen.Scaling);
+            Width = Math.Min(Width, area.Width - 32);
+            Height = Math.Min(Height, area.Height - 32);
+            WindowStartupLocation = WindowStartupLocation.CenterScreen;
+        }
+
         UseLayoutRounding = true;
         var grid = new Grid();
         grid.Children.Add(Workspace);

@@ -53,8 +53,8 @@ public sealed class TerminalView : Control
     public TerminalView(TerminalEmulator emulator)
     {
         _emulator = emulator;
-        _typeface = new Typeface(_fontFamily);
-        _boldTypeface = new Typeface(_fontFamily, FontStyle.Normal, FontWeight.Bold);
+        _typeface = new Typeface(Theming.Fonts.MonoWith(_fontFamily));
+        _boldTypeface = new Typeface(Theming.Fonts.MonoWith(_fontFamily), FontStyle.Normal, FontWeight.Bold);
         Focusable = true;
         ClipToBounds = true;
         Cursor = new Cursor(StandardCursorType.Ibeam);
@@ -86,7 +86,7 @@ public sealed class TerminalView : Control
     /// <summary>The cell size a font gives, in device-independent pixels.</summary>
     public static Size MeasureCell(string fontFamily, double fontSize)
     {
-        var text = new FormattedText("0", CultureInfo.InvariantCulture, FlowDirection.LeftToRight, new Typeface(fontFamily), fontSize, null);
+        var text = new FormattedText("0", CultureInfo.InvariantCulture, FlowDirection.LeftToRight, new Typeface(Theming.Fonts.MonoWith(fontFamily)), fontSize, null);
         return new Size(Math.Max(1, Math.Round(text.WidthIncludingTrailingWhitespace, 2)), Math.Max(1, Math.Ceiling(text.Height)));
     }
 
@@ -97,8 +97,8 @@ public sealed class TerminalView : Control
         {
             _fontFamily = fontFamily;
             _fontSize = fontSize;
-            _typeface = new Typeface(fontFamily);
-            _boldTypeface = new Typeface(fontFamily, FontStyle.Normal, FontWeight.Bold);
+            _typeface = new Typeface(Theming.Fonts.MonoWith(fontFamily));
+            _boldTypeface = new Typeface(Theming.Fonts.MonoWith(fontFamily), FontStyle.Normal, FontWeight.Bold);
             UpdateCell();
             ResizeGrid(Bounds.Size);
         }

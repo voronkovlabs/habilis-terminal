@@ -31,7 +31,7 @@ public sealed class QuickView : Grid, IDisposable
     private readonly ViewerView _text = new();
     private readonly Image _image = new() { Stretch = Stretch.Uniform, StretchDirection = StretchDirection.DownOnly, Margin = new Thickness(8) };
     private readonly TextBlock _message = new() { Margin = new Thickness(12), TextWrapping = TextWrapping.Wrap, FontFamily = new FontFamily("Segoe UI"), FontSize = 13 };
-    private readonly TextBlock _plain = new() { Margin = new Thickness(10, 8, 10, 8), FontFamily = new FontFamily("Cascadia Mono, Consolas"), FontSize = 13 };
+    private readonly TextBlock _plain = new() { Margin = new Thickness(10, 8, 10, 8), FontFamily = new FontFamily(Theming.Fonts.Mono), FontSize = 13 };
     private readonly ScrollViewer _plainScroll = new() { HorizontalScrollBarVisibility = ScrollBarVisibility.Auto, VerticalScrollBarVisibility = ScrollBarVisibility.Auto, IsVisible = false };
     private readonly TextEditor _editor = new()
     {
@@ -322,7 +322,7 @@ public sealed class QuickView : Grid, IDisposable
 
     private void ShowInEditor(TextFile file, AppSettings settings)
     {
-        _editor.FontFamily = new FontFamily(settings.ViewerFontFamily + ", Consolas");
+        _editor.FontFamily = new FontFamily(Theming.Fonts.MonoWith(settings.ViewerFontFamily));
         _editor.FontSize = settings.ViewerFontSize;
         _editor.WordWrap = settings.ViewerWrap;
         _editor.Options.IndentationSize = settings.EditorTabSize;
