@@ -1,0 +1,50 @@
+name: macos-screens
+
+# Screenshots from a macOS runner (issue #258): the cross-platform parts build and test there, and a small Avalonia
+# probe window is started, typed into and photographed. Habilis itself does not run on macOS yet (#253).
+on:
+  push:
+    branches: [experiment/avalonia]
+    paths: ['tools/MacProbe/**', 'src/HabilisTerminal.Terminal/**', '.github/workflows/macos-screens.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  screens:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+      - name: System
+        run: sw_vers; uname -m; system_profiler SPDisplaysDataType | sed -n '1,30p'
+      - name: Terminal emulator tests
+        run: dotnet test tests/HabilisTerminal.Terminal.Tests -c Release
+      - name: Build the probe
+        run: dotnet build tools/MacProbe -c Release -o probe
+      - name: Start, type, photograph
+        run: |
+          mkdir -p screens
+          screencapture -x screens/1-desktop.png
+          ./probe/MacProbe > probe.log 2>&1 &
+          sleep 15
+          osascript -e 'tell application "System Events" to set frontmost of (first process whose unix id is '"$!"') to true' || true
+          sleep 2
+          screencapture -x screens/2-probe-window.png
+          osascript -e 'tell application "System Events" to keystroke "Hello from a Mac runner, привет"' || echo "keystroke failed"
+          sleep 2
+          screencapture -x screens/3-after-typing.png
+          # The emulator's screen from the terminal tests' point of view, next to the window: the runner's own Terminal app.
+          open -a Terminal "$PWD" || true
+          sleep 5
+          screencapture -x screens/4-terminal-app.png
+          kill %1 || true
+          cat probe.log
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: macos-screens
+          path: screens/
