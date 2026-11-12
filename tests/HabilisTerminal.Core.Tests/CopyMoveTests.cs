@@ -18,7 +18,7 @@ public class CopyMoveTests
         return path;
     }
 
-    [Fact]
+    [WindowsFact]
     public void Copies_files_and_trees_into_an_existing_directory_with_times_and_attributes()
     {
         using var sandbox = new TestSandbox();
@@ -72,7 +72,7 @@ public class CopyMoveTests
         using var sandbox = new TestSandbox();
         var directory = Directory.CreateDirectory(Path.Combine(sandbox.Path, "dir")).FullName;
 
-        Assert.Throws<OperationRefusedException>(() => Copy([directory], Path.Combine(directory, "inner") + "\\", new ScriptedHandler()));
+        Assert.Throws<OperationRefusedException>(() => Copy([directory], Path.Combine(directory, "inner") + Path.DirectorySeparatorChar, new ScriptedHandler()));
     }
 
     [Fact]
@@ -96,7 +96,7 @@ public class CopyMoveTests
         var target = Write(Path.Combine(sandbox.Path, "dst", "a.txt"), "old");
         var handler = new ScriptedHandler { OnConflict = _ => new ConflictDecision(action) };
 
-        Copy([source], Path.Combine(sandbox.Path, "dst") + "\\", handler);
+        Copy([source], Path.Combine(sandbox.Path, "dst") + Path.DirectorySeparatorChar, handler);
 
         Assert.Single(handler.Conflicts);
         Assert.Equal(expectedTarget, File.ReadAllText(target));
@@ -118,7 +118,7 @@ public class CopyMoveTests
         File.SetLastWriteTimeUtc(older, DateTime.UtcNow.AddHours(-1));
         var handler = new ScriptedHandler { OnConflict = _ => new ConflictDecision(ConflictAction.OverwriteIfNewer, ApplyToAll: true) };
 
-        var result = Copy([newer, older], Path.Combine(sandbox.Path, "dst") + "\\", handler);
+        var result = Copy([newer, older], Path.Combine(sandbox.Path, "dst") + Path.DirectorySeparatorChar, handler);
 
         Assert.Single(handler.Conflicts);
         Assert.Equal("src", File.ReadAllText(Path.Combine(sandbox.Path, "dst", "newer.txt")));
@@ -126,7 +126,7 @@ public class CopyMoveTests
         Assert.Equal(1, result.Skipped);
     }
 
-    [Fact]
+    [WindowsFact]
     public void Read_only_targets_need_a_separate_confirmation()
     {
         using var sandbox = new TestSandbox();
@@ -139,7 +139,7 @@ public class CopyMoveTests
             OnConfirm = c => c.Kind == ConfirmationKind.OverwriteProtected ? ConfirmationAnswer.Yes : ConfirmationAnswer.Cancel,
         };
 
-        Copy([source], Path.Combine(sandbox.Path, "dst") + "\\", handler);
+        Copy([source], Path.Combine(sandbox.Path, "dst") + Path.DirectorySeparatorChar, handler);
 
         Assert.Equal("new", File.ReadAllText(target));
         Assert.Single(handler.Confirmations);
@@ -152,12 +152,12 @@ public class CopyMoveTests
         var source = Write(Path.Combine(sandbox.Path, "src", "a.txt"), "new");
         var target = Write(Path.Combine(sandbox.Path, "dst", "a.txt"), "old");
 
-        Copy([source], Path.Combine(sandbox.Path, "dst") + "\\", new ScriptedHandler(), new CopyOptions { ExistingFiles = ExistingFilePolicy.Skip });
+        Copy([source], Path.Combine(sandbox.Path, "dst") + Path.DirectorySeparatorChar, new ScriptedHandler(), new CopyOptions { ExistingFiles = ExistingFilePolicy.Skip });
 
         Assert.Equal("old", File.ReadAllText(target));
     }
 
-    [Fact]
+    [WindowsFact]
     public void Junctions_are_recreated_not_traversed()
     {
         using var sandbox = new TestSandbox();
@@ -173,7 +173,7 @@ public class CopyMoveTests
         Assert.Equal(realTarget.TrimEnd('\\'), copiedLink.LinkTarget?.TrimEnd('\\'), ignoreCase: true);
     }
 
-    [Fact]
+    [WindowsFact]
     public void Junction_contents_are_copied_when_asked()
     {
         using var sandbox = new TestSandbox();
@@ -240,7 +240,7 @@ public class CopyMoveTests
         Assert.Equal("y", File.ReadAllText(Path.Combine(sandbox.Path, "moved", "inner.txt")));
     }
 
-    [Fact]
+    [WindowsFact]
     public void Cross_volume_move_deletes_sources_only_after_successful_copies()
     {
         using var sandbox = new TestSandbox();

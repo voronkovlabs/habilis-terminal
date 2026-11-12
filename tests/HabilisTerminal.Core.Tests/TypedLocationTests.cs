@@ -12,7 +12,7 @@ public class TypedLocationTests
     [InlineData("\"half", "\"half")]
     public void Spaces_and_quotes_go(string text, string expected) => Assert.Equal(expected, TypedLocation.Clean(text));
 
-    [Theory]
+    [WindowsTheory]
     [InlineData(@"C:\Work\a.txt", @"C:\Work\a.txt")]
     [InlineData(@"""C:\Program Files\a.txt""", @"C:\Program Files\a.txt")]
     [InlineData("sub", @"C:\Here\sub")]
@@ -22,7 +22,7 @@ public class TypedLocationTests
     public void Goto_takes_full_paths_addresses_and_what_is_relative_to_the_shell(string text, string expected) =>
         Assert.Equal(expected, TypedLocation.ForGoto(text, @"C:\Here", t => t.StartsWith("s3:", StringComparison.Ordinal)));
 
-    [Fact]
+    [WindowsFact]
     public void Goto_knows_the_home_folder_and_variables()
     {
         var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
@@ -31,7 +31,7 @@ public class TypedLocationTests
         Assert.Equal(Path.Combine(home, "a.txt"), TypedLocation.ForGoto(@"%USERPROFILE%\a.txt", @"C:\Here", _ => false));
     }
 
-    [Theory]
+    [WindowsTheory]
     [InlineData(@"C:\", true)]
     [InlineData(@"C:\Work\a.txt", true)]
     [InlineData("C:/Work/a.txt", true)]

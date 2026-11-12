@@ -13,7 +13,8 @@ public sealed class FileSearchTests : IDisposable
 
     private string Write(string relative, string text, Encoding? encoding = null)
     {
-        var path = Path.Combine(_sandbox.Path, relative);
+        // The cases write Windows paths; elsewhere the separator is the system's (#259).
+        var path = Path.Combine(_sandbox.Path, relative.Replace('\\', Path.DirectorySeparatorChar));
         Directory.CreateDirectory(Path.GetDirectoryName(path)!);
         File.WriteAllText(path, text, encoding ?? new UTF8Encoding(false));
         return path;
@@ -23,7 +24,7 @@ public sealed class FileSearchTests : IDisposable
     {
         var found = new List<string>();
         FileSearch.Run(new FileSearchRequest(FileMask.Parse(mask), text, matchCase, wholeWords, folders, [root ?? _sandbox.Path], recursive),
-            item => found.Add(Path.GetRelativePath(_sandbox.Path, item.Path)));
+            item => found.Add(Path.GetRelativePath(_sandbox.Path, item.Path).Replace(Path.DirectorySeparatorChar, '\\')));
         return found;
     }
 

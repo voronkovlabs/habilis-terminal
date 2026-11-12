@@ -57,7 +57,7 @@ public class RenameItemTests
         Assert.Equal("mine", File.ReadAllText(Path.Combine(sandbox.Path, "a.txt")));
     }
 
-    [Theory]
+    [WindowsTheory]
     [InlineData("")]
     [InlineData("a/b.txt")]
     [InlineData(@"..\b.txt")]

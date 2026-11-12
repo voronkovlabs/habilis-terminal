@@ -86,7 +86,7 @@ public class TextFileTests
         Assert.Equal(expected, TextFile.DominantLineEnding(text));
     }
 
-    [Fact]
+    [WindowsFact]
     public void Save_keeps_attributes_and_creation_time_and_leaves_no_temp_files()
     {
         using var sandbox = new TestSandbox();
@@ -130,7 +130,7 @@ public class TextFileTests
         Assert.True(file.ChangedOnDisk());
     }
 
-    [Fact]
+    [WindowsFact]
     public void Read_only_files_cannot_be_saved_until_the_attribute_is_cleared()
     {
         using var sandbox = new TestSandbox();

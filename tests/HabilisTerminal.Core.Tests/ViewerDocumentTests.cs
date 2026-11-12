@@ -175,7 +175,7 @@ public class ViewerDocumentTests
         Assert.True(stopwatch.ElapsedMilliseconds < 500, $"took {stopwatch.ElapsedMilliseconds} ms");
     }
 
-    [Fact]
+    [WindowsFact]
     public void Directory_size_counts_files_without_entering_links()
     {
         using var sandbox = new TestSandbox();

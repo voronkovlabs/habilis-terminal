@@ -94,7 +94,7 @@ public class DirectoryReaderTests
         Assert.Single(entries, e => e.Name == "deep.txt");
     }
 
-    [Fact]
+    [WindowsFact]
     public void Junctions_are_listed_as_reparse_points_and_not_traversed()
     {
         using var sandbox = new TestSandbox();

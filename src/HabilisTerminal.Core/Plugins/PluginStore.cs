@@ -275,7 +275,7 @@ public sealed class PluginStore(string shippedRoot, string userRoot)
         string.Equals(Path.GetDirectoryName(Path.GetFullPath(folder).TrimEnd('\\')), Path.GetFullPath(root).TrimEnd('\\'), StringComparison.OrdinalIgnoreCase);
 
     private static bool IsInside(string folder, string root) =>
-        Path.GetFullPath(folder).TrimEnd('\\').StartsWith(Path.GetFullPath(root).TrimEnd('\\') + "\\", StringComparison.OrdinalIgnoreCase);
+        Path.TrimEndingDirectorySeparator(Path.GetFullPath(folder)).StartsWith(Path.TrimEndingDirectorySeparator(Path.GetFullPath(root)) + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase);
 
     /// <summary>The marker goes last: a locked file stops the delete part way, and the next start must still find the folder.</summary>
     private static bool DeleteMarked(string folder)

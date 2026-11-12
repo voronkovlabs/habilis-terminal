@@ -221,7 +221,7 @@ public sealed class PluginStoreTests : IDisposable
         Assert.Equal("1.0.0", _store.List().Single().Version);
     }
 
-    [Fact]
+    [WindowsFact]
     public void A_locked_plugin_no_longer_counts_and_goes_at_the_next_start()
     {
         var user = Plugin(_user, "my.plugin");

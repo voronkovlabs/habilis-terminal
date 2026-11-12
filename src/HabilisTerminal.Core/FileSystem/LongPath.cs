@@ -9,6 +9,12 @@ public static class LongPath
     /// <summary><c>C:\a</c> → <c>\\?\C:\a</c>; <c>\\server\share\a</c> → <c>\\?\UNC\server\share\a</c>.</summary>
     public static string ToExtended(string path)
     {
+        if (!OperatingSystem.IsWindows())
+        {
+            // Other systems have no MAX_PATH and no such prefix (#259).
+            return Path.GetFullPath(path);
+        }
+
         if (path.StartsWith(ExtendedPrefix, StringComparison.Ordinal) || path.StartsWith(@"\\.\", StringComparison.Ordinal))
         {
             return path;
@@ -33,6 +39,7 @@ public static class LongPath
 
     /// <summary>True for UNC paths, including the extended form.</summary>
     public static bool IsUnc(string path) =>
-        path.StartsWith(ExtendedUncPrefix, StringComparison.OrdinalIgnoreCase) ||
-        (path.StartsWith(@"\\", StringComparison.Ordinal) && !path.StartsWith(ExtendedPrefix, StringComparison.Ordinal) && !path.StartsWith(@"\\.\", StringComparison.Ordinal));
+        OperatingSystem.IsWindows() &&
+        (path.StartsWith(ExtendedUncPrefix, StringComparison.OrdinalIgnoreCase) ||
+        (path.StartsWith(@"\\", StringComparison.Ordinal) && !path.StartsWith(ExtendedPrefix, StringComparison.Ordinal) && !path.StartsWith(@"\\.\", StringComparison.Ordinal)));
 }
