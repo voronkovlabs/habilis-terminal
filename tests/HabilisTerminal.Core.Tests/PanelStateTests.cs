@@ -98,7 +98,7 @@ public class PanelStateTests
         Assert.Equal((3, 5, 510L), state.SummarizeSelection());
     }
 
-    [Fact]
+    [WindowsFact]
     public void Parent_entry_is_first_except_at_the_root()
     {
         Assert.Equal(["..", "sub", "a.txt"], Names(Create(@"C:\work", File("a.txt"), Dir("sub"))));

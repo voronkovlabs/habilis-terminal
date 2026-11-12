@@ -46,7 +46,15 @@ public sealed class ShellConnection : IDisposable
         }
 
         _started = true;
-        Host.Start(View.Columns, View.Rows);
+        try
+        {
+            Host.Start(View.Columns, View.Rows);
+        }
+        catch (PlatformNotSupportedException ex)
+        {
+            // The portable build has no pseudo terminal yet (#259): the panels work, the console says why it is empty.
+            View.Emulator.Feed($"\u001b[33mNo console on this system yet: {ex.Message}\u001b[0m\r\n");
+        }
     }
 
     /// <summary>Input for the console: keys (win32-input-mode sequences), text and replies.</summary>

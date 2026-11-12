@@ -45,7 +45,7 @@ public sealed class DeniedLinkTests : IDisposable
         Run("icacls", $"\"{path}\" /deny *S-1-1-0:(RD)");
     }
 
-    [Fact]
+    [WindowsFact]
     public void A_junction_that_denies_listing_shows_what_its_target_holds()
     {
         var link = Junction("link", Target());
@@ -57,7 +57,7 @@ public sealed class DeniedLinkTests : IDisposable
         Assert.Equal(["a.txt", "inner"], names);
     }
 
-    [Fact]
+    [WindowsFact]
     public void What_is_inside_opens_through_the_link()
     {
         var link = Junction("link", Target());
@@ -66,7 +66,7 @@ public sealed class DeniedLinkTests : IDisposable
         Assert.Empty(DirectoryReader.ReadAll(Path.Combine(link, "inner")));
     }
 
-    [Fact]
+    [WindowsFact]
     public void An_ordinary_folder_that_denies_listing_is_still_denied()
     {
         var folder = Path.Combine(_sandbox.Path, "closed");
@@ -78,7 +78,7 @@ public sealed class DeniedLinkTests : IDisposable
         Assert.Equal(DirectoryReadError.AccessDenied, error.Error);
     }
 
-    [Fact]
+    [WindowsFact]
     public void A_link_whose_target_is_denied_too_is_denied()
     {
         var target = Target();
@@ -92,7 +92,7 @@ public sealed class DeniedLinkTests : IDisposable
         Assert.Equal(link, error.Path);
     }
 
-    [Fact]
+    [WindowsFact]
     public void A_denied_link_with_no_target_left_is_denied()
     {
         var target = Target();

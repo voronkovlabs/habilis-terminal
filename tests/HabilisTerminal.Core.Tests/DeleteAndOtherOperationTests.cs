@@ -43,7 +43,7 @@ public class DeleteAndOtherOperationTests
         Assert.Equal(1, result.Skipped);
     }
 
-    [Fact]
+    [WindowsFact]
     public void Deleting_a_junction_never_touches_its_target()
     {
         using var sandbox = new TestSandbox();
@@ -61,7 +61,7 @@ public class DeleteAndOtherOperationTests
         Assert.Equal("keep me", File.ReadAllText(Path.Combine(realTarget, "precious.txt")));
     }
 
-    [Fact]
+    [WindowsFact]
     public void Locked_files_report_the_process_and_can_be_skipped()
     {
         using var sandbox = new TestSandbox();
@@ -79,7 +79,7 @@ public class DeleteAndOtherOperationTests
     }
 
     [System.Runtime.Versioning.SupportedOSPlatform("windows")]
-    [Fact]
+    [WindowsFact]
     public void Access_denied_is_reported_and_skip_all_stops_asking()
     {
         using var sandbox = new TestSandbox();
@@ -130,7 +130,7 @@ public class DeleteAndOtherOperationTests
         Assert.Equal(1, result.Succeeded);
     }
 
-    [Fact]
+    [WindowsFact]
     public void Paths_too_long_for_the_recycle_bin_ask_before_permanent_delete()
     {
         using var sandbox = new TestSandbox();
@@ -190,7 +190,7 @@ public class DeleteAndOtherOperationTests
         Assert.True(File.GetAttributes(file).HasFlag(FileAttributes.Compressed));
     }
 
-    [Fact]
+    [WindowsFact]
     public void Directory_creator_handles_nesting_lists_and_errors()
     {
         using var sandbox = new TestSandbox();
@@ -206,7 +206,7 @@ public class DeleteAndOtherOperationTests
         Assert.Throws<ArgumentException>(() => DirectoryCreator.Create(sandbox.Path, @"x\CON", multipleNames: false));
     }
 
-    [Theory]
+    [WindowsTheory]
     [InlineData("report.txt", null)]
     [InlineData("CON", "reserved")]
     [InlineData("com1.log", "reserved")]

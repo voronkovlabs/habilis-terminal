@@ -165,7 +165,7 @@ public sealed class LinkInfoTests : IDisposable
         Assert.Null(info.TargetIsFolder);
     }
 
-    [Fact]
+    [WindowsFact]
     public void A_listing_names_the_kind_of_each_link()
     {
         Folder("plain");
@@ -191,7 +191,7 @@ public sealed class LinkInfoTests : IDisposable
         return In(name);
     }
 
-    [Fact]
+    [WindowsFact]
     public void A_file_with_several_names_lists_the_others()
     {
         var file = WriteFile("first.txt");

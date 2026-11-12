@@ -31,11 +31,12 @@ jobs:
         run: |
           dotnet test --project tests/HabilisTerminal.Terminal.Tests -c Release --no-build
           dotnet test --project tests/HabilisTerminal.Themes.Tests -c Release --no-build
-          dotnet test --project tests/HabilisTerminal.Core.Tests -c Release --no-build --filter-class "*PortablePlatformTests"
+          dotnet test --project tests/HabilisTerminal.Core.Tests -c Release --no-build
+          dotnet test --project tests/HabilisTerminal.App.Tests -c Release --no-build
       - name: All tests (what still assumes Windows)
         continue-on-error: true
         run: |
-          for t in Core Shell App; do
+          for t in Shell; do
             dotnet test --project tests/HabilisTerminal.$t.Tests -c Release --no-build 2>&1 | tee "tests-$t.log" | grep -E "^failed|Test run summary|total:|failed:|succeeded:|skipped:" || true
           done
       - name: Build the probe

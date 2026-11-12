@@ -45,7 +45,7 @@ public class ConsoleTabRulesTests
     public void Elapsed_time_reads_like_a_clock(int seconds, string expected) =>
         Assert.Equal(expected, ConsoleTabRules.FormatElapsed(TimeSpan.FromSeconds(seconds)));
 
-    [Theory]
+    [WindowsTheory]
     [InlineData(@"C:\Users\me\work\app", @"C:\Users\me", @"~\work")]
     [InlineData(@"C:\Users\me\app", @"C:\Users\me", "~")]
     [InlineData(@"C:\Users\meta\app", @"C:\Users\me", @"C:\Users\meta")]

@@ -4,7 +4,7 @@ namespace HabilisTerminal.Core.Tests;
 
 public class LongPathTests
 {
-    [Theory]
+    [WindowsTheory]
     [InlineData(@"C:\a\b", @"\\?\C:\a\b")]
     [InlineData(@"\\server\share\dir", @"\\?\UNC\server\share\dir")]
     [InlineData(@"\\?\C:\already", @"\\?\C:\already")]
