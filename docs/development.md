@@ -80,7 +80,8 @@ Every command is in `src/HabilisTerminal.Core/Commands/CommandCatalog.cs`: id, s
 - **Tracing.** `HABI_TRACE=<file>`, or a `trace-on` file next to `habi.exe` (test copies start through Explorer and get no environment), writes `trace.log` there.
 
 ## Releases
-- **Only the last two releases are kept** (the owner's wish): a step in `build.yml` deletes older ones after each release. Their git tags stay.
+- **Two builds side by side (issue #256).** main releases the WPF build (`vX.Y.Z`, package `HabilisTerminal`, channel `win-<rid>`); `experiment/avalonia` releases the Avalonia build (`vX.Y.Z-avalonia.N`, package `HabilisTerminalAvalonia`, channel `avalonia-<rid>`, GitHub prereleases, title "Habilis Terminal (Avalonia)"). They install into different folders, keep different settings and state (`AppPaths.ProductFolder`), and each updater sees only its own releases.
+- **Only the last two releases of each build are kept** (the owner's wish): a step in `build.yml` deletes older ones after each release, counting tags with `-avalonia` apart. Their git tags stay.
 - **Pushing a tag `vX.Y.Z`** runs `.github/workflows/build.yml`. It publishes self-contained builds per RID, runs `vpk pack --noPortable` (installer and update packages), builds our own portable zip with the `portable` marker, and publishes to GitHub Releases.
 - **Never create or move a tag without the owner's explicit go-ahead.** A tag publishes binaries.
 - **Code signing:** none yet, so SmartScreen warns about the installer (issue #13).

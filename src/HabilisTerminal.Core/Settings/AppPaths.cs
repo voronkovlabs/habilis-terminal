@@ -1,14 +1,18 @@
 namespace HabilisTerminal.Core.Settings;
 
 /// <summary>
-/// Where settings, state and user themes live (SPEC §14): <c>%APPDATA%\HabilisTerminal</c> for settings and themes,
-/// <c>%LOCALAPPDATA%\VoronkovLabs\HabilisTerminal</c> for state — or everything next to the executable in portable mode
-/// (a <c>settings.json</c> or a <c>portable</c> marker beside it).
+/// Where settings, state and user themes live (SPEC §14): <c>%APPDATA%\HabilisTerminal.Avalonia</c> for settings and
+/// themes, <c>%LOCALAPPDATA%\VoronkovLabs\HabilisTerminal.Avalonia</c> for state — or everything next to the executable in
+/// portable mode (a <c>settings.json</c> or a <c>portable</c> marker beside it). The Avalonia build has folders of its own,
+/// so it installs and runs next to the WPF build (issue #256); its first start copies the WPF build's settings.
 /// </summary>
 public sealed record AppPaths(string SettingsDirectory, string StateDirectory, bool IsPortable)
 {
     public const string CompanyFolder = "VoronkovLabs";
-    public const string ProductFolder = "HabilisTerminal";
+    public const string ProductFolder = "HabilisTerminal.Avalonia";
+
+    /// <summary>The WPF build's folder name, whose settings the first start copies.</summary>
+    public const string WpfProductFolder = "HabilisTerminal";
     public const string PortableMarker = "portable";
 
     private static readonly string[] LegacyStateEntries = ["state.json", "crashes", "diagnostics", "plugins"];
@@ -74,6 +78,51 @@ public sealed record AppPaths(string SettingsDirectory, string StateDirectory, b
         foreach (var name in LegacyStateEntries)
         {
             TryMoveIfMissing(Path.Combine(legacyDirectory, name), Path.Combine(paths.StateDirectory, name));
+        }
+    }
+
+    /// <summary>
+    /// The first start of the Avalonia build takes the WPF build's settings, user themes and plugin settings, so both
+    /// begin alike; afterwards each keeps its own. State (history, layout) is not copied.
+    /// </summary>
+    public static void CopyWpfSettings(AppPaths paths) =>
+        CopyWpfSettings(paths, Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData));
+
+    public static void CopyWpfSettings(AppPaths paths, string roamingAppData)
+    {
+        var wpf = Path.Combine(roamingAppData, WpfProductFolder);
+        if (paths.IsPortable || File.Exists(paths.SettingsFile) || !Directory.Exists(wpf))
+        {
+            return;
+        }
+
+        try
+        {
+            Directory.CreateDirectory(paths.SettingsDirectory);
+            if (File.Exists(Path.Combine(wpf, "settings.json")))
+            {
+                File.Copy(Path.Combine(wpf, "settings.json"), paths.SettingsFile);
+            }
+
+            foreach (var folder in new[] { "themes", "plugin-settings" })
+            {
+                var source = Path.Combine(wpf, folder);
+                if (!Directory.Exists(source))
+                {
+                    continue;
+                }
+
+                foreach (var file in Directory.EnumerateFiles(source, "*", SearchOption.AllDirectories))
+                {
+                    var target = Path.Combine(paths.SettingsDirectory, folder, Path.GetRelativePath(source, file));
+                    Directory.CreateDirectory(Path.GetDirectoryName(target)!);
+                    File.Copy(file, target, overwrite: false);
+                }
+            }
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            // Settings start from the defaults then.
         }
     }
 
