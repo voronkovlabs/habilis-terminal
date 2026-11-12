@@ -108,12 +108,16 @@ public partial class MainWindow
     private void OpenViewer(string path, FilePanel returnTo) => OpenPlainViewer(path, returnTo);
 
     /// <summary>
-    /// Alt+F3 inside the program: PDF pages, pictures. False for any other file, which goes to its associated program.
-    /// Markdown went to a WebView2 page, which the Avalonia version has not yet (issue #253): it opens in its program.
+    /// Alt+F3 inside the program: Markdown rendered, PDF pages, pictures. False for any other file, which goes to its
+    /// associated program.
     /// </summary>
     private bool OpenRich(string path, FilePanel returnTo)
     {
-        if (PdfImagePage.IsPdf(path))
+        if (MarkdownPage.IsMarkdown(path))
+        {
+            OpenMarkdown(path, returnTo);
+        }
+        else if (PdfImagePage.IsPdf(path))
         {
             OpenPdf(path, returnTo);
         }
@@ -206,6 +210,21 @@ public partial class MainWindow
         {
             OpenWithAssociation(panel, item.Name);
         }
+    }
+
+    private void OpenMarkdown(string path, FilePanel returnTo)
+    {
+        var page = new MarkdownPage(path, _themes.Current);
+        RememberFile(path, edited: false);
+        page.CloseRequested += () =>
+        {
+            ClosePage();
+            returnTo.State.TrySetCursor(Path.GetFileName(path));
+            returnTo.Refresh();
+        };
+        page.ViewRequested += file => OpenViewer(file, returnTo);
+        page.EditRequested += file => Edit(file, returnTo);
+        ShowPage(page);
     }
 
     /// <summary>Ctrl+Q: quick view of the active panel's current file in the other panel.</summary>
