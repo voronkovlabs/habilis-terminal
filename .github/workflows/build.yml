@@ -76,19 +76,16 @@ jobs:
             $machine = [BitConverter]::ToUInt16($dll, [BitConverter]::ToInt32($dll, 0x3C) + 4)
             if ($machine -ne @{ 'win-x64' = 0x8664; 'win-arm64' = 0xAA64 }[$rid]) { throw "7z.dll for $rid has machine 0x$($machine.ToString('X4'))." }
 
-            # The Avalonia build (issue #256) installs next to the WPF one: its own package id (install folder, shortcut),
-            # its own channel, and prereleases, which the WPF build's updater never looks at.
-            $channel = "avalonia-$rid"
             # Previous release for delta updates; the first release has none.
-            dotnet vpk download github --repoUrl $env:REPO_URL --channel $channel --outputDir "releases/$rid" --token $env:GH_TOKEN --pre
-            dotnet vpk pack --packId HabilisTerminalAvalonia --packVersion $version --packDir $publish --mainExe habi.exe `
-              --packTitle "Habilis Terminal (Avalonia)" --packAuthors "Sergei Voronkov" --icon src/HabilisTerminal.App/Assets/habi.ico `
-              --runtime $rid --channel $channel --outputDir "releases/$rid" --noPortable
+            dotnet vpk download github --repoUrl $env:REPO_URL --channel $rid --outputDir "releases/$rid" --token $env:GH_TOKEN
+            dotnet vpk pack --packId HabilisTerminal --packVersion $version --packDir $publish --mainExe habi.exe `
+              --packTitle "Habilis Terminal" --packAuthors "Sergei Voronkov" --icon src/HabilisTerminal.App/Assets/habi.ico `
+              --runtime $rid --channel $rid --outputDir "releases/$rid" --noPortable
             if ($LASTEXITCODE) { exit $LASTEXITCODE }
 
             # Our own portable zip instead of Velopack's: the app plus the 'portable' marker (settings and state stay next to habi.exe).
             New-Item "$publish/portable" -ItemType File | Out-Null
-            Compress-Archive -Path "$publish/*" -DestinationPath "artifacts/HabilisTerminal-Avalonia-$version-$rid-portable.zip"
+            Compress-Archive -Path "$publish/*" -DestinationPath "artifacts/HabilisTerminal-$version-$rid-portable.zip"
           }
       - name: Publish release
         shell: pwsh
@@ -97,8 +94,8 @@ jobs:
         run: |
           $version = '${{ github.ref_name }}'.TrimStart('v')
           foreach ($rid in 'win-x64', 'win-arm64') {
-            dotnet vpk upload github --repoUrl $env:REPO_URL --token $env:GH_TOKEN --channel "avalonia-$rid" --outputDir "releases/$rid" `
-              --tag ${{ github.ref_name }} --releaseName "Habilis Terminal (Avalonia) $version" --publish --merge --pre
+            dotnet vpk upload github --repoUrl $env:REPO_URL --token $env:GH_TOKEN --channel $rid --outputDir "releases/$rid" `
+              --tag ${{ github.ref_name }} --releaseName "Habilis Terminal $version" --publish --merge
             if ($LASTEXITCODE) { exit $LASTEXITCODE }
           }
           gh release upload ${{ github.ref_name }} artifacts/*.zip --clobber
@@ -110,8 +107,8 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           # The releases go; their git tags stay, as the findings refer to them. Two of each build (issue #256): the
-          # Avalonia releases (tags with -avalonia) and the WPF ones are counted apart.
-          $old = gh release list --limit 1000 --exclude-drafts --json tagName,publishedAt --jq '[.[] | select(.tagName | contains("-avalonia"))] | sort_by(.publishedAt) | reverse | .[2:] | .[].tagName'
+          # Avalonia build's releases (tags with -avalonia, from experiment/avalonia) are not counted here.
+          $old = gh release list --limit 1000 --exclude-drafts --json tagName,publishedAt --jq '[.[] | select(.tagName | contains("-avalonia") | not)] | sort_by(.publishedAt) | reverse | .[2:] | .[].tagName'
           foreach ($tag in $old) { gh release delete $tag --yes }
       - uses: actions/upload-artifact@v4
         with:
