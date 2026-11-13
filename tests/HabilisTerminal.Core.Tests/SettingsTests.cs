@@ -159,8 +159,8 @@ public class SettingsTests
 
         var installed = AppPaths.Resolve(exe, roaming, local);
         Assert.False(installed.IsPortable);
-        Assert.Equal(Path.Combine(roaming, AppPaths.ProductFolder, "settings.json"), installed.SettingsFile);
-        Assert.Equal(Path.Combine(local, "VoronkovLabs", AppPaths.ProductFolder, "state.json"), installed.StateFile);
+        Assert.Equal(Path.Combine(roaming, "HabilisTerminal", "settings.json"), installed.SettingsFile);
+        Assert.Equal(Path.Combine(local, "VoronkovLabs", "HabilisTerminal", "state.json"), installed.StateFile);
 
         File.WriteAllText(Path.Combine(exe, "portable"), string.Empty);
         var portable = AppPaths.Resolve(exe, roaming, local);
@@ -170,37 +170,11 @@ public class SettingsTests
     }
 
     [Fact]
-    public void The_first_start_copies_the_wpf_builds_settings_once()
-    {
-        using var sandbox = new TestSandbox();
-        var roaming = Path.Combine(sandbox.Path, "roaming");
-        var wpf = Directory.CreateDirectory(Path.Combine(roaming, AppPaths.WpfProductFolder)).FullName;
-        File.WriteAllText(Path.Combine(wpf, "settings.json"), "{ \"theme\": \"light_modern\" }");
-        Directory.CreateDirectory(Path.Combine(wpf, "themes"));
-        File.WriteAllText(Path.Combine(wpf, "themes", "mine.json"), "{}");
-        Directory.CreateDirectory(Path.Combine(wpf, "plugin-settings"));
-        File.WriteAllText(Path.Combine(wpf, "plugin-settings", "demo.json"), "{}");
-
-        var paths = AppPaths.Resolve(Path.Combine(sandbox.Path, "app"), roaming, Path.Combine(sandbox.Path, "local"));
-        Assert.NotEqual(Path.Combine(roaming, AppPaths.WpfProductFolder), paths.SettingsDirectory);
-        AppPaths.CopyWpfSettings(paths, roaming);
-
-        Assert.Contains("light_modern", File.ReadAllText(paths.SettingsFile), StringComparison.Ordinal);
-        Assert.True(File.Exists(Path.Combine(paths.ThemesDirectory, "mine.json")));
-        Assert.True(File.Exists(Path.Combine(paths.PluginSettingsDirectory, "demo.json")));
-
-        // Afterwards each build keeps its own.
-        File.WriteAllText(paths.SettingsFile, "{}");
-        AppPaths.CopyWpfSettings(paths, roaming);
-        Assert.Equal("{}", File.ReadAllText(paths.SettingsFile));
-    }
-
-    [Fact]
     public void Installed_data_moves_out_of_the_package_root_once()
     {
         using var sandbox = new TestSandbox();
         var local = Path.Combine(sandbox.Path, "local");
-        var legacy = Directory.CreateDirectory(Path.Combine(local, AppPaths.ProductFolder)).FullName;
+        var legacy = Directory.CreateDirectory(Path.Combine(local, "HabilisTerminal")).FullName;
         File.WriteAllText(Path.Combine(legacy, "state.json"), "state");
         File.WriteAllText(Path.Combine(legacy, "package.nupkg"), "package");
         Directory.CreateDirectory(Path.Combine(legacy, "plugins", "mine"));
@@ -229,7 +203,7 @@ public class SettingsTests
     {
         using var sandbox = new TestSandbox();
         var local = Path.Combine(sandbox.Path, "local");
-        var legacy = Directory.CreateDirectory(Path.Combine(local, AppPaths.ProductFolder)).FullName;
+        var legacy = Directory.CreateDirectory(Path.Combine(local, "HabilisTerminal")).FullName;
         File.WriteAllText(Path.Combine(legacy, "state.json"), "old");
         var paths = AppPaths.Resolve(Path.Combine(legacy, "current"), Path.Combine(sandbox.Path, "roaming"), local);
         Directory.CreateDirectory(paths.StateDirectory);
@@ -246,7 +220,7 @@ public class SettingsTests
     {
         using var sandbox = new TestSandbox();
         var local = Path.Combine(sandbox.Path, "local");
-        var legacy = Directory.CreateDirectory(Path.Combine(local, AppPaths.ProductFolder)).FullName;
+        var legacy = Directory.CreateDirectory(Path.Combine(local, "HabilisTerminal")).FullName;
         File.WriteAllText(Path.Combine(legacy, "state.json"), "installed");
         var portableDirectory = Directory.CreateDirectory(Path.Combine(sandbox.Path, "portable")).FullName;
         File.WriteAllText(Path.Combine(portableDirectory, AppPaths.PortableMarker), string.Empty);

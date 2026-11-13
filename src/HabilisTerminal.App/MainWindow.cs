@@ -53,7 +53,7 @@ public partial class MainWindow : Window
 
     public MainWindow()
     {
-        Title = "Habilis Terminal (Avalonia)";
+        Title = "Habilis Terminal";
         Width = 1200;
         Height = 800;
 

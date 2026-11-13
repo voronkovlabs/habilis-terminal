@@ -60,9 +60,7 @@ public sealed class UpdateService
         _dispatcher = dispatcher;
         try
         {
-            // The Avalonia build's releases are prereleases on their own channel (avalonia-win-x64, issue #256), so the WPF
-            // build never sees them; this one looks at prereleases too.
-            _manager = new UpdateManager(new GithubSource(RepositoryUrl, accessToken: null, prerelease: true));
+            _manager = new UpdateManager(new GithubSource(RepositoryUrl, accessToken: null, prerelease: false));
         }
         catch (Exception ex) when (ex is InvalidOperationException or NotSupportedException or ArgumentException)
         {
