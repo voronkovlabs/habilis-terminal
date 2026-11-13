@@ -26,7 +26,7 @@ recursive / content-based folder compare, mapping network drives.
 | Item | Decision |
 |---|---|
 | Runtime | .NET 10 (LTS, supported until 2028-11-14), C# |
-| UI | Avalonia 12.1.4 (MIT); WPF until issue #253 (branch `experiment/avalonia`) |
+| UI | Avalonia 12.1.4 (MIT); WPF until v0.1.63 (issues #253, #264) |
 | Terminal | Own VT emulator (`HabilisTerminal.Terminal`, no UI) drawn by `TerminalView` + `Microsoft.Windows.Console.ConPTY` 1.25.260930003 (current conpty/OpenConsole) + own ConPTY session layer in `HabilisTerminal.Shell` (flags `RESIZE_QUIRK | WIN32_INPUT_MODE`, as Windows Terminal). Before #253: `CI.Microsoft.Terminal.Wpf` (the Windows Terminal WPF control) |
 | Editor component | `Avalonia.AvaloniaEdit` 12.0.0 (MIT) |
 | Installer / updates | `Velopack` 1.2.x (MIT) |
@@ -38,8 +38,8 @@ Rejected alternatives: overlay window on top of the terminal (not needed once pa
 stopped overlapping), WebView2 + xterm.js (UI would not be C#), Avalonia + own VT renderer
 (too large), WinUI 3 (no packaged terminal control), C++ / fork of Windows Terminal (expensive to build and maintain).
 
-**Risk:** `CI.Microsoft.Terminal.Wpf` is a community package and may lag behind Windows Terminal.
-Fallback options if it proves unusable: build the WPF control from the Windows Terminal sources ourselves.
+Since v0.1.64 (issue #264) the UI is Avalonia with our own VT emulator, which was the rejected "too large" option above; the
+WPF version with `CI.Microsoft.Terminal.Wpf` is no longer built.
 
 ## 3. Window layout
 

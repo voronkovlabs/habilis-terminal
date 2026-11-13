@@ -9,7 +9,7 @@ How the project is built, tested and checked by hand. Most of this is not visibl
 - **GitHub issues labelled `claude`**: what is open and what is done. See `CLAUDE.md`.
 - **Naming.** The product was renamed on 2026-10-31 from "Terminal Commander" / `tcmd.exe` to **Habilis Terminal** / `habi.exe`. The local folder is still `terminal-commander`.
 - **Projects.**
-  - `src/HabilisTerminal.App`: Avalonia (WPF until issue #253).
+  - `src/HabilisTerminal.App`: Avalonia (WPF until v0.1.63, issues #253, #264).
   - `src/HabilisTerminal.Terminal`: the VT emulator the console view draws (no UI).
   - `src/HabilisTerminal.Plugins.Sdk.Avalonia`: plugin panels drawn by the plugin (`IPanelView`).
   - `src/HabilisTerminal.Core`: panels, file system, settings, viewer, editor.
@@ -92,7 +92,7 @@ Every command is in `src/HabilisTerminal.Core/Commands/CommandCatalog.cs`: id, s
 - **Tracing.** `HABI_TRACE=<file>`, or a `trace-on` file next to `habi.exe` (test copies start through Explorer and get no environment), writes `trace.log` there.
 
 ## Releases
-- **Two builds side by side (issue #256).** main releases the WPF build (`vX.Y.Z`, package `HabilisTerminal`, channel `win-<rid>`); `experiment/avalonia` releases the Avalonia build (`vX.Y.Z-avalonia.N`, package `HabilisTerminalAvalonia`, channel `avalonia-<rid>`, GitHub prereleases, title "Habilis Terminal (Avalonia)"). They install into different folders, keep different settings and state (`AppPaths.ProductFolder`), and each updater sees only its own releases.
+- **One build (issue #264).** Since v0.1.64 the Avalonia app is the main line and the only build: tags `vX.Y.Z` on main, package `HabilisTerminal`, channel `win-<rid>`, stable releases. An installed WPF version updates to it in place. The `vX.Y.Z-avalonia.N` prereleases of #256 (package `HabilisTerminalAvalonia`) are no longer made; the release cleanup still counts them apart, so the last two stay.
 - **Only the last two releases of each build are kept** (the owner's wish): a step in `build.yml` deletes older ones after each release, counting tags with `-avalonia` apart. Their git tags stay.
 - **Pushing a tag `vX.Y.Z`** runs `.github/workflows/build.yml`. It publishes self-contained builds per RID, runs `vpk pack --noPortable` (installer and update packages), builds our own portable zip with the `portable` marker, and publishes to GitHub Releases.
 - **Never create or move a tag without the owner's explicit go-ahead.** A tag publishes binaries.
