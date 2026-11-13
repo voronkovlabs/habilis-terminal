@@ -84,6 +84,21 @@ if ($global:__Habi.OriginalReadLine) {
     }
 }
 
+# Draws the prompt again, for the new folder. PSReadLine draws it at the row it remembers; when the console got lower
+# since (issue #263), that row is gone and it throws. The prompt then goes on the cursor's row, which is the prompt's
+# own row now: it is cleared first, and PSReadLine draws the prompt and the typed text there and remembers the row.
+function global:__HabiInvokePrompt {
+    try {
+        [Microsoft.PowerShell.PSConsoleReadLine]::InvokePrompt()
+    }
+    catch {
+        $row = [Math]::Max(0, [Math]::Min([Console]::CursorTop, [Console]::BufferHeight - 1))
+        [Console]::SetCursorPosition(0, $row)
+        [Console]::Write(' ' * [Math]::Max(0, [Console]::BufferWidth - 1))
+        [Microsoft.PowerShell.PSConsoleReadLine]::InvokePrompt($null, $row)
+    }
+}
+
 Set-PSReadLineKeyHandler -Chord F24 -BriefDescription HabilisTerminalRequest -Description 'Habilis Terminal request' -ScriptBlock {
     __HabiDrawUnicode
     $state = $global:__Habi
@@ -100,7 +115,7 @@ Set-PSReadLineKeyHandler -Chord F24 -BriefDescription HabilisTerminalRequest -De
         switch ($request.op) {
             'cd' {
                 Set-Location -LiteralPath $request.path -ErrorAction Stop
-                [Microsoft.PowerShell.PSConsoleReadLine]::InvokePrompt()
+                __HabiInvokePrompt
             }
             'run' {
                 $line = $null
