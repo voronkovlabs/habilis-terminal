@@ -37,10 +37,17 @@ public class UnixConsoleTests
     [UnixFact]
     public async Task The_terminal_has_the_size_asked_for_and_follows_a_resize()
     {
-        var (output, _) = await RunAsync("/bin/sh", ["-c", "stty size; sleep 1; stty size"], pty => pty.Resize(100, 40));
+        // The second size is asked for after the first was printed.
+        var (output, _) = await RunAsync("/bin/sh", ["-c", "stty size; read go; stty size"], pty =>
+        {
+            Thread.Sleep(1500);
+            pty.Resize(100, 40);
+            pty.Write("\r");
+        });
 
-        Assert.Contains("24 80", output, StringComparison.Ordinal);
-        Assert.Contains("40 100", output, StringComparison.Ordinal);
+        var first = output.IndexOf("24 80", StringComparison.Ordinal);
+        Assert.True(first >= 0, output);
+        Assert.True(output.IndexOf("40 100", first, StringComparison.Ordinal) > first, output);
     }
 
     [UnixFact]
@@ -125,15 +132,18 @@ public class UnixConsoleTests
         using var shell = new TestShell(zsh: true);
         await shell.WaitIdleAsync();
         shell.Host.Write("echo typed-before");
-        await shell.WaitForTextAsync("typed-before");
+        await Task.Delay(500); // the line editor has taken the keys
 
         var id = shell.Host.Run("echo ran-by-habilis");
 
         Assert.Equal("ok", await shell.WaitCompletedAsync(id));
         await shell.WaitForTextAsync("ran-by-habilis\r\n");
         await shell.WaitOpCompletedAsync("restore");
+
+        // The typed line is back: Enter runs it.
+        var before = CountOf(shell.Text, "typed-before\r\n");
         shell.Host.Write("\r");
-        await TestShell.WaitUntilAsync(() => CountOf(shell.Text, "typed-before") >= 3, "the restored line run"); // typed, restored, printed
+        await TestShell.WaitUntilAsync(() => CountOf(shell.Text, "typed-before\r\n") > before, "the restored line run");
     }
 
     [UnixFact]

@@ -36,7 +36,11 @@ public partial class MainWindow
     private int _openPopups;
 
     /// <summary>The shell runs the integration script, so the line's state is known (shell.integration, read at start).</summary>
-    private bool ShellIntegrated { get; set; }
+    /// <summary>
+    /// The console's shell has our integration: pwsh or zsh, with shell.integration on. A shell without it (bash on a
+    /// runner, issue #268) gets keys as they are: nothing else would read the private ones.
+    /// </summary>
+    private bool ShellIntegrated => _settings.ShellIntegration && _shell?.Host.Kind is Shell.Integration.ShellKind.Pwsh or Shell.Integration.ShellKind.Zsh;
 
     /// <summary>The user works in the console: it has the Win32 focus and no panel has the keys.</summary>
     private bool ConsoleHasKeys => TerminalHasFocus && FocusedPanel() is null;

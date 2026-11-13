@@ -63,7 +63,8 @@ jobs:
         if: always()
         run: |
           osascript -e 'quit app "Terminal"' || true
-          ./src/HabilisTerminal.App/bin/Release/net10.0/habi > habi.log 2>&1 &
+          # The runner's login shell is bash; a Mac's is zsh, which has the integration (#268).
+          SHELL=/bin/zsh ./src/HabilisTerminal.App/bin/Release/net10.0/habi > habi.log 2>&1 &
           pid=$!
           sleep 25
           if kill -0 $pid 2>/dev/null; then echo "habi is running"; else echo "habi has ended"; fi
@@ -80,7 +81,7 @@ jobs:
           osascript -e 'tell application "System Events" to key code 53' || true
           sleep 1
           # The console (#268): typed text goes to zsh's command line, as in Far; Enter runs it; cd moves the panel.
-          osascript -e 'tell application "System Events" to keystroke "echo hello from zsh; print -P %n@%m"' || true
+          osascript -e 'tell application "System Events" to keystroke "echo hello from zsh $ZSH_VERSION"' || true
           osascript -e 'tell application "System Events" to key code 36' || true
           sleep 3
           screencapture -x screens/8-habilis-zsh.png
