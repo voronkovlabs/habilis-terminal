@@ -179,6 +179,12 @@ public partial class MainWindow
     {
         if (state.Window is not { } placement || placement.Width < 200 || placement.Height < 150)
         {
+            // The first start on a Mac fills the screen's free area, as Mac programs open (#275); later the size is kept.
+            if (IsMac)
+            {
+                Opened += FillScreenOnce;
+            }
+
             return;
         }
 

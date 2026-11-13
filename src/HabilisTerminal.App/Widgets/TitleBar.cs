@@ -82,6 +82,9 @@ public sealed class TitleBar : DockPanel
             header.PointerExited += (_, _) => header.Background = Brushes.Transparent;
             _headers.Add(header);
             MenuStrip.Children.Add(header);
+
+            // A Mac has these menus in its menu bar (#273): not twice. F9 still opens them under the title bar.
+            header.IsVisible = !IsMac;
         }
 
         SetDock(MenuStrip, Dock.Left);

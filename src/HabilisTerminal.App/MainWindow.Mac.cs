@@ -138,6 +138,20 @@ public partial class MainWindow
         tab.Host.Write("\f");
     }
 
+    private void FillScreenOnce(object? sender, EventArgs e)
+    {
+        Opened -= FillScreenOnce;
+        if (Screens.ScreenFromWindow(this) is not { } screen)
+        {
+            return;
+        }
+
+        var area = screen.WorkingArea;
+        Position = area.Position;
+        Width = area.Width / screen.Scaling;
+        Height = area.Height / screen.Scaling;
+    }
+
     /// <summary>Cmd+click marks a file, as Insert does in Far: a Mac keyboard has no Insert.</summary>
     internal static KeyModifiers MarkModifier => IsMac ? KeyModifiers.Meta : KeyModifiers.Control;
 
