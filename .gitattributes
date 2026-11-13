@@ -4,3 +4,4 @@
 # zsh reads its startup files byte for byte: a CR breaks every line (#268).
 *.zsh text eol=lf
 src/HabilisTerminal.Shell/Scripts/zsh/.z* text eol=lf
+tools/mac/*.sh text eol=lf

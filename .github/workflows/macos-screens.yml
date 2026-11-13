@@ -113,6 +113,25 @@ jobs:
           echo "--- habi output"; cat habi.log
           echo "--- crash reports"; find ~/Library/Application\ Support -path '*Habilis*' -name 'crash-*.json' -exec cat {} \; 2>/dev/null | head -c 20000
           echo "--- crash or trace files"; find ~/Library/Application\ Support ~/.config ~/.local/share -path '*Habilis*' -type f 2>/dev/null | head -20
+      - name: Package for macOS (#276)
+        if: always()
+        run: |
+          dotnet tool restore
+          chmod +x tools/mac/package.sh
+          tools/mac/package.sh 0.0.1 osx-arm64 mac-package 2>&1 | tail -40
+          # The app from the disk image: does it start as a Mac app (Dock name, icon)?
+          hdiutil attach -nobrowse -readonly "mac-package/HabilisTerminal-0.0.1-osx-arm64.dmg" -mountpoint /tmp/habi-dmg
+          ls -la /tmp/habi-dmg
+          app=$(ls -d /tmp/habi-dmg/*.app | head -1); echo "app: $app"
+          codesign -dv "$app" 2>&1 | head -5 || true
+          ditto "$app" "/tmp/HabilisTest.app"
+          open "/tmp/HabilisTest.app"
+          sleep 25
+          screencapture -x screens/11-app-bundle.png
+          osascript -e 'tell application "System Events" to get name of every process whose background only is false' || true
+          pkill -f HabilisTest.app || true
+          hdiutil detach /tmp/habi-dmg || true
+          cp mac-package/HabilisTerminal-0.0.1-osx-arm64.dmg screens/ || true
       - uses: actions/upload-artifact@v4
         if: always()
         with:
