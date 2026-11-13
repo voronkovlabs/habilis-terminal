@@ -54,7 +54,32 @@ public partial class App : Application
         return !string.IsNullOrWhiteSpace(login) && File.Exists(login) ? login : File.Exists("/bin/zsh") ? "/bin/zsh" : "/bin/sh";
     }
 
-    public override void Initialize() => AvaloniaXamlLoader.Load(this);
+    public override void Initialize()
+    {
+        AvaloniaXamlLoader.Load(this);
+
+        // The Mac's app menu must be there before the first window, or the system keeps Avalonia's own (#273).
+        if (OperatingSystem.IsMacOS())
+        {
+            Avalonia.Controls.NativeMenu.SetMenu(this, new Avalonia.Controls.NativeMenu
+            {
+                MacAppItem("About Habilis Terminal", "about", null),
+                MacAppItem("Check for Updates…", "updates", null),
+                new Avalonia.Controls.NativeMenuItemSeparator(),
+                MacAppItem("Settings…", "settings", new Avalonia.Input.KeyGesture(Avalonia.Input.Key.OemComma, Avalonia.Input.KeyModifiers.Meta)),
+            });
+        }
+    }
+
+    /// <summary>A command of the Mac's app menu, for the main window to run (#273).</summary>
+    public static event Action<string>? MacAppMenuCommand;
+
+    private static Avalonia.Controls.NativeMenuItem MacAppItem(string header, string command, Avalonia.Input.KeyGesture? gesture)
+    {
+        var item = new Avalonia.Controls.NativeMenuItem(header) { Gesture = gesture };
+        item.Click += (_, _) => MacAppMenuCommand?.Invoke(command);
+        return item;
+    }
 
     public override void OnFrameworkInitializationCompleted()
     {

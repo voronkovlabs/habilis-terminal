@@ -21,14 +21,23 @@ public partial class MainWindow
             return;
         }
 
-        var appMenu = new NativeMenu
+        // The app menu itself is set up by App before the window (the system takes it only then).
+        _ = application;
+        App.MacAppMenuCommand += command =>
         {
-            Item("About Habilis Terminal", ShowAbout),
-            Item("Check for Updates…", () => Fire(CheckForUpdatesAsync())),
-            new NativeMenuItemSeparator(),
-            Item("Settings…", OpenSettingsPage, new KeyGesture(Key.OemComma, KeyModifiers.Meta)),
+            switch (command)
+            {
+                case "about":
+                    ShowAbout();
+                    break;
+                case "updates":
+                    Fire(CheckForUpdatesAsync());
+                    break;
+                case "settings":
+                    OpenSettingsPage();
+                    break;
+            }
         };
-        NativeMenu.SetMenu(application, appMenu);
 
         var bar = new NativeMenu();
         foreach (var title in MenuTitles)
