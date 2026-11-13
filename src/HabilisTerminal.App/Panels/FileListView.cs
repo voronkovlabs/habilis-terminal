@@ -435,10 +435,18 @@ public sealed class FileListView : Control
             return;
         }
 
+        // Three rows a notch (a column's worth in several columns); a trackpad's fractions add up (#275).
         var step = ColumnCount == 1 ? 3 : RowsPerColumn;
-        ScrollBy(e.Delta.Y > 0 ? -step : step);
+        var rows = _wheel.Take(e.Delta.Y, step);
+        if (rows != 0)
+        {
+            ScrollBy(-rows);
+        }
+
         e.Handled = true;
     }
+
+    private readonly Input.WheelSteps _wheel = new();
 
     /// <summary>Multi-column views scroll by full rows of columns, so their last page may begin past Count - PageSize.</summary>
     private int MaxTopIndex

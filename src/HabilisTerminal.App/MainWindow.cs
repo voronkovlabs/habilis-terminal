@@ -113,6 +113,7 @@ public partial class MainWindow : Window
         var rightStart = StartPath(state.Right, home);
         InitTabs();
         InstallMacMenu();
+        InstallMacActivation();
         WireWindowKeys();
         var first = CreateTab(_active == _right ? rightStart : leftStart);
         SavePanels(first);

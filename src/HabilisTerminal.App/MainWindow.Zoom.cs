@@ -17,6 +17,8 @@ namespace HabilisTerminal.App;
 /// </summary>
 public partial class MainWindow
 {
+    private readonly WheelSteps _zoomWheel = new();
+
     private void InstallZoom(AppState state)
     {
         UiZoom.Set(state.Zoom ?? 1.0);
@@ -30,18 +32,42 @@ public partial class MainWindow
             {
                 e.Handled = true;
 
-                // A picture or a PDF page zooms itself (issue #241).
+                // A picture or a PDF page zooms itself (issue #241); a trackpad's fractions add up to steps (#275).
+                var steps = _zoomWheel.Take(e.Delta.Y);
+                for (var i = 0; i < Math.Abs(steps); i++)
+                {
+                    if (ContentZoom is { } view)
+                    {
+                        view.ZoomAt(e.GetPosition(view), Math.Sign(steps));
+                    }
+                    else
+                    {
+                        UiZoom.Step(Math.Sign(steps));
+                    }
+                }
+            }
+        }, Avalonia.Interactivity.RoutingStrategies.Tunnel);
+
+        // A Mac trackpad's pinch (#275): the interface zooms, or the picture or the PDF page in their views.
+        AddHandler(PointerTouchPadGestureMagnifyEvent, (_, e) =>
+        {
+            e.Handled = true;
+            var steps = _pinch.Take(e.Delta.X, 4); // about a quarter of magnification a step
+            for (var i = 0; i < Math.Abs(steps); i++)
+            {
                 if (ContentZoom is { } view)
                 {
-                    view.ZoomAt(e.GetPosition(view), Math.Sign(e.Delta.Y));
+                    view.ZoomAt(e.GetPosition(view), Math.Sign(steps));
                 }
                 else
                 {
-                    UiZoom.Step(Math.Sign(e.Delta.Y));
+                    UiZoom.Step(Math.Sign(steps));
                 }
             }
         }, Avalonia.Interactivity.RoutingStrategies.Tunnel);
     }
+
+    private readonly WheelSteps _pinch = new();
 
     /// <summary>The open page's own zoom (a picture, a PDF page), if it has one.</summary>
     private Viewing.ZoomPanView? ContentZoom => IsPageOpen && PageHost.Content is Viewing.IContentZoom page ? page.ZoomView : null;

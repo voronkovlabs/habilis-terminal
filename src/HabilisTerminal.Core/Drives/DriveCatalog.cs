@@ -34,6 +34,20 @@ public static class DriveCatalog
     internal static bool IsMacVolume(string root) =>
         root == "/" || root.StartsWith("/Volumes/", StringComparison.Ordinal) && root.TrimEnd('/').Length > "/Volumes".Length;
 
+    /// <summary>The start disk as the Finder names it ("Macintosh HD"): the entry of /Volumes that leads to / (#274).</summary>
+    private static string? MacStartDiskName()
+    {
+        try
+        {
+            return new DirectoryInfo("/Volumes").EnumerateDirectories()
+                .FirstOrDefault(d => d.LinkTarget is "/" or "/System/Volumes/Data")?.Name;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return null;
+        }
+    }
+
     /// <summary>The trash's name as the system calls it: the Trash on a Mac, the Recycle Bin on Windows.</summary>
     public static string TrashName => OperatingSystem.IsWindows() ? "Recycle Bin" : "Trash";
 
@@ -49,7 +63,7 @@ public static class DriveCatalog
                     ? drive with
                     {
                         IsReady = true,
-                        Label = info.VolumeLabel,
+                        Label = OperatingSystem.IsMacOS() && drive.Root == "/" ? MacStartDiskName() ?? info.VolumeLabel : info.VolumeLabel,
                         FileSystem = info.DriveFormat,
                         TotalBytes = info.TotalSize,
                         FreeBytes = info.AvailableFreeSpace,

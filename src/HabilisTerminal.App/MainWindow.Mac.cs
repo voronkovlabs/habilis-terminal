@@ -1,4 +1,5 @@
 using Avalonia.Controls;
+using Avalonia.Platform.Storage;
 using Avalonia.Input;
 using HabilisTerminal.App.Panels;
 using HabilisTerminal.Core.Panels;
@@ -233,5 +234,26 @@ public partial class MainWindow
         }
 
         new ContextMenu { ItemsSource = items }.Open(panel);
+    }
+
+    /// <summary>
+    /// A folder or file dropped on the Dock icon, or opened with the program from the Finder (#275): the active panel
+    /// goes there, a file under its cursor.
+    /// </summary>
+    private void InstallMacActivation()
+    {
+        if (!IsMac || Avalonia.Application.Current?.TryGetFeature(typeof(Avalonia.Controls.ApplicationLifetimes.IActivatableLifetime)) is not Avalonia.Controls.ApplicationLifetimes.IActivatableLifetime lifetime)
+        {
+            return;
+        }
+
+        lifetime.Activated += (_, e) =>
+        {
+            if (e is Avalonia.Controls.ApplicationLifetimes.FileActivatedEventArgs files &&
+                files.Files.Select(f => f.TryGetLocalPath()).FirstOrDefault(p => p is not null) is { } path)
+            {
+                Avalonia.Threading.Dispatcher.UIThread.Post(() => Fire(OpenPastedLocationAsync(_active, path)));
+            }
+        };
     }
 }

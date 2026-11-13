@@ -157,9 +157,14 @@ public sealed class QuickView : Grid, IDisposable
         if (_pdf is not null)
         {
             e.Handled = true;
-            TurnPdfPage(_pdfIndex + (e.Delta.Y < 0 ? 1 : -1));
+            if (_wheel.Take(e.Delta.Y) is var steps and not 0)
+            {
+                TurnPdfPage(_pdfIndex - steps);
+            }
         }
     }
+
+    private readonly Input.WheelSteps _wheel = new();
 
     private void TurnPdfPage(int index)
     {

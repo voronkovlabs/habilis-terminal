@@ -67,7 +67,7 @@ public partial class CommandCatalogTests
         var copy = CommandCatalog.Get("files.copy");
         Assert.Equal("Copy \"a.txt\"", copy.TitleIn(OnFile));
         Assert.Equal("Copy 3 items", copy.TitleIn(OnFile with { Marked = 3 }));
-        Assert.Equal("Delete to Recycle Bin \"a.txt\"", CommandCatalog.Get("files.delete").TitleIn(OnFile));
+        Assert.Equal($"Delete to {Drives.DriveCatalog.TrashName} \"a.txt\"", CommandCatalog.Get("files.delete").TitleIn(OnFile));
         Assert.Equal("Delete \"a.txt\"", CommandCatalog.Get("files.delete").TitleIn(OnFile with { DeleteToRecycleBin = false }));
         Assert.Equal("Open as archive", CommandCatalog.Get("go.enter").TitleIn(OnFile));
         Assert.Equal("Enter the folder", CommandCatalog.Get("go.enter").TitleIn(OnFile with { Cursor = CursorKind.Folder }));

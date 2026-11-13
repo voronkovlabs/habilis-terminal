@@ -151,9 +151,14 @@ public sealed class PdfImagePage : DockPanel, IPage, IDisposable, IContentZoom
         if (!e.Handled && Keyboard.Modifiers == KeyModifiers.None)
         {
             e.Handled = true;
-            GoTo(_index + (e.Delta.Y < 0 ? 1 : -1));
+            if (_wheel.Take(e.Delta.Y) is var steps and not 0)
+            {
+                GoTo(_index - steps); // a trackpad's fractions add up to whole pages (#275)
+            }
         }
     }
+
+    private readonly Input.WheelSteps _wheel = new();
 
     private void GoTo(int index)
     {

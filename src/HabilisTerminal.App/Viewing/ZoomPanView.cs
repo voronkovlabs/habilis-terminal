@@ -215,7 +215,8 @@ public sealed class ZoomPanView : Canvas
             return;
         }
 
-        var step = Math.Sign(e.Delta.Y) * Bounds.Height / 4;
+        // A notch moves a quarter of the view; a trackpad moves it by as much as it was moved (#275).
+        var step = e.Delta.Y * Bounds.Height / 4;
         _offset = Keyboard.Modifiers.HasFlag(KeyModifiers.Shift) ? new Point(_offset.X + step, _offset.Y) : new Point(_offset.X, _offset.Y + step);
         Relayout();
         e.Handled = true;

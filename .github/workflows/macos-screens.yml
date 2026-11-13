@@ -86,8 +86,8 @@ jobs:
           screencapture -x screens/7b-habilis-drives.png
           osascript -e 'tell application "System Events" to key code 53' || true
           sleep 1
-          # The Mac's menu bar (#273): the app menu, then our Files menu.
-          osascript -e 'tell application "System Events" to tell (first process whose unix id is '"$pid"') to click menu bar item 1 of menu bar 1' || true
+          # The Mac's menu bar (#273): the app menu (item 1 is Apple's), then our Files menu.
+          osascript -e 'tell application "System Events" to tell (first process whose unix id is '"$pid"') to click menu bar item 2 of menu bar 1' || true
           sleep 1
           screencapture -x screens/7c-habilis-app-menu.png
           osascript -e 'tell application "System Events" to key code 53' || true
