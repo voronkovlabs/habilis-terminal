@@ -63,6 +63,31 @@ public class ShellHostTests
     }
 
     [Fact]
+    public async Task Change_directory_after_the_console_got_lower_draws_the_prompt_again()
+    {
+        using var shell = new TestShell();
+        var target = shell.CreateDirectory("after shrink");
+        await shell.WaitIdleAsync();
+
+        // The prompt near the bottom of a 30-row console, then the console only 10 rows high: PSReadLine still aims at
+        // the old row when it draws the prompt again (#263).
+        shell.Host.Write("1..26 | ForEach-Object { \"row $_\" }\r");
+        await shell.WaitForTextAsync("row 26");
+        await shell.WaitIdleAsync();
+        await Task.Delay(300, TestContext.Current.CancellationToken);
+        shell.Host.Resize(120, 10);
+        await Task.Delay(500, TestContext.Current.CancellationToken);
+
+        var status = await shell.WaitCompletedAsync(shell.Host.ChangeDirectory(target));
+
+        Assert.Equal("ok", status);
+        await TestShell.WaitUntilAsync(() => string.Equals(shell.Host.CurrentDirectory, target, StringComparison.OrdinalIgnoreCase), "cwd update");
+        await shell.WaitForTextAsync("after shrink>");
+        shell.Host.Write("\"AFTER=$($PWD.Path.Length)\"\r");
+        await TestShell.WaitUntilAsync(() => System.Text.RegularExpressions.Regex.IsMatch(shell.Text, "AFTER=[0-9]"), "the shell still answers");
+    }
+
+    [Fact]
     public async Task Change_directory_reports_errors()
     {
         using var shell = new TestShell();
