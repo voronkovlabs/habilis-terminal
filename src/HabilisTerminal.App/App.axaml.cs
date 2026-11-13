@@ -33,10 +33,25 @@ public partial class App : Application
     public static UpdateService Updates { get; } = new();
 
     /// <summary><c>shell.path</c> when it points to a file, otherwise PowerShell 7 found on this machine.</summary>
+    /// <summary>
+    /// The console's shell: <c>shell.path</c> when it exists; else PowerShell 7 on Windows, and on macOS and Linux the
+    /// user's login shell from $SHELL, else /bin/zsh (issue #268).
+    /// </summary>
     public static string? FindPwsh()
     {
         var configured = Settings?.Current.ShellPath;
-        return !string.IsNullOrWhiteSpace(configured) && File.Exists(configured) ? configured : PwshLocator.Find();
+        if (!string.IsNullOrWhiteSpace(configured) && File.Exists(configured))
+        {
+            return configured;
+        }
+
+        if (OperatingSystem.IsWindows())
+        {
+            return PwshLocator.Find();
+        }
+
+        var login = Environment.GetEnvironmentVariable("SHELL");
+        return !string.IsNullOrWhiteSpace(login) && File.Exists(login) ? login : File.Exists("/bin/zsh") ? "/bin/zsh" : "/bin/sh";
     }
 
     public override void Initialize() => AvaloniaXamlLoader.Load(this);

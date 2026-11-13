@@ -4,7 +4,7 @@ namespace HabilisTerminal.Shell.Tests;
 
 public class ShellHostTests
 {
-    [Fact]
+    [WindowsFact]
     public async Task Reports_idle_state_and_starting_directory()
     {
         using var shell = new TestShell();
@@ -15,7 +15,7 @@ public class ShellHostTests
         Assert.Equal(shell.WorkingDirectory, shell.Host.CurrentDirectory, ignoreCase: true);
     }
 
-    [Fact]
+    [WindowsFact]
     public async Task Tracks_command_execution_and_shell_cd()
     {
         using var shell = new TestShell();
@@ -34,7 +34,7 @@ public class ShellHostTests
         }
     }
 
-    [Fact]
+    [WindowsFact]
     public async Task Change_directory_keeps_typed_text_and_adds_no_history()
     {
         using var shell = new TestShell();
@@ -62,7 +62,7 @@ public class ShellHostTests
         Assert.Equal((baseline + 1).ToString(System.Globalization.CultureInfo.InvariantCulture), count);
     }
 
-    [Fact]
+    [WindowsFact]
     public async Task Change_directory_after_the_console_got_lower_draws_the_prompt_again()
     {
         using var shell = new TestShell();
@@ -87,7 +87,7 @@ public class ShellHostTests
         await TestShell.WaitUntilAsync(() => System.Text.RegularExpressions.Regex.IsMatch(shell.Text, "AFTER=[0-9]"), "the shell still answers");
     }
 
-    [Fact]
+    [WindowsFact]
     public async Task Change_directory_reports_errors()
     {
         using var shell = new TestShell();
@@ -98,7 +98,7 @@ public class ShellHostTests
         Assert.StartsWith("error;", status, StringComparison.Ordinal);
     }
 
-    [Fact]
+    [WindowsFact]
     public async Task Change_directory_while_busy_is_applied_at_the_next_prompt()
     {
         using var shell = new TestShell();
@@ -115,7 +115,7 @@ public class ShellHostTests
         Assert.Equal(second, shell.Host.CurrentDirectory, ignoreCase: true);
     }
 
-    [Fact]
+    [WindowsFact]
     public async Task Run_executes_command_and_restores_typed_text()
     {
         using var shell = new TestShell();
@@ -136,7 +136,7 @@ public class ShellHostTests
         await shell.WaitForTextAsync("LAST=Write-Output ('restored' + '-text')");
     }
 
-    [Fact]
+    [WindowsFact]
     public async Task Esc_on_an_empty_line_asks_for_the_panel_only_while_panels_are_shown()
     {
         using var shell = new TestShell();
@@ -165,7 +165,7 @@ public class ShellHostTests
         Assert.False(shell.Host.PanelsShown);
     }
 
-    [Fact]
+    [WindowsFact]
     public async Task Keys_handled_by_the_script_draw_cyrillic_text()
     {
         using var shell = new TestShell();
@@ -183,7 +183,7 @@ public class ShellHostTests
         Assert.DoesNotContain("???", shell.Text[before..]);
     }
 
-    [Fact]
+    [WindowsFact]
     public async Task Line_keys_come_back_to_the_panel_on_an_empty_line_only_in_panel_mode()
     {
         using var shell = new TestShell();
@@ -248,7 +248,7 @@ public class ShellHostTests
         Assert.Empty(returned);
     }
 
-    [Fact]
+    [WindowsFact]
     public async Task Enter_on_a_plugin_prefix_reports_the_address_instead_of_running_it()
     {
         using var shell = new TestShell();
@@ -276,7 +276,7 @@ public class ShellHostTests
         Assert.Single(addresses);
     }
 
-    [Fact]
+    [WindowsFact]
     public async Task Cd_with_a_variable_or_to_a_file_is_reported_as_in_far()
     {
         // Issue #245: PowerShell expands no %VARIABLES% and cannot cd to a file.
@@ -326,7 +326,7 @@ public class ShellHostTests
         Assert.Empty(paths);
     }
 
-    [Fact]
+    [WindowsFact]
     public async Task Goto_reports_what_follows_it_instead_of_running_it()
     {
         using var shell = new TestShell();
@@ -359,7 +359,7 @@ public class ShellHostTests
         Assert.Empty(targets);
     }
 
-    [Fact]
+    [WindowsFact]
     public async Task Enter_on_a_registered_command_reports_the_address_instead_of_running_it()
     {
         using var shell = new TestShell();
@@ -392,7 +392,7 @@ public class ShellHostTests
         Assert.Empty(addresses);
     }
 
-    [Fact]
+    [WindowsFact]
     public async Task Non_filesystem_location_does_not_change_directory()
     {
         using var shell = new TestShell();

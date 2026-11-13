@@ -4,7 +4,7 @@ name: macos-screens
 # tests run, and a small Avalonia probe window and Habilis itself are started and photographed (#253).
 on:
   push:
-    branches: [experiment/avalonia]
+    branches: [main, experiment/avalonia]
     paths: ['tools/MacProbe/**', 'src/**', 'tests/**', 'Directory.Build.props', '.github/workflows/macos-screens.yml']
   workflow_dispatch:
 
@@ -33,15 +33,15 @@ jobs:
           dotnet test --project tests/HabilisTerminal.Themes.Tests -c Release --no-build
           dotnet test --project tests/HabilisTerminal.Core.Tests -c Release --no-build
           dotnet test --project tests/HabilisTerminal.App.Tests -c Release --no-build
-      - name: All tests (what still assumes Windows)
-        continue-on-error: true
+      - name: Console tests (pty and zsh, #268)
         run: |
-          for t in Shell; do
-            dotnet test --project tests/HabilisTerminal.$t.Tests -c Release --no-build 2>&1 | tee "tests-$t.log" | grep -E "^failed|Test run summary|total:|failed:|succeeded:|skipped:" || true
-          done
+          set -o pipefail
+          dotnet test --project tests/HabilisTerminal.Shell.Tests -c Release --no-build 2>&1 | tee tests-Shell.log
       - name: Build the probe
+        if: always()
         run: dotnet build tools/MacProbe -c Release -o probe
       - name: Start, type, photograph
+        if: always()
         run: |
           mkdir -p screens
           screencapture -x screens/1-desktop.png
@@ -60,6 +60,7 @@ jobs:
           kill %1 || true
           cat probe.log
       - name: Start Habilis
+        if: always()
         run: |
           osascript -e 'quit app "Terminal"' || true
           ./src/HabilisTerminal.App/bin/Release/net10.0/habi > habi.log 2>&1 &
@@ -77,6 +78,20 @@ jobs:
           sleep 2
           screencapture -x screens/7-habilis-f9.png
           osascript -e 'tell application "System Events" to key code 53' || true
+          sleep 1
+          # The console (#268): typed text goes to zsh's command line, as in Far; Enter runs it; cd moves the panel.
+          osascript -e 'tell application "System Events" to keystroke "echo hello from zsh; print -P %n@%m"' || true
+          osascript -e 'tell application "System Events" to key code 36' || true
+          sleep 3
+          screencapture -x screens/8-habilis-zsh.png
+          osascript -e 'tell application "System Events" to keystroke "cd /usr/bin"' || true
+          osascript -e 'tell application "System Events" to key code 36' || true
+          sleep 3
+          screencapture -x screens/9-habilis-cd.png
+          osascript -e 'tell application "System Events" to keystroke "ls -la | head -40"' || true
+          osascript -e 'tell application "System Events" to key code 36' || true
+          sleep 3
+          screencapture -x screens/10-habilis-ls.png
           kill $pid || true
           echo "--- habi output"; cat habi.log
           echo "--- crash reports"; find ~/Library/Application\ Support -path '*Habilis*' -name 'crash-*.json' -exec cat {} \; 2>/dev/null | head -c 20000

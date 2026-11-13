@@ -5,7 +5,8 @@ using HabilisTerminal.Shell.Integration;
 namespace HabilisTerminal.Shell.Tests;
 
 /// <summary>
-/// A real pwsh (no user profile, history not saved) with the integration script, working in its own temp directory.
+/// A real pwsh (no user profile, history not saved) with the integration script, working in its own temp directory; or,
+/// with <c>zsh: true</c>, the system's zsh with habilis.zsh and no user startup files (issue #268).
 /// </summary>
 internal sealed partial class TestShell : IDisposable
 {
@@ -14,17 +15,19 @@ internal sealed partial class TestShell : IDisposable
     private readonly StringBuilder _output = new();
     private readonly List<(int Id, string Op, string Status)> _completed = [];
 
-    public TestShell()
+    public TestShell(bool zsh = false)
     {
         WorkingDirectory = Path.Combine(Path.GetTempPath(), "habi-tests", Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(WorkingDirectory);
 
-        Host = new ShellHost(new ShellHostOptions(
-            PwshLocator.Find() ?? throw new InvalidOperationException("pwsh.exe not found"),
-            ShellScripts.IntegrationScriptPath,
-            WorkingDirectory,
-            InitCommand: "Set-PSReadLineOption -HistorySaveStyle SaveNothing -PredictionSource None",
-            LoadProfile: false));
+        Host = new ShellHost(zsh
+            ? new ShellHostOptions("/bin/zsh", ShellScripts.IntegrationScriptPath, WorkingDirectory, LoadProfile: false)
+            : new ShellHostOptions(
+                PwshLocator.Find() ?? throw new InvalidOperationException("pwsh.exe not found"),
+                ShellScripts.IntegrationScriptPath,
+                WorkingDirectory,
+                InitCommand: "Set-PSReadLineOption -HistorySaveStyle SaveNothing -PredictionSource None",
+                LoadProfile: false));
 
         Host.Output += text =>
         {

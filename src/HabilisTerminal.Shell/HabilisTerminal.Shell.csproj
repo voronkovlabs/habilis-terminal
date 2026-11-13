@@ -1,10 +1,18 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
+    <!-- The Unix pty passes native buffers to libc (#268). -->
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
   </PropertyGroup>
   <ItemGroup>
     <!-- Shipped next to the executable as shell\HabilisTerminal.ps1 (also flows to referencing projects). -->
     <None Include="Scripts\HabilisTerminal.ps1" Link="shell\HabilisTerminal.ps1" CopyToOutputDirectory="PreserveNewest" />
+    <!-- zsh off Windows (#268): ZDOTDIR points to shell/zsh, whose startup files run the user's and then habilis.zsh. -->
+    <None Include="Scripts\zsh\habilis.zsh" Link="shell\zsh\habilis.zsh" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="Scripts\zsh\.zshenv" Link="shell\zsh\.zshenv" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="Scripts\zsh\.zprofile" Link="shell\zsh\.zprofile" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="Scripts\zsh\.zshrc" Link="shell\zsh\.zshrc" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="Scripts\zsh\.zlogin" Link="shell\zsh\.zlogin" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
   <ItemGroup>
     <InternalsVisibleTo Include="HabilisTerminal.Shell.Tests" />

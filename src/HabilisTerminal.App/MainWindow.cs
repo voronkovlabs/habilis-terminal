@@ -528,7 +528,7 @@ public partial class MainWindow : Window
         }
 
         SyncShellDirectory();
-        _shell.Host.Run("& " + ShellQuote.Quote(".\\" + item.Name));
+        _shell.Host.Run(ShellQuote.RunHere(item.Name));
     }
 
     /// <summary>

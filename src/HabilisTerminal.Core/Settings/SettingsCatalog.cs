@@ -40,7 +40,7 @@ public static class SettingsCatalog
         new("terminal.fontSize", Terminal, "Font Size", "Font size of the terminal, in points.", SettingKind.Number, 11, Minimum: 6, Maximum: 48),
         new("terminal.defaultRows", Terminal, "Default Rows", "Terminal height in rows below the panels on first start.", SettingKind.Number, 12, Minimum: 2, Maximum: 200),
         new("terminal.multilinePasteWarning", Terminal, "Multi-line Paste Warning", "Ask before pasting text with several lines.", SettingKind.Toggle, true),
-        new("shell.path", Terminal, "Shell Path", "Path to pwsh.exe. Empty finds PowerShell 7 automatically.", SettingKind.Text, "", RequiresRestart: true),
+        new("shell.path", Terminal, "Shell Path", "Path to the shell. Empty: PowerShell 7 on Windows, the login shell ($SHELL, zsh) on macOS and Linux.", SettingKind.Text, "", RequiresRestart: true),
         new("shell.args", Terminal, "Shell Arguments", "Extra arguments for pwsh, e.g. -NoProfile.", SettingKind.Text, "", RequiresRestart: true),
         new("shell.integration", Terminal, "Shell Integration",
             "Load the integration script that keeps panels and the shell in sync. Without it the panels do not follow cd.", SettingKind.Toggle, true, RequiresRestart: true),

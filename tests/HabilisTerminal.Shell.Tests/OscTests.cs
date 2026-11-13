@@ -63,13 +63,23 @@ public class OscTests
     [InlineData("9;9;\"C:\\Users\\me\"", @"C:\Users\me")]
     [InlineData("9;9;C:\\Plain", @"C:\Plain")]
     [InlineData("9;9;\"\\\\server\\share\\dir\"", @"\\server\share\dir")]
-    [InlineData("7;file://host/C:/Program%20Files", @"C:\Program Files")]
-    [InlineData("7;file://server/share/dir", @"\\server\share\dir")]
+    [InlineData("9;9;\"/Users/me/a b\"", "/Users/me/a b")]
     public void Decoder_reads_current_directory(string payload, string expected)
     {
         var changed = Assert.IsType<ShellEvent.DirectoryChanged>(OscDecoder.Decode(payload));
         Assert.Equal(expected, changed.Path);
     }
+
+    [WindowsFact]
+    public void A_file_uri_is_a_windows_path_on_windows()
+    {
+        Assert.Equal(@"C:\Program Files", Assert.IsType<ShellEvent.DirectoryChanged>(OscDecoder.Decode("7;file://host/C:/Program%20Files")).Path);
+        Assert.Equal(@"\\server\share\dir", Assert.IsType<ShellEvent.DirectoryChanged>(OscDecoder.Decode("7;file://server/share/dir")).Path);
+    }
+
+    [UnixFact]
+    public void A_file_uri_is_a_posix_path_off_windows() =>
+        Assert.Equal("/Users/me/a b", Assert.IsType<ShellEvent.DirectoryChanged>(OscDecoder.Decode("7;file://mac.local/Users/me/a%20b")).Path);
 
     [Fact]
     public void Decoder_reads_habilis_messages()

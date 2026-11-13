@@ -2,7 +2,7 @@ namespace HabilisTerminal.Shell.Tests;
 
 public class PwshLocatorTests
 {
-    [Fact]
+    [WindowsFact]
     public void Find_returns_existing_pwsh_executable()
     {
         var path = PwshLocator.Find();

@@ -81,6 +81,11 @@ public static class OscDecoder
             return null;
         }
 
+        if (!OperatingSystem.IsWindows())
+        {
+            return Uri.UnescapeDataString(parsed.AbsolutePath); // a POSIX path as it is (issue #268)
+        }
+
         var path = Uri.UnescapeDataString(parsed.AbsolutePath).Replace('/', '\\');
         if (path.Length >= 3 && path[0] == '\\' && char.IsAsciiLetter(path[1]) && path[2] == ':')
         {

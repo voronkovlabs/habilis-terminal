@@ -6,13 +6,17 @@ namespace HabilisTerminal.Shell.Pty;
 /// <param name="FileName">The program.</param>
 /// <param name="Arguments">Its arguments as one command line, quoted the Windows way (as the shell settings hold them).</param>
 /// <param name="Environment">Variables added to (or overriding) the inherited environment.</param>
+/// <param name="ArgumentList">Off Windows: the arguments one by one (argv after the program); Arguments is for ConPTY.</param>
+/// <param name="ArgumentZero">Off Windows: argv[0] when it is not the program, e.g. "-zsh" for a login shell.</param>
 public sealed record PtyStartInfo(
     string FileName,
     string Arguments,
     string? WorkingDirectory,
     int Columns,
     int Rows,
-    IReadOnlyDictionary<string, string>? Environment = null)
+    IReadOnlyDictionary<string, string>? Environment = null,
+    IReadOnlyList<string>? ArgumentList = null,
+    string? ArgumentZero = null)
 {
     /// <summary>The whole command line: the quoted program, then the arguments.</summary>
     public string CommandLine => string.IsNullOrEmpty(Arguments) ? $"\"{FileName}\"" : $"\"{FileName}\" {Arguments}";
@@ -36,5 +40,5 @@ public static class PseudoTerminal
     public static IPseudoTerminal Start(PtyStartInfo startInfo, Action<string> onOutput, Action<int> onExited) =>
         OperatingSystem.IsWindows()
             ? ConPtySession.Start(startInfo, onOutput, onExited)
-            : throw new PlatformNotSupportedException("A pseudo terminal on this system comes with the forkpty step of the port (#253).");
+            : UnixPseudoTerminal.Start(startInfo, onOutput, onExited);
 }

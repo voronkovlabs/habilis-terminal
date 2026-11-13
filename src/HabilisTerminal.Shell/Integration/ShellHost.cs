@@ -19,6 +19,20 @@ public enum ShellState
     Exited,
 }
 
+/// <summary>Which integration a shell gets, by its program's name (issue #268).</summary>
+public enum ShellKind
+{
+    /// <summary>PowerShell 7: HabilisTerminal.ps1, requests as F24 in win32-input-mode (Windows).</summary>
+    Pwsh,
+
+    /// <summary>zsh: shell/zsh through ZDOTDIR, requests as ESC [9024~ (macOS and Linux).</summary>
+    Zsh,
+
+    /// <summary>Any other program: a plain console without integration.</summary>
+    Other,
+}
+
+/// <param name="PwshPath">The shell's program: pwsh on Windows, the login shell (zsh) elsewhere.</param>
 public sealed record ShellHostOptions(
     string PwshPath,
     string ScriptPath,
@@ -39,6 +53,9 @@ public sealed class ShellHost : IDisposable
     public const string RequestFileName = "request.json";
     public static readonly TimeSpan RequestTimeout = TimeSpan.FromSeconds(3);
 
+    /// <summary>The private key sequence the zsh integration binds to its request widget.</summary>
+    public const string ZshRequestKey = "\u001b[9024~";
+
     private readonly object _sync = new();
     private readonly ShellHostOptions _options;
     private readonly OscScanner _scanner = new();
@@ -53,6 +70,7 @@ public sealed class ShellHost : IDisposable
     public ShellHost(ShellHostOptions options)
     {
         _options = options;
+        Kind = KindOf(options.PwshPath);
         ChannelDirectory = Path.Combine(Path.GetTempPath(), "HabilisTerminal", $"{Environment.ProcessId}-{Guid.NewGuid():N}");
         _timeoutTimer = new Timer(_ => CheckTimeout());
     }
@@ -181,6 +199,20 @@ public sealed class ShellHost : IDisposable
 
     public string ChannelDirectory { get; }
 
+    public ShellKind Kind { get; }
+
+    /// <summary>By the program's name: pwsh / powershell, zsh, or anything else.</summary>
+    public static ShellKind KindOf(string program) =>
+        Path.GetFileNameWithoutExtension(program).ToLowerInvariant() switch
+        {
+            "pwsh" or "powershell" => ShellKind.Pwsh,
+            "zsh" => ShellKind.Zsh,
+            _ => ShellKind.Other,
+        };
+
+    /// <summary>Keys go to the console as win32-input-mode sequences (ConPTY), else as plain VT ones.</summary>
+    private static bool Win32Keys => OperatingSystem.IsWindows();
+
     public ShellState State { get; private set; } = ShellState.Starting;
 
     public string? CurrentDirectory { get; private set; }
@@ -188,6 +220,12 @@ public sealed class ShellHost : IDisposable
     public void Start(int columns, int rows)
     {
         Directory.CreateDirectory(ChannelDirectory);
+        if (!OperatingSystem.IsWindows())
+        {
+            _session = PseudoTerminal.Start(UnixStartInfo(columns, rows), OnOutput, OnExited);
+            return;
+        }
+
         var startInfo = new PtyStartInfo(
             _options.PwshPath,
             BuildArguments(),
@@ -203,6 +241,58 @@ public sealed class ShellHost : IDisposable
             });
 
         _session = PseudoTerminal.Start(startInfo, OnOutput, OnExited);
+    }
+
+    /// <summary>
+    /// macOS and Linux (issue #268): the shell as a login shell ("-zsh"), with the terminal's variables a Mac terminal
+    /// sets. zsh reads its startup files from shell/zsh, which run the user's own and then habilis.zsh.
+    /// </summary>
+    private PtyStartInfo UnixStartInfo(int columns, int rows)
+    {
+        var environment = new Dictionary<string, string>
+        {
+            [ChannelVariable] = ChannelDirectory,
+            ["HABI_PID"] = Environment.ProcessId.ToString(System.Globalization.CultureInfo.InvariantCulture),
+            ["TERM"] = "xterm-256color",
+            ["COLORTERM"] = "truecolor",
+            ["TERM_PROGRAM"] = "HabilisTerminal",
+        };
+
+        // An app started from the Finder has no LANG, and zsh would then take UTF-8 for single bytes.
+        if (string.IsNullOrEmpty(Environment.GetEnvironmentVariable("LANG")) && string.IsNullOrEmpty(Environment.GetEnvironmentVariable("LC_ALL")))
+        {
+            environment["LANG"] = "en_US.UTF-8";
+        }
+
+        if (Kind == ShellKind.Zsh)
+        {
+            // Without the user's profile (tests): the user's startup files are looked for in the empty channel folder.
+            var userFolder = _options.LoadProfile ? Environment.GetEnvironmentVariable("ZDOTDIR") : ChannelDirectory;
+            environment["HABI_USER_ZDOTDIR"] = string.IsNullOrEmpty(userFolder) ? Environment.GetFolderPath(Environment.SpecialFolder.UserProfile) : userFolder;
+            environment["ZDOTDIR"] = Path.Combine(Path.GetDirectoryName(_options.ScriptPath) ?? AppContext.BaseDirectory, "zsh");
+            if (_options.Integration)
+            {
+                environment["HABI_INTEGRATION"] = "1";
+            }
+
+            if (!string.IsNullOrWhiteSpace(_options.InitCommand))
+            {
+                environment["HABI_INIT"] = _options.InitCommand;
+            }
+        }
+
+        var extra = string.IsNullOrWhiteSpace(_options.ExtraArguments)
+            ? []
+            : _options.ExtraArguments.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        return new PtyStartInfo(
+            _options.PwshPath,
+            string.Empty,
+            _options.WorkingDirectory,
+            columns,
+            rows,
+            environment,
+            extra,
+            ArgumentZero: "-" + Path.GetFileName(_options.PwshPath));
     }
 
     /// <summary>Input from the terminal control (keys, replies to terminal queries).</summary>
@@ -223,13 +313,32 @@ public sealed class ShellHost : IDisposable
     /// Gray + ("Add"), - ("Subtract") or * ("Multiply") while a panel has the keys: typed on a line with text, returned
     /// through <see cref="PanelKeyReturned"/> on an empty one. Sent as F13..F15, the integration script's table.
     /// </summary>
-    public void SendGrayKey(string name) => SendKey(Win32InputSequence.VkF13 + Array.IndexOf(GrayKeys, name));
+    public void SendGrayKey(string name)
+    {
+        if (Win32Keys)
+        {
+            SendKey(Win32InputSequence.VkF13 + Array.IndexOf(GrayKeys, name));
+        }
+        else
+        {
+            _session?.Write($"\u001b[{9025 + Array.IndexOf(GrayKeys, name)}~"); // habilis.zsh binds these
+        }
+    }
 
     private static readonly string[] GrayKeys = ["Add", "Subtract", "Multiply"];
 
     /// <summary>Sends a key press to the shell (e.g. history navigation from panel focus).</summary>
     public void SendKey(int virtualKey, char unicodeChar = '\0', int controlKeyState = 0) =>
-        _session?.Write(Win32InputSequence.KeyPress(virtualKey, unicodeChar, controlKeyState));
+        _session?.Write(Win32Keys ? Win32InputSequence.KeyPress(virtualKey, unicodeChar, controlKeyState) : VtKey(virtualKey, unicodeChar, controlKeyState));
+
+    /// <summary>The keys the window sends to a shell, as a VT terminal writes them (issue #268).</summary>
+    private static string VtKey(int virtualKey, char unicodeChar, int controlKeyState) => virtualKey switch
+    {
+        Win32InputSequence.VkUp => "\u001b[A",
+        Win32InputSequence.VkDown => "\u001b[B",
+        Win32InputSequence.VkSpace when (controlKeyState & Win32InputSequence.LeftCtrl) != 0 => "\0",
+        _ => unicodeChar == '\0' ? string.Empty : unicodeChar.ToString(),
+    };
 
     public void Dispose()
     {
@@ -466,11 +575,17 @@ public sealed class ShellHost : IDisposable
 
         WriteRequestFile(request);
         _timeoutTimer.Change(RequestTimeout, Timeout.InfiniteTimeSpan);
-        _session.Write(Win32InputSequence.KeyPress(Win32InputSequence.VkF24));
+        _session.Write(Kind == ShellKind.Zsh ? ZshRequestKey : Win32InputSequence.KeyPress(Win32InputSequence.VkF24));
     }
 
     private void WriteRequestFile(Request request)
     {
+        if (Kind == ShellKind.Zsh)
+        {
+            WriteZshRequest(request);
+            return;
+        }
+
         var payload = new Dictionary<string, object>(request.Arguments.ToDictionary(p => p.Key, p => (object)p.Value))
         {
             ["id"] = request.Id,
@@ -480,6 +595,18 @@ public sealed class ShellHost : IDisposable
         var target = Path.Combine(ChannelDirectory, RequestFileName);
         var temporary = target + ".tmp";
         File.WriteAllText(temporary, JsonSerializer.Serialize(payload), new UTF8Encoding(false));
+        File.Move(temporary, target, overwrite: true);
+    }
+
+    /// <summary>The request as zsh assignments, which habilis.zsh sources: single quotes keep any text as it is.</summary>
+    private void WriteZshRequest(Request request)
+    {
+        static string Quote(string text) => "'" + text.Replace("'", "'\\''", StringComparison.Ordinal) + "'";
+        var argument = request.Arguments.Values.FirstOrDefault() ?? string.Empty;
+        var text = $"habi_id={request.Id}\nhabi_op={Quote(request.Op)}\nhabi_arg={Quote(argument)}\n";
+        var target = Path.Combine(ChannelDirectory, "request.zsh");
+        var temporary = target + ".tmp";
+        File.WriteAllText(temporary, text, new UTF8Encoding(false));
         File.Move(temporary, target, overwrite: true);
     }
 
