@@ -279,6 +279,17 @@ public partial class MainWindow : Window
             return;
         }
 
+        // A Mac's Cmd keys (#272): the Mac's meaning, or the focused control's; never Far's key of the same letter.
+        if (IsMac && e.KeyModifiers.HasFlag(KeyModifiers.Meta))
+        {
+            if (HandleMacCommandKey(e.Key, e.KeyModifiers & (KeyModifiers.Alt | KeyModifiers.Control | KeyModifiers.Shift)))
+            {
+                e.Handled = true;
+            }
+
+            return;
+        }
+
         if (OnGlobalKey(e.Key, e.KeyModifiers & (KeyModifiers.Alt | KeyModifiers.Control | KeyModifiers.Shift)))
         {
             e.Handled = true;

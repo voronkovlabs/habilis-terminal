@@ -170,17 +170,27 @@ public sealed class ImagePage : DockPanel, IPage, IContentZoom
     /// <summary>A round button on the picture's edge, as in Windows Photos.</summary>
     private static Border Arrow(string glyph, HorizontalAlignment side, Action click)
     {
-        // Segoe Fluent Icons exists on Windows only (#261): elsewhere the bundled codicons' chevrons.
-        var windows = OperatingSystem.IsWindows();
-        var text = new TextBlock
-        {
-            Text = windows ? glyph : side == HorizontalAlignment.Left ? "" : "",
-            FontFamily = new FontFamily(windows ? "Segoe Fluent Icons, Segoe MDL2 Assets" : "avares://habi/Assets#codicon"),
-            FontSize = 16,
-            Foreground = Brushes.White,
-            HorizontalAlignment = HorizontalAlignment.Center,
-            VerticalAlignment = VerticalAlignment.Center,
-        };
+        // Segoe Fluent Icons exists on Windows only (#261): elsewhere the codicons' chevrons, drawn as outlines.
+        Control text = OperatingSystem.IsWindows()
+            ? new TextBlock
+            {
+                Text = glyph,
+                FontFamily = new FontFamily("Segoe Fluent Icons, Segoe MDL2 Assets"),
+                FontSize = 16,
+                Foreground = Brushes.White,
+                HorizontalAlignment = HorizontalAlignment.Center,
+                VerticalAlignment = VerticalAlignment.Center,
+            }
+            : new Avalonia.Controls.Shapes.Path
+            {
+                Data = Theming.Codicon.GeometryOf(side == HorizontalAlignment.Left ? "" : ""),
+                Fill = Brushes.White,
+                Width = 14,
+                Height = 14,
+                Stretch = Stretch.Uniform,
+                HorizontalAlignment = HorizontalAlignment.Center,
+                VerticalAlignment = VerticalAlignment.Center,
+            };
         var idle = new SolidColorBrush(Color.FromArgb(0x70, 0x20, 0x20, 0x20));
         var hover = new SolidColorBrush(Color.FromArgb(0xC0, 0x30, 0x30, 0x30));
         var button = new Border

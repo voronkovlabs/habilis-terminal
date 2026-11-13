@@ -18,8 +18,11 @@ internal static class Codicon
 
         if (!Geometries.TryGetValue(icon, out var geometry))
         {
-            geometry = new FormattedText(icon[..1], System.Globalization.CultureInfo.InvariantCulture, FlowDirection.LeftToRight, Font, 16, null)
-                .BuildGeometry(default);
+            // The outline kept as path data draws everywhere; the font is only for a glyph not kept (issue #261).
+            geometry = CodiconOutlines.All.TryGetValue(icon[0], out var outline)
+                ? Geometry.Parse(outline)
+                : new FormattedText(icon[..1], System.Globalization.CultureInfo.InvariantCulture, FlowDirection.LeftToRight, Font, 16, null)
+                    .BuildGeometry(default);
             Geometries[icon] = geometry;
         }
 

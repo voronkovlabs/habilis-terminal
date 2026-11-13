@@ -1219,9 +1219,10 @@ public sealed partial class FilePanel : Border
         Focus();
         RevealPluginCursor(index);
         State.SetCursor(index);
-        if (Keyboard.Modifiers == KeyModifiers.Control)
+        if (Keyboard.Modifiers == MainWindow.MarkModifier)
         {
-            // Ctrl+click marks, as in Explorer: the right button opens the context menu (issue #41).
+            // Ctrl+click marks, as in Explorer: the right button opens the context menu (issue #41). Cmd+click on a Mac,
+            // as in the Finder, whose keyboard has no Insert either (#272).
             if (!State.Current.IsParent)
             {
                 State.Selection.Toggle(State.Current.Name);
