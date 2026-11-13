@@ -187,7 +187,7 @@ public static class CommandCatalog
         new("files.mkdir", Files, "Make folder", "F7", c => HasPanel(c) && (!c.ActiveIsPlugin || c.CanMakeFolder)),
         new("files.delete", Files, "Delete", "F8", c => HasItems(c) && (!c.ActiveIsPlugin || c.CanDelete))
         {
-            DynamicTitle = c => Items(c, c.ActiveIsPlugin || !c.DeleteToRecycleBin ? "Delete" : "Delete to Recycle Bin"),
+            DynamicTitle = c => Items(c, c.ActiveIsPlugin || !c.DeleteToRecycleBin ? "Delete" : "Delete to " + Drives.DriveCatalog.TrashName),
             Help = "Delete (Recycle Bin by default). Del too",
         },
         new("files.deleteNow", Files, "Delete permanently", "Shift+Del", OnLocalItem) { DynamicTitle = c => Items(c, "Delete permanently") },

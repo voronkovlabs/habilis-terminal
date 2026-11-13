@@ -107,7 +107,7 @@ public static class OperationDialogs
     {
         var what = names.Count == 1 ? $"'{names[0]}'" : $"{names.Count} items";
         var body = new StackPanel();
-        body.Children.Add(Label(permanent ? $"Delete {what} permanently?" : $"Move {what} to the Recycle Bin?"));
+        body.Children.Add(Label(permanent ? $"Delete {what} permanently?" : $"Move {what} to the {Core.Drives.DriveCatalog.TrashName}?"));
         if (permanent)
         {
             body.Children.Add(Description("This cannot be undone.", top: 6));

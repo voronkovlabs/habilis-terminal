@@ -1,5 +1,7 @@
+using Avalonia.Controls;
 using Avalonia.Input;
 using HabilisTerminal.App.Panels;
+using HabilisTerminal.Core.Panels;
 
 namespace HabilisTerminal.App;
 
@@ -112,6 +114,12 @@ public partial class MainWindow
             case Key.R when plain:
                 PanelKey(panel, Key.R, KeyModifiers.Control); // read again
                 return true;
+            case Key.Y when plain:
+                QuickLook(panel, Targets(panel)); // as Cmd+Y in the Finder
+                return true;
+            case Key.R when shift:
+                RevealInFinder(panel, Targets(panel));
+                return true;
             default:
                 return true;
         }
@@ -131,4 +139,99 @@ public partial class MainWindow
 
     /// <summary>Cmd+click marks a file, as Insert does in Far: a Mac keyboard has no Insert.</summary>
     internal static KeyModifiers MarkModifier => IsMac ? KeyModifiers.Meta : KeyModifiers.Control;
+
+    /// <summary>
+    /// Enter runs a program in the console: on Windows by its extension (PATHEXT), elsewhere when the file may be run
+    /// (its x bit) and is not a package, which the system opens (#274).
+    /// </summary>
+    private static bool IsRunnable(FilePanel panel, PanelItem item)
+    {
+        if (OperatingSystem.IsWindows())
+        {
+            return Core.FileSystem.RunnableFiles.IsRunnable(item.Name);
+        }
+
+        if (item.Entry.IsDirectory)
+        {
+            return false;
+        }
+
+        try
+        {
+            var mode = File.GetUnixFileMode(Path.Combine(panel.CurrentPath, item.Name));
+            return (mode & (UnixFileMode.UserExecute | UnixFileMode.GroupExecute | UnixFileMode.OtherExecute)) != 0;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return false;
+        }
+    }
+
+    /// <summary>The marked items, else the one under the cursor; full paths.</summary>
+    private static List<string> Targets(FilePanel panel)
+    {
+        var names = panel.State.Selection.Count > 0 ? [.. panel.State.Selection.Names] : panel.State.Current.IsParent ? [] : new List<string> { panel.State.Current.Name };
+        return [.. names.Select(n => Path.Combine(panel.CurrentPath, n))];
+    }
+
+    /// <summary>The Finder's Quick Look for the items (qlmanage, the system's own previewer).</summary>
+    private static void QuickLook(FilePanel panel, List<string> paths) => RunTool(panel, "qlmanage", ["-p", .. paths]);
+
+    /// <summary>A Finder window on the folder, the first item selected.</summary>
+    private static void RevealInFinder(FilePanel panel, List<string> paths) =>
+        RunTool(panel, "open", paths.Count > 0 ? ["-R", paths[0]] : [panel.CurrentPath]);
+
+    private static void RunTool(FilePanel panel, string tool, List<string> arguments)
+    {
+        try
+        {
+            var start = new System.Diagnostics.ProcessStartInfo(tool) { UseShellExecute = false, RedirectStandardOutput = true, RedirectStandardError = true };
+            foreach (var argument in arguments)
+            {
+                start.ArgumentList.Add(argument);
+            }
+
+            System.Diagnostics.Process.Start(start)?.Dispose();
+        }
+        catch (Exception ex) when (ex is System.ComponentModel.Win32Exception or InvalidOperationException)
+        {
+            panel.Message = $"{tool}: {ex.Message}";
+        }
+    }
+
+    /// <summary>
+    /// Right click on a Mac (#274): the Finder's commands for the items, as the system has no context menu to borrow
+    /// from another program the way Explorer lends its own.
+    /// </summary>
+    private void ShowMacItemMenu(FilePanel panel, IReadOnlyList<string> names)
+    {
+        var paths = names.Select(n => Path.Combine(panel.CurrentPath, n)).ToList();
+        MenuItem Item(string header, string? keys, Action run)
+        {
+            var item = new MenuItem { Header = header, InputGesture = keys is null ? null : KeyGesture.Parse(keys) };
+            item.Click += (_, _) => run();
+            return item;
+        }
+
+        var items = new List<Control>();
+        if (paths.Count > 0)
+        {
+            items.Add(Item("Open", "Cmd+O", () => PanelKey(panel, Key.Enter, KeyModifiers.None)));
+            items.Add(Item("Quick Look", "Cmd+Y", () => QuickLook(panel, paths)));
+            items.Add(Item("Show in Finder", "Cmd+Shift+R", () => RevealInFinder(panel, paths)));
+            items.Add(new Separator());
+            items.Add(Item("Copy Path", null, () => Platform.Desktop.Current.SetClipboardText(string.Join('\n', paths))));
+            items.Add(Item("Rename…", "Shift+F6", () => PanelKey(panel, Key.F6, KeyModifiers.Shift)));
+            items.Add(Item("Get Info", "Cmd+I", () => PanelKey(panel, Key.A, KeyModifiers.Control)));
+            items.Add(new Separator());
+            items.Add(Item("Move to Trash", "Cmd+Back", () => PanelKey(panel, Key.F8, KeyModifiers.None)));
+        }
+        else
+        {
+            items.Add(Item("Show in Finder", null, () => RevealInFinder(panel, [])));
+            items.Add(Item("New Folder", "Cmd+Shift+N", () => PanelKey(panel, Key.F7, KeyModifiers.None)));
+        }
+
+        new ContextMenu { ItemsSource = items }.Open(panel);
+    }
 }

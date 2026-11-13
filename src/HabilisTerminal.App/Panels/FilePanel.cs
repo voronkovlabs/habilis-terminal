@@ -820,7 +820,7 @@ public sealed partial class FilePanel : Border
             case Key.PageDown when modifiers == KeyModifiers.Control:
                 if (State.Current.Entry.IsDirectory || State.Current.IsParent || IsPlugin)
                 {
-                    Open(State.Current);
+                    Open(State.Current, intoPackage: true);
                 }
                 else if (State.Count > 0)
                 {
@@ -1291,7 +1291,7 @@ public sealed partial class FilePanel : Border
         Refresh();
     }
 
-    private void Open(PanelItem item)
+    private void Open(PanelItem item, bool intoPackage = false)
     {
         if (State.Count == 0)
         {
@@ -1307,6 +1307,10 @@ public sealed partial class FilePanel : Border
         if (item.IsParent)
         {
             GoToParent();
+        }
+        else if (item.Entry.IsDirectory && !intoPackage && OperatingSystem.IsMacOS() && Core.FileSystem.MacPackages.IsPackage(item.Name))
+        {
+            ExecuteRequested?.Invoke(this, item); // a program or a document package, as the Finder opens it (#274)
         }
         else if (item.Entry.IsDirectory)
         {

@@ -527,7 +527,7 @@ public partial class MainWindow : Window
             Activate(panel);
         }
 
-        if (!Core.FileSystem.RunnableFiles.IsRunnable(item.Name))
+        if (!IsRunnable(panel, item))
         {
             OpenWithAssociation(panel, item.Name);
             return;
@@ -554,7 +554,7 @@ public partial class MainWindow : Window
             return;
         }
 
-        if (!Core.FileSystem.RunnableFiles.IsRunnable(item.Name))
+        if (!IsRunnable(panel, item))
         {
             OpenWithAssociation(panel, item.Name);
             return;
@@ -627,6 +627,12 @@ public partial class MainWindow : Window
         if (panel != _active)
         {
             Activate(panel);
+        }
+
+        if (IsMac)
+        {
+            ShowMacItemMenu(panel, names);
+            return;
         }
 
         var selection = panel.State.Selection;

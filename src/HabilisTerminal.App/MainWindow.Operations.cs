@@ -102,7 +102,7 @@ public partial class MainWindow
 
         next ??= Enumerable.Range(0, panel.State.Count).Select(i => panel.State.ItemAt(i).Name).LastOrDefault(n => !deleted.Contains(n));
         var paths = names.Select(n => Path.Combine(panel.CurrentPath, n)).ToArray();
-        var title = $"{(permanent ? "Deleting" : "Moving to Recycle Bin")} {(names.Length == 1 ? names[0] : $"{names.Length} items")}";
+        var title = $"{(permanent ? "Deleting" : "Moving to " + Core.Drives.DriveCatalog.TrashName)} {(names.Length == 1 ? names[0] : $"{names.Length} items")}";
         await RunAsync(title, paths, (handler, control) => new DeleteOperation(paths, permanent, handler, control).Run());
         foreach (var deletedPath in paths)
         {

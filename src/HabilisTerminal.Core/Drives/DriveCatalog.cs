@@ -23,7 +23,19 @@ public static class DriveCatalog
     public static readonly TimeSpan DefaultQueryTimeout = TimeSpan.FromSeconds(2);
 
     public static IReadOnlyList<DriveSummary> List() =>
-        DriveInfo.GetDrives().Select(d => new DriveSummary(d.Name, d.DriveType, IsReady: false)).ToArray();
+        DriveInfo.GetDrives().Where(d => IsShown(d.Name)).Select(d => new DriveSummary(d.Name, d.DriveType, IsReady: false)).ToArray();
+
+    /// <summary>
+    /// On a Mac only what the Finder shows (issue #274): the start disk and the volumes under /Volumes, not /dev, the
+    /// system's own volumes or mounted assets.
+    /// </summary>
+    internal static bool IsShown(string root) => !OperatingSystem.IsMacOS() || IsMacVolume(root);
+
+    internal static bool IsMacVolume(string root) =>
+        root == "/" || root.StartsWith("/Volumes/", StringComparison.Ordinal) && root.TrimEnd('/').Length > "/Volumes".Length;
+
+    /// <summary>The trash's name as the system calls it: the Trash on a Mac, the Recycle Bin on Windows.</summary>
+    public static string TrashName => OperatingSystem.IsWindows() ? "Recycle Bin" : "Trash";
 
     /// <summary>Reads label, file system and sizes; returns the input unchanged when the drive does not answer in time.</summary>
     public static async Task<DriveSummary> QueryAsync(DriveSummary drive, TimeSpan? timeout = null)
@@ -54,14 +66,18 @@ public static class DriveCatalog
         return finished == query ? await query.ConfigureAwait(false) : drive;
     }
 
-    /// <summary>Home, Desktop, Downloads, Documents — those that exist.</summary>
+    /// <summary>Home, Desktop, Downloads, Documents — those that exist; on a Mac also Applications and iCloud Drive (#274).</summary>
     public static IReadOnlyList<(string Name, string Path)> Places()
     {
-        var places = new List<(string, string)>
+        var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+        var places = new List<(string, string)>();
+        if (OperatingSystem.IsMacOS())
         {
-            ("Home", Environment.GetFolderPath(Environment.SpecialFolder.UserProfile)),
-            ("Desktop", Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory)),
-        };
+            places.Add(("Applications", "/Applications"));
+        }
+
+        places.Add(("Home", home));
+        places.Add(("Desktop", Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory)));
 
         if (Platforms.Current.Drives.DownloadsFolder() is { } downloads)
         {
@@ -69,6 +85,11 @@ public static class DriveCatalog
         }
 
         places.Add(("Documents", Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments)));
+        if (OperatingSystem.IsMacOS() && home.Length > 0)
+        {
+            places.Add(("iCloud Drive", Path.Combine(home, "Library", "Mobile Documents", "com~apple~CloudDocs")));
+        }
+
         return places.Where(p => !string.IsNullOrEmpty(p.Item2) && Directory.Exists(p.Item2)).ToArray();
     }
 

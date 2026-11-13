@@ -30,7 +30,7 @@ public static class SettingsCatalog
 
         new("panels.fontFamily", Panels, "Font Family", "Font of the file panels.", SettingKind.Text, "Segoe UI"),
         new("panels.fontSize", Panels, "Font Size", "Font size of the file panels, in pixels.", SettingKind.Number, 13, Minimum: 8, Maximum: 32),
-        new("panels.showHidden", Panels, "Show Hidden Files", "Show hidden and system files (Ctrl+H toggles it for a panel).", SettingKind.Toggle, true),
+        new("panels.showHidden", Panels, "Show Hidden Files", "Show hidden and system files (Ctrl+H toggles it for a panel). Off by default on a Mac, as in the Finder.", SettingKind.Toggle, !OperatingSystem.IsMacOS()),
         new("diagnostics.performance", Diagnostics, "Performance Diagnostics",
             "Measure where the app is slow, by the clock and by CPU. Numbers only, no paths or file names. Reports go to public GitHub issues when they reach 1 MB, or from Options, Send performance report, and are then deleted here.", SettingKind.Toggle, false),
         new("panels.folderSizes", Panels, "Folder Sizes",
