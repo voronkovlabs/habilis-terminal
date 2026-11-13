@@ -116,3 +116,36 @@ jobs:
           path: |
             releases/*/*Setup.exe
             artifacts/*.zip
+
+  release-mac:
+    # macOS (issue #276): Habilis Terminal.app for Apple Silicon and Intel, as a Velopack installer (.pkg), update
+    # packages (channels osx-arm64 and osx-x64) and a disk image, added to the release the Windows job published.
+    # Ad-hoc signed only: macOS asks the user to allow the app once, until a Developer ID signs and notarizes it.
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: release
+    runs-on: macos-latest
+    permissions:
+      contents: write
+    env:
+      REPO_URL: https://github.com/${{ github.repository }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+      - name: Restore tools
+        run: dotnet tool restore
+      - name: Package and publish
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -e
+          version="${GITHUB_REF_NAME#v}"
+          chmod +x tools/mac/package.sh
+          for rid in osx-arm64 osx-x64; do
+            # The previous Mac release for delta updates; the first has none.
+            dotnet vpk download github --repoUrl "$REPO_URL" --channel "$rid" --outputDir "mac/$rid/releases" --token "$GH_TOKEN" || true
+            tools/mac/package.sh "$version" "$rid" "mac/$rid"
+            dotnet vpk upload github --repoUrl "$REPO_URL" --token "$GH_TOKEN" --channel "$rid" --outputDir "mac/$rid/releases"               --tag "$GITHUB_REF_NAME" --releaseName "Habilis Terminal $version" --publish --merge
+            gh release upload "$GITHUB_REF_NAME" "mac/$rid/HabilisTerminal-$version-$rid.dmg" --clobber
+          done
