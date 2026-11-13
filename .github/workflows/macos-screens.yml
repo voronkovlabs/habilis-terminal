@@ -80,6 +80,12 @@ jobs:
           screencapture -x screens/7-habilis-f9.png
           osascript -e 'tell application "System Events" to key code 53' || true
           sleep 1
+          # The drive menu (Alt+F1: option and key code 122) has codicons: do they draw on a Mac (#261)?
+          osascript -e 'tell application "System Events" to key code 122 using option down' || true
+          sleep 2
+          screencapture -x screens/7b-habilis-drives.png
+          osascript -e 'tell application "System Events" to key code 53' || true
+          sleep 1
           # The console (#268): typed text goes to zsh's command line, as in Far; Enter runs it; cd moves the panel.
           osascript -e 'tell application "System Events" to keystroke "echo hello from zsh $ZSH_VERSION"' || true
           osascript -e 'tell application "System Events" to key code 36' || true

@@ -247,7 +247,7 @@ public partial class MainWindow
             {
                 Label = r.Title,
                 Description = r.Command.Section,
-                Detail = r.Command.Keys ?? string.Empty,
+                Detail = Core.Commands.KeyLabel.Show(r.Command.Keys),
                 Tag = r.Command,
             })];
         }

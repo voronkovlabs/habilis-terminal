@@ -674,7 +674,7 @@ public partial class MainWindow
         {
             Label = m.Label,
             Icon = m.Mode == sort.Mode ? (sort.Descending ? Codicon.ArrowDown : Codicon.ArrowUp) : string.Empty,
-            Detail = m.Keys,
+            Detail = Core.Commands.KeyLabel.Show(m.Keys),
             Tag = m.Mode,
             IsCurrent = m.Mode == sort.Mode,
         }).ToList();

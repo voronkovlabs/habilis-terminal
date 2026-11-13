@@ -175,7 +175,7 @@ public sealed class TopMenu
 
         var check = new Avalonia.Controls.Shapes.Path { Width = 12, Height = 12, Stretch = Stretch.Uniform, Margin = new Thickness(0, 0, 8, 0), Data = command.IsChecked ? Codicon.GeometryOf(Codicon.Check) : null };
         check.SetResourceReference(Shape.FillProperty, "Habi.Foreground");
-        var shortcut = Text(command.Shortcut ?? string.Empty);
+        var shortcut = Text(Core.Commands.KeyLabel.Show(command.Shortcut));
         shortcut.Margin = new Thickness(32, 0, 0, 0);
         shortcut.SetResourceReference(TextBlock.ForegroundProperty, "Habi.Description");
         var row = new DockPanel();

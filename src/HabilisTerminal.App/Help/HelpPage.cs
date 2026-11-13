@@ -44,7 +44,7 @@ public sealed class HelpPage : DockPanel, IPage
             foreach (var (keys, action) in rows)
             {
                 grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-                var keyText = Text(keys, 13, FontWeight.Normal, "Habi.Accent");
+                var keyText = Text(Core.Commands.KeyLabel.Show(keys), 13, FontWeight.Normal, "Habi.Accent");
                 keyText.FontFamily = new FontFamily(Theming.Fonts.Mono);
                 keyText.FontSize = 12;
                 var actionText = Text(action, 13, FontWeight.Normal, "Habi.Foreground");

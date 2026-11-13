@@ -23,7 +23,7 @@ public sealed class TitleBar : DockPanel
     public const double BarHeight = 30;
 
     /// <summary>What the box in the title bar says.</summary>
-    public const string CommandBoxText = "Commands and paths · Ctrl+Shift+P";
+    public static string CommandBoxText { get; } = "Commands and paths · " + Core.Commands.KeyLabel.Show("Ctrl+Shift+P");
 
     private const double CommandBoxMaxWidth = 520;
     private const double CommandBoxMinWidth = 200;
