@@ -86,6 +86,16 @@ jobs:
           screencapture -x screens/7b-habilis-drives.png
           osascript -e 'tell application "System Events" to key code 53' || true
           sleep 1
+          # The Mac's menu bar (#273): the app menu, then our Files menu.
+          osascript -e 'tell application "System Events" to tell (first process whose unix id is '"$pid"') to click menu bar item 1 of menu bar 1' || true
+          sleep 1
+          screencapture -x screens/7c-habilis-app-menu.png
+          osascript -e 'tell application "System Events" to key code 53' || true
+          osascript -e 'tell application "System Events" to tell (first process whose unix id is '"$pid"') to click menu bar item "Files" of menu bar 1' || true
+          sleep 1
+          screencapture -x screens/7d-habilis-files-menu.png
+          osascript -e 'tell application "System Events" to key code 53' || true
+          sleep 1
           # The console (#268): typed text goes to zsh's command line, as in Far; Enter runs it; cd moves the panel.
           osascript -e 'tell application "System Events" to keystroke "echo hello from zsh $ZSH_VERSION"' || true
           osascript -e 'tell application "System Events" to key code 36' || true

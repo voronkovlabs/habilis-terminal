@@ -26,7 +26,22 @@ public partial class MainWindow
     /// <summary>F9 opens on the menu of the active panel's side, like Far; a click on a title bar header opens that one.</summary>
     private async Task ShowTopMenuAsync(int? group = null)
     {
-        var groups = new List<MenuGroup>
+        var groups = MenuGroups();
+        var result = await TopMenu.ShowAsync(_titleBar.MenuStrip, groups, group ?? (_active == _right ? groups.Count - 1 : 0));
+        if (result?.Run is { } run)
+        {
+            run();
+        }
+        else if (!IsPageOpen)
+        {
+            FocusActivePanel();
+        }
+    }
+
+    /// <summary>The menus as they are now (titles and checks follow the state): F9's and, on a Mac, the menu bar's.</summary>
+    private List<MenuGroup> MenuGroups()
+    {
+        return new List<MenuGroup>
         {
             PanelMenu(LeftMenu, _left),
             new("Files",
@@ -84,16 +99,6 @@ public partial class MainWindow
             ]),
             PanelMenu(RightMenu, _right),
         };
-
-        var result = await TopMenu.ShowAsync(_titleBar.MenuStrip, groups, group ?? (_active == _right ? groups.Count - 1 : 0));
-        if (result?.Run is { } run)
-        {
-            run();
-        }
-        else if (!IsPageOpen)
-        {
-            FocusActivePanel();
-        }
     }
 
     private MenuGroup PanelMenu(string title, FilePanel panel)
