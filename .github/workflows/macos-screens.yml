@@ -5,7 +5,7 @@ name: macos-screens
 on:
   push:
     branches: [main, experiment/avalonia]
-    paths: ['tools/MacProbe/**', 'src/**', 'tests/**', 'Directory.Build.props', '.github/workflows/macos-screens.yml']
+    paths: ['tools/MacProbe/**', 'src/**', 'tests/**', 'plugins/**', 'tools/mac/**', 'Directory.Build.props', '.github/workflows/macos-screens.yml']
   workflow_dispatch:
 
 permissions:
@@ -33,6 +33,13 @@ jobs:
           dotnet test --project tests/HabilisTerminal.Themes.Tests -c Release --no-build
           dotnet test --project tests/HabilisTerminal.Core.Tests -c Release --no-build
           dotnet test --project tests/HabilisTerminal.App.Tests -c Release --no-build
+      - name: Plugin tests (GitHub and the Keychain, #280)
+        run: |
+          set -e
+          for sdk in HabilisTerminal.Plugins.Sdk HabilisTerminal.Plugins.Sdk.Avalonia; do
+            dotnet pack "src/$sdk" -c Release -o artifacts/nuget -nologo -v q
+          done
+          dotnet test --project plugins/Habilis.GitHub.Tests -c Release
       - name: Console tests (pty and zsh, #268)
         run: |
           set -o pipefail

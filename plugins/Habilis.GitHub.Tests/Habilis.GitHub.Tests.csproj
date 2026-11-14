@@ -1,6 +1,6 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
-    <TargetFramework>net10.0-windows</TargetFramework>
+    <TargetFramework>net10.0</TargetFramework>
     <OutputType>Exe</OutputType>
     <EnableDynamicLoading>false</EnableDynamicLoading>
     <!-- Test names read as sentences; the tests were written against the app's rules. -->

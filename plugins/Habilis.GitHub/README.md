@@ -25,7 +25,8 @@ The first time the panel opens it asks how:
 - **With a personal access token.** A classic token with `repo` and `read:org`, pasted into the dialog. For an
   organization with single sign-on, authorize the token for it on GitHub too.
 
-A token from the first or the last way is kept in Windows Credential Manager as `HabilisTerminal:github`. "Sign out of
+A token from the first or the last way is kept in Windows Credential Manager, or on a Mac in the login Keychain, as
+`HabilisTerminal:github`. "Sign out of
 GitHub" forgets it, or stops using the CLI's sign-in.
 
 **Missing repositories?** An organization that restricts OAuth apps hides its repositories, and private forks of

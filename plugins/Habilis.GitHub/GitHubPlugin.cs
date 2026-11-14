@@ -1,4 +1,4 @@
-using System.Diagnostics;
+﻿using System.Diagnostics;
 using System.Text.Json.Nodes;
 using HabilisTerminal.Plugins;
 
@@ -8,7 +8,7 @@ namespace Habilis.GitHub;
 /// GitHub in a Habilis Terminal panel (issue #214): owners, repositories, branches and files, read-only. Opens from
 /// F11, the drive menu or the command line (<c>gh:</c>, <c>gh:owner/repo</c>, also after <c>cd</c>). Signs in with
 /// GitHub's device flow, the GitHub CLI's sign-in or a personal access token; a token stays in Windows Credential
-/// Manager until "Sign out".
+/// Manager, or the macOS Keychain, until "Sign out".
 /// </summary>
 public sealed class GitHubPlugin : Plugin
 {
@@ -29,7 +29,7 @@ public sealed class GitHubPlugin : Plugin
 
     private HttpClient? _http;
 
-    internal ITokenStore Tokens { get; set; } = new CredentialManagerStore();
+    internal ITokenStore Tokens { get; set; } = TokenStores.ForThisSystem();
 
     internal Func<string, IGitHubApi> Connect { get; set; }
 
@@ -184,11 +184,11 @@ public sealed class GitHubPlugin : Plugin
             "1. On that page press \"Generate token\" at the bottom.\n" +
             "2. Copy the token: the line that starts with ghp_. GitHub shows it only once.\n" +
             "3. If your organization uses single sign-on, press \"Configure SSO\" next to the token and authorize it.\n" +
-            "4. Paste the token here and press OK. It is kept in Windows Credential Manager.").ConfigureAwait(false))?.Trim();
+            $"4. Paste the token here and press OK. It is kept in {TokenStores.Place}.").ConfigureAwait(false))?.Trim();
         return string.IsNullOrEmpty(token) ? null : await KeepAsync(token, cancellationToken).ConfigureAwait(false);
     }
 
-    /// <summary>A token that GitHub accepts, kept in Credential Manager under the login it belongs to.</summary>
+    /// <summary>A token that GitHub accepts, kept in Credential Manager or the Keychain under the login it belongs to.</summary>
     private async Task<string> KeepAsync(string token, CancellationToken cancellationToken)
     {
         string login;

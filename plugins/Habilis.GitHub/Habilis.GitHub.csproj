@@ -1,8 +1,8 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
-    <TargetFramework>net10.0-windows</TargetFramework>
+    <TargetFramework>net10.0</TargetFramework>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
-    <Description>Habilis Terminal plugin: GitHub owners, repositories, branches and files with their dates; read-only. Signs in with the device flow; the token stays in Windows Credential Manager.</Description>
+    <Description>Habilis Terminal plugin: GitHub owners, repositories, branches and files with their dates; read-only. Signs in with the device flow; the token stays in Windows Credential Manager or the macOS Keychain.</Description>
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="HabilisTerminal.Plugins.Sdk" PrivateAssets="all" ExcludeAssets="runtime" />
