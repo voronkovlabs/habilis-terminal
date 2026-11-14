@@ -1,0 +1,52 @@
+name: mac-release-check
+
+# A published Mac release as a user gets it (issue #307): the .dmg from the release, copied to /Applications, started
+# from its bundle; its output and any crash report are kept. Started by hand, on the macOS version to check.
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Release version, for example 0.1.81
+        required: true
+      runner:
+        description: Runner label, for example macos-26 or macos-15
+        default: macos-26
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ${{ inputs.runner }}
+    steps:
+      - name: System
+        run: sw_vers; uname -m
+      - name: Download and install
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -e
+          gh release download "v${{ inputs.version }}" --repo "${{ github.repository }}" --pattern "HabilisTerminal-${{ inputs.version }}-osx-arm64.dmg" --dir .
+          hdiutil attach -nobrowse -readonly "HabilisTerminal-${{ inputs.version }}-osx-arm64.dmg" -mountpoint /tmp/habi-dmg
+          ditto "/tmp/habi-dmg/Habilis Terminal.app" "/Applications/Habilis Terminal.app"
+          hdiutil detach /tmp/habi-dmg
+          codesign -dv --entitlements - "/Applications/Habilis Terminal.app" 2>&1 || true
+      - name: Start from the bundle
+        run: |
+          mkdir -p out
+          app="/Applications/Habilis Terminal.app/Contents/MacOS/habi"
+          DOTNET_DbgEnableMiniDump=0 "$app" > out/habi.log 2>&1 &
+          pid=$!
+          sleep 25
+          if kill -0 $pid 2>/dev/null; then echo "running after 25 s"; screencapture -x out/screen.png || true; kill $pid; else wait $pid; echo "exited: $?"; fi
+          echo "--- output"; cat out/habi.log
+          echo "--- crash reports"
+          for f in ~/Library/Logs/DiagnosticReports/habi*; do [ -f "$f" ] && { echo "== $f"; head -c 12000 "$f"; cp "$f" out/; }; done
+          echo "--- app crash files"
+          find ~/Library/Application\ Support -path '*Habilis*' -type f 2>/dev/null | head -20
+          find ~/Library/Application\ Support -path '*Habilis*' -name 'crash-*.json' -exec cat {} \; 2>/dev/null | head -c 20000
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: mac-release-check
+          path: out/
