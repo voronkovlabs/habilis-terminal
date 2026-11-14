@@ -58,8 +58,10 @@ shot 02-copy-dialog
 enter
 check "F5 copies a file" test -f "$root/right/alpha.txt" -a -f "$root/left/alpha.txt"
 
-# F5 on a folder: the tree is copied.
-goto "$root/left/folder"
+# F5 on a folder: the tree is copied. goto on a folder opens it, so the cursor goes to the file under it and up.
+goto "$root/left/alpha.txt"
+key 126
+shot 02b-on-folder
 key 96 "" 2
 enter 3
 check "F5 copies a folder tree" test -f "$root/right/folder/sub/inner.txt"

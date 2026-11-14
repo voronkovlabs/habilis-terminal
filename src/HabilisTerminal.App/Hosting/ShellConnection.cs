@@ -15,6 +15,7 @@ public sealed class ShellConnection : IDisposable
     {
         Host = host;
         View = view;
+        view.Emulator.GrowIntoScrollback = !OperatingSystem.IsWindows(); // ConPTY repaints after a resize (#312)
         Host.Output += text =>
         {
             using var measure = Core.Diagnostics.Perf.Measure("console.output");

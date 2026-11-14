@@ -281,4 +281,29 @@ public sealed class EmulatorTests
         Assert.Equal((3, 10, 20), emulator.TakeCommandMark());
         Assert.Null(emulator.TakeCommandMark());
     }
+
+    /// <summary>Issue #312: on a Unix pty the console grown over the panels shows the lines above, not blank rows below.</summary>
+    [Fact]
+    public void A_taller_screen_takes_its_new_rows_from_the_scrollback()
+    {
+        var t = new TerminalEmulator(10, 4, scrollback: 50) { GrowIntoScrollback = true };
+        t.Feed(string.Join("\r\n", Enumerable.Range(1, 8)) + "\r\n$ ");
+        Assert.Equal(["6", "7", "8", "$"], Screen(t).Select(s => s.Trim()).ToArray());
+
+        t.Resize(10, 7);
+
+        Assert.Equal(["3", "4", "5", "6", "7", "8", "$"], Screen(t).Select(s => s.Trim()).ToArray());
+        Assert.Equal(6, t.CursorY);
+    }
+
+    [Fact]
+    public void Without_growing_into_the_scrollback_new_rows_come_blank_below()
+    {
+        var t = new TerminalEmulator(10, 4, scrollback: 50);
+        t.Feed(string.Join("\r\n", Enumerable.Range(1, 8)) + "\r\n$ ");
+        t.Resize(10, 7);
+
+        Assert.Equal(["6", "7", "8", "$", "", "", ""], Screen(t).Select(s => s.Trim()).ToArray());
+        Assert.Equal(3, t.CursorY);
+    }
 }

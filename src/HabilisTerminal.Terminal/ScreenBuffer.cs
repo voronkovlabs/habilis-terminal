@@ -16,6 +16,12 @@ internal sealed class ScreenBuffer(int columns, int rows, int scrollbackLimit)
 
     public int ScrollbackLimit { get; } = scrollbackLimit;
 
+    /// <summary>
+    /// A taller screen takes its new top rows back from the scrollback, so the text stays at the bottom, as terminals do
+    /// (issue #312). Off under ConPTY, which repaints the whole screen after a resize itself.
+    /// </summary>
+    public bool GrowIntoScrollback { get; set; }
+
     public int Count => _lines.Count;
 
     public int ScrollbackCount => _lines.Count - Rows;
@@ -102,7 +108,15 @@ internal sealed class ScreenBuffer(int columns, int rows, int scrollbackLimit)
 
         while (rows > Rows)
         {
-            _lines.Add(new TermLine(columns, CellStyle.Plain));
+            if (GrowIntoScrollback && _lines.Count > Rows)
+            {
+                cursorRow++;
+            }
+            else
+            {
+                _lines.Add(new TermLine(columns, CellStyle.Plain));
+            }
+
             Rows++;
         }
 

@@ -114,6 +114,16 @@ public sealed class TerminalEmulator : IVtHandler
     private (int Row, int Rows, int Columns)? _commandMark;
 
     /// <summary>
+    /// When the screen grows taller, its new top rows come back from the scrollback and the text stays at the bottom
+    /// (issue #312): for shells on a Unix pseudo terminal. ConPTY repaints the screen after a resize itself.
+    /// </summary>
+    public bool GrowIntoScrollback
+    {
+        get => _main.GrowIntoScrollback;
+        set => _main.GrowIntoScrollback = value;
+    }
+
+    /// <summary>
     /// The cursor row and screen size where the last OSC 133;C (command accepted) was met, once: null when none came
     /// since the last call.
     /// </summary>
