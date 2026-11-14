@@ -121,7 +121,8 @@ jobs:
     # macOS (issue #276): Habilis Terminal.app for Apple Silicon and Intel, as a Velopack installer (.pkg), update
     # packages (channels osx-arm64 and osx-x64) and a disk image, added to the release the Windows job published.
     # Ad-hoc signed only (#305): macOS asks the user to allow the app once, until a Developer ID signs and notarizes it.
-    if: startsWith(github.ref, 'refs/tags/v')
+    # Paused with the Mac direction (issue #322): runs only while the repository variable MAC_BUILDS is "true".
+    if: startsWith(github.ref, 'refs/tags/v') && vars.MAC_BUILDS == 'true'
     needs: release
     runs-on: macos-latest
     permissions:

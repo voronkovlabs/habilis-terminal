@@ -2,10 +2,8 @@ name: macos-screens
 
 # Screenshots from a macOS runner (issue #258): the app and its tests build there (the portable build, #259), the
 # tests run, and a small Avalonia probe window and Habilis itself are started and photographed (#253).
+# The Mac direction is paused (issue #322): started by hand only, no longer on every push.
 on:
-  push:
-    branches: [main, experiment/avalonia]
-    paths: ['tools/MacProbe/**', 'src/**', 'tests/**', 'plugins/**', 'tools/mac/**', 'Directory.Build.props', '.github/workflows/macos-screens.yml']
   workflow_dispatch:
 
 permissions:
