@@ -23,7 +23,12 @@ check() { # description, test...
   if "$@"; then echo "PASS $what"; passed=$((passed + 1)); else echo "FAIL $what"; failed=$((failed + 1)); fi
 }
 
-key() { osascript -e "tell application \"System Events\" to key code $1${2:+ using {$2}}" > /dev/null; sleep "${3:-1}"; }
+key() { # key code, modifiers ("shift down", "control down, shift down" or ""), pause
+  local using=""
+  [ -n "${2:-}" ] && using=" using {$2}"
+  osascript -e "tell application \"System Events\" to key code $1$using" > /dev/null
+  sleep "${3:-1}"
+}
 typed() { osascript -e "tell application \"System Events\" to keystroke \"$1\"" > /dev/null; sleep 0.5; }
 enter() { key 36 "" "${1:-2}"; }
 esc() { key 53 "" "${1:-1}"; }
@@ -114,6 +119,7 @@ shot 11-esc-to-console
 esc 2
 shot 12-esc-to-panel
 echo "--- trace for Esc"; cat "$trace"
+cp "$trace" "$screens/ops-trace-esc.log"
 check "Esc gives the keys to the command line" grep -q "focus terminal" "$trace"
 check "Esc gives the keys back to the panel" grep -q "keys to panel" "$trace"
 
