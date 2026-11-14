@@ -395,7 +395,7 @@ public class ArchiveTests
     private static ArchiveProvider Open(string path) =>
         ArchiveProvider.TryOpen(path, anyFormat: false, _ => null) ?? throw new InvalidOperationException($"{path} did not open.");
 
-    private static async Task<List<string>> Names(ArchiveProvider provider)
+    internal static async Task<List<string>> Names(ArchiveProvider provider)
     {
         var names = new List<string>();
         await foreach (var batch in provider.ListAsync(CancellationToken.None))

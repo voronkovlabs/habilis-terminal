@@ -62,7 +62,7 @@ public sealed class LibArchiveTests
         }
 
         await using var provider = ArchiveProvider.TryOpen(tgz, anyFormat: false, _ => null)!;
-        Assert.False(provider.CanWrite);
+        Assert.True(provider.CanWrite);
         var target = Directory.CreateDirectory(Path.Combine(sandbox.Path, "out")).FullName;
         var outcome = await provider.GetFilesAsync(
             new TransferRequest([new PanelEntry("src", IsFolder: true), new PanelEntry("README")], target, move: false, _ => throw new InvalidOperationException("no conflicts expected")),
@@ -145,6 +145,130 @@ public sealed class LibArchiveTests
         var error = Assert.ThrowsAny<IOException>(() => ArchiveProvider.TryOpen(path, anyFormat: false, _ => "sesame"));
         Assert.StartsWith("names.7z: ", error.Message, StringComparison.Ordinal);
     }
+
+    [Theory]
+    [InlineData(0x50000, 0, "zip", null)]
+    [InlineData(0xE0000, 0, "7zip", null)]
+    [InlineData(0x30002, 0, "paxr", null)]
+    [InlineData(0x30005, 1, "paxr", "gzip")]
+    [InlineData(0x30001, 2, "paxr", "bzip2")]
+    [InlineData(0x30001, 6, "paxr", "xz")]
+    [InlineData(0x30001, 14, null, null)]
+    [InlineData(0x50000, 1, null, null)]
+    [InlineData(0xD0000, 0, null, null)]
+    [InlineData(0x40000, 0, null, null)]
+    public void Zip_7z_and_tar_with_the_usual_compressions_are_written(int format, int filter, string? writer, string? compression) =>
+        Assert.Equal((writer, compression), LibArchiveEngine.Writer(format, filter));
+
+    [Fact]
+    public async Task F5_into_a_zip_adds_files_and_folders_and_replaces_a_file_when_allowed()
+    {
+        Engine();
+        using var sandbox = new TestSandbox();
+        var zip = MakeZip(sandbox, "a.zip", ("readme.txt", "old"), ("docs/notes.txt", "n"));
+        var local = Directory.CreateDirectory(Path.Combine(sandbox.Path, "local")).FullName;
+        File.WriteAllText(Path.Combine(local, "readme.txt"), "new readme");
+        Directory.CreateDirectory(Path.Combine(local, "pics", "empty"));
+        File.WriteAllText(Path.Combine(local, "pics", "cat.txt"), "meow");
+        await using var provider = ArchiveProvider.TryOpen(zip, anyFormat: false, _ => null)!;
+        Assert.True(provider.CanWrite);
+
+        var asked = new List<string>();
+        var outcome = await provider.PutFilesAsync(
+            [Path.Combine(local, "readme.txt"), Path.Combine(local, "pics")],
+            name => { asked.Add(name); return Task.FromResult(OverwriteChoice.Overwrite); },
+            new ArchiveTests.CountingProgress(),
+            CancellationToken.None);
+
+        Assert.Equal(new OperationOutcome(2, 0, 0), outcome);
+        Assert.Equal(["readme.txt"], asked);
+        Assert.Equal(["docs/", "pics/", "readme.txt"], await ArchiveTests.Names(provider));
+        await provider.EnterAsync(new PanelEntry("pics", IsFolder: true), CancellationToken.None);
+        Assert.Equal(["cat.txt", "empty/"], await ArchiveTests.Names(provider));
+        await provider.GoUpAsync(CancellationToken.None);
+
+        // Another reader (.NET's) sees the rewritten zip.
+        using var check = ZipFile.OpenRead(zip);
+        Assert.Equal("new readme", new StreamReader(check.GetEntry("readme.txt")!.Open()).ReadToEnd());
+        Assert.Equal("n", new StreamReader(check.GetEntry("docs/notes.txt")!.Open()).ReadToEnd());
+        Assert.Equal("meow", new StreamReader(check.GetEntry("pics/cat.txt")!.Open()).ReadToEnd());
+        Assert.Equal(1, check.Entries.Count(e => e.FullName == "readme.txt"));
+        Assert.Empty(Directory.GetFiles(sandbox.Path, "~*.tmp"));
+    }
+
+    [Fact]
+    public async Task F8_and_F7_change_a_tar_gz_that_tar_still_reads()
+    {
+        Engine();
+        using var sandbox = new TestSandbox();
+        var tgz = Path.Combine(sandbox.Path, "a.tgz");
+        await using (var file = File.Create(tgz))
+        await using (var gzip = new GZipStream(file, CompressionLevel.Fastest))
+        await using (var writer = new TarWriter(gzip))
+        {
+            foreach (var (name, text) in new[] { ("keep.txt", "k"), ("old/one.txt", "1"), ("old/two.txt", "2") })
+            {
+                await writer.WriteEntryAsync(new PaxTarEntry(TarEntryType.RegularFile, name) { DataStream = new MemoryStream(System.Text.Encoding.UTF8.GetBytes(text)), ModificationTime = Stamp });
+            }
+        }
+
+        await using var provider = ArchiveProvider.TryOpen(tgz, anyFormat: false, _ => null)!;
+        await provider.DeleteAsync([new PanelEntry("old", IsFolder: true)], new ArchiveTests.CountingProgress(), CancellationToken.None);
+        Assert.Equal(["keep.txt"], await ArchiveTests.Names(provider));
+
+        await provider.MakeFolderAsync("new", CancellationToken.None);
+        await Assert.ThrowsAsync<PluginException>(() => provider.MakeFolderAsync("new", CancellationToken.None));
+        Assert.Equal(["keep.txt", "new/"], await ArchiveTests.Names(provider));
+
+        // Still a gzip'd tar, with the kept file's content and date.
+        await using var stream = new GZipStream(File.OpenRead(tgz), CompressionMode.Decompress);
+        using var reader = new TarReader(stream);
+        var entries = new Dictionary<string, (string Text, DateTimeOffset Modified)>();
+        while (reader.GetNextEntry() is { } entry)
+        {
+            entries[entry.Name] = (entry.DataStream is { } data ? new StreamReader(data).ReadToEnd() : string.Empty, entry.ModificationTime);
+        }
+
+        Assert.Equal(["keep.txt", "new/"], entries.Keys.Order(StringComparer.Ordinal));
+        Assert.Equal("k", entries["keep.txt"].Text);
+        Assert.Equal(Stamp, entries["keep.txt"].Modified.UtcDateTime);
+    }
+
+    [Fact]
+    public async Task A_7z_is_written_and_reads_back()
+    {
+        Engine();
+        using var sandbox = new TestSandbox();
+        var sevenZip = Path.Combine(sandbox.Path, "a.7z");
+        File.WriteAllBytes(sevenZip, Convert.FromBase64String(Empty7z));
+        await using var provider = ArchiveProvider.TryOpen(sevenZip, anyFormat: false, _ => null)!;
+        Assert.True(provider.CanWrite);
+
+        var local = Path.Combine(sandbox.Path, "note.txt");
+        File.WriteAllText(local, "seven");
+        await provider.PutFilesAsync([local], _ => Task.FromResult(OverwriteChoice.Overwrite), new ArchiveTests.CountingProgress(), CancellationToken.None);
+        await provider.MakeFolderAsync("dir", CancellationToken.None);
+        Assert.Equal(["dir/", "note.txt"], await ArchiveTests.Names(provider));
+
+        var target = Directory.CreateDirectory(Path.Combine(sandbox.Path, "out")).FullName;
+        await provider.GetFilesAsync(ArchiveTests.CopyOut(target, "note.txt"), new ArchiveTests.CountingProgress(), CancellationToken.None);
+        Assert.Equal("seven", File.ReadAllText(Path.Combine(target, "note.txt")));
+    }
+
+    [Fact]
+    public async Task An_encrypted_zip_is_only_read()
+    {
+        Engine();
+        using var sandbox = new TestSandbox();
+        var zip = ArchiveTests.MakeEncryptedZip(sandbox, "sesame", "secret.txt", "the secret");
+        await using var provider = ArchiveProvider.TryOpen(zip, anyFormat: false, _ => "sesame")!;
+
+        Assert.False(provider.CanWrite);
+        await Assert.ThrowsAsync<PluginException>(() => provider.MakeFolderAsync("x", CancellationToken.None));
+    }
+
+    /// <summary>An empty 7z: the signature header, pointing at no next header (32 bytes).</summary>
+    private const string Empty7z = "N3q8ryccAASNm9UPAAAAAAAAAAAAAAAAAAAAAAAAAAA=";
 
     private static string Write(TestSandbox sandbox, string name, string content)
     {

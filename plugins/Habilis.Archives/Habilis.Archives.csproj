@@ -1,6 +1,6 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
-    <Description>Habilis Terminal plugin: archives as folders, on 7-Zip (on a Mac the system's libarchive, reading only). Copy out and in, delete, make folder where 7-Zip writes the format.</Description>
+    <Description>Habilis Terminal plugin: archives as folders, on 7-Zip (on a Mac the system's libarchive). Copy out and in, delete, make folder where 7-Zip writes the format.</Description>
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="HabilisTerminal.Plugins.Sdk" PrivateAssets="all" ExcludeAssets="runtime" />

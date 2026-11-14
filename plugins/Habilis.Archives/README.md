@@ -14,6 +14,6 @@ Without `7z.dll` the plugin claims no files, and Enter opens them in their progr
 
 **On a Mac** the plugin uses the system's own libarchive (`/usr/lib/libarchive.2.dylib`, the library behind `tar`)
 instead, so nothing is shipped or downloaded (#281). It reads zip, 7z, rar, tar with gz / bz2 / xz / zst, cab, lha,
-cpio, iso, xar and more, and a lone compressed file (`log.gz`) shows the file inside. It only reads: F5 copies out and
-F3 views, but archives are not changed, and an encrypted 7z or rar does not open (libarchive does not decrypt them;
-encrypted zip works).
+cpio, iso, xar and more, and a lone compressed file (`log.gz`) shows the file inside. F5 / F6 in, F8 and F7 change
+zip, 7z and tar (plain, gz, bz2 or xz), as on Windows (#285). An archive with encrypted entries is only read, and an
+encrypted 7z or rar does not open (libarchive does not decrypt them; encrypted zip works).
