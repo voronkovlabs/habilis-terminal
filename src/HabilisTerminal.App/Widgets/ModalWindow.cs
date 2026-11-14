@@ -1,4 +1,6 @@
 using Avalonia.Controls;
+using Avalonia.Input;
+using Avalonia.Interactivity;
 using Avalonia.Media;
 using Avalonia.Controls.Primitives;
 using Avalonia.Threading;
@@ -13,6 +15,18 @@ namespace HabilisTerminal.App.Widgets;
 public class ModalWindow : Window
 {
     private bool? _dialogResult;
+
+    public ModalWindow()
+    {
+        // Arrows move between buttons and controls, as in Far dialogs (issue #294).
+        AddHandler(KeyDownEvent, (_, e) =>
+        {
+            if (!e.Handled && e.KeyModifiers == KeyModifiers.None && DialogArrows.Move(this, e.Key))
+            {
+                e.Handled = true;
+            }
+        }, RoutingStrategies.Tunnel);
+    }
 
     /// <summary>Setting it closes the window, as in WPF.</summary>
     public bool? DialogResult

@@ -26,6 +26,16 @@
     <Style Selector="Button:pointerover /template/ Border#Body">
         <Setter Property="Opacity" Value="0.85" />
     </Style>
+    <!-- Fluent paints the content presenter itself on hover and press (a box around the text, issue #294): our
+         Border#Body is the whole look, so the presenter stays bare in every state. -->
+    <Style Selector="Button /template/ ContentPresenter#PART_ContentPresenter, Button:pointerover /template/ ContentPresenter#PART_ContentPresenter, Button:pressed /template/ ContentPresenter#PART_ContentPresenter, Button:disabled /template/ ContentPresenter#PART_ContentPresenter">
+        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="BorderBrush" Value="Transparent" />
+        <Setter Property="BorderThickness" Value="0" />
+    </Style>
+    <Style Selector="Button:pointerover /template/ ContentPresenter#PART_ContentPresenter, Button:pressed /template/ ContentPresenter#PART_ContentPresenter">
+        <Setter Property="Foreground" Value="{Binding $parent[Button].Foreground}" />
+    </Style>
     <Style Selector="Button:focus-visible /template/ Border#Body">
         <Setter Property="BorderBrush" Value="{DynamicResource Habi.Accent}" />
     </Style>
