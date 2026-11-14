@@ -203,4 +203,10 @@
     <Style Selector="ScrollBar /template/ RepeatButton">
         <Setter Property="IsVisible" Value="False" />
     </Style>
+    <!-- Always-shown bars take their own column and row: Fluent lays them over the content, where they covered the
+         shortcuts at the right edge of the command list (issue #314). -->
+    <Style Selector="ScrollViewer /template/ ScrollContentPresenter#PART_ContentPresenter">
+        <Setter Property="Grid.ColumnSpan" Value="1" />
+        <Setter Property="Grid.RowSpan" Value="1" />
+    </Style>
 </Styles>

@@ -271,4 +271,14 @@ public sealed class EmulatorTests
         Assert.Equal("599", t.ScreenLine(0).Text());
         Assert.True(t.DroppedLines > 0);
     }
+
+    /// <summary>Issue #312: the cursor row where a command was accepted, for the console that grows.</summary>
+    [Fact]
+    public void The_command_mark_gives_the_cursor_row_once()
+    {
+        var emulator = new TerminalEmulator(20, 10);
+        emulator.Feed("one\r\ntwo\r\n$ ls\r\n\u001b]133;C\afile\r\n");
+        Assert.Equal((3, 10, 20), emulator.TakeCommandMark());
+        Assert.Null(emulator.TakeCommandMark());
+    }
 }

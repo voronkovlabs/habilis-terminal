@@ -171,10 +171,14 @@ __habi_request() {
 
 zle -N __habi_request
 
-# Esc (the window sends it as ESC [9028~, issue #270): on an empty line, while the panels are shown, the keys go to the
-# panel; on a line with text the line is cleared, as in Far.
+# Esc (the window sends it as ESC [9028~, issue #270), as in HabilisTerminal.ps1: on an empty line, while a panel has
+# the keys, it is the panel's Esc, which gives the keys to the command line when the panel has no use for it (#290,
+# #313); inside the console, while the panels are shown, the keys go back to the panel; on a line with text the line is
+# cleared, as in Far.
 __habi_escape() {
-    if [[ -z $BUFFER && -f $HABI_CHANNEL/panels-shown ]]; then
+    if [[ -z $BUFFER && -f $HABI_CHANNEL/panel-mode ]]; then
+        __habi_osc '7731;habi;panel-key;Escape'
+    elif [[ -z $BUFFER && -f $HABI_CHANNEL/panels-shown ]]; then
         __habi_osc '7731;habi;focus-panel'
     else
         BUFFER=

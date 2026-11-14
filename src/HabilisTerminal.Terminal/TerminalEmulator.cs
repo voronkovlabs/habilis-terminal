@@ -111,6 +111,22 @@ public sealed class TerminalEmulator : IVtHandler
 
     public event Action<string>? TitleChanged;
 
+    private (int Row, int Rows, int Columns)? _commandMark;
+
+    /// <summary>
+    /// The cursor row and screen size where the last OSC 133;C (command accepted) was met, once: null when none came
+    /// since the last call.
+    /// </summary>
+    public (int Row, int Rows, int Columns)? TakeCommandMark()
+    {
+        lock (SyncRoot)
+        {
+            var mark = _commandMark;
+            _commandMark = null;
+            return mark;
+        }
+    }
+
     /// <summary>A line of the screen, 0 at the top. Read under <see cref="SyncRoot"/>.</summary>
     public TermLine ScreenLine(int row) => _screen.Row(row);
 
@@ -397,6 +413,13 @@ public sealed class TerminalEmulator : IVtHandler
 
     void IVtHandler.OscDispatch(string payload)
     {
+        // A command was accepted (OSC 133;C): where its output starts, for the console that grows over the panels. zsh
+        // and bash cannot tell their cursor row, the emulator can (issue #312).
+        if (payload == "133;C")
+        {
+            _commandMark = (_y, Rows, Columns);
+        }
+
         var separator = payload.IndexOf(';', StringComparison.Ordinal);
         var code = separator < 0 ? payload : payload[..separator];
         if (code is "0" or "2")

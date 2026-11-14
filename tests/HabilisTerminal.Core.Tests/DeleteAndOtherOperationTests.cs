@@ -326,4 +326,37 @@ public class DeleteAndOtherOperationTests
 
         Assert.Equal(1, maximum);
     }
+
+    /// <summary>Issue #315: F8 on a Mac puts the item into Finder's Trash (NSFileManager), files and folders alike.</summary>
+    [MacFact]
+    public void Delete_on_a_mac_moves_items_to_the_trash()
+    {
+        using var sandbox = new TestSandbox();
+        var unique = "habi-trash-test-" + Guid.NewGuid().ToString("N")[..8];
+        var file = Path.Combine(sandbox.Path, unique + ".txt");
+        File.WriteAllText(file, "x");
+        var folder = Directory.CreateDirectory(Path.Combine(sandbox.Path, unique + "-folder")).FullName;
+        File.WriteAllText(Path.Combine(folder, "inside"), "y");
+        var trash = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".Trash");
+
+        try
+        {
+            Assert.Null(HabilisTerminal.Core.Interop.RecycleBin.CannotRecycleReason(file));
+            var result = Delete([file, folder], permanent: false, new ScriptedHandler());
+
+            Assert.Equal(2, result.Succeeded);
+            Assert.False(File.Exists(file));
+            Assert.False(Directory.Exists(folder));
+            Assert.True(File.Exists(Path.Combine(trash, unique + ".txt")), "the file is in ~/.Trash");
+            Assert.True(File.Exists(Path.Combine(trash, unique + "-folder", "inside")), "the folder is in ~/.Trash");
+        }
+        finally
+        {
+            File.Delete(Path.Combine(trash, unique + ".txt"));
+            if (Directory.Exists(Path.Combine(trash, unique + "-folder")))
+            {
+                Directory.Delete(Path.Combine(trash, unique + "-folder"), recursive: true);
+            }
+        }
+    }
 }

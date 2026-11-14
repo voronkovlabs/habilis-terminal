@@ -132,6 +132,11 @@ jobs:
           echo "--- habi output"; cat habi.log
           echo "--- crash reports"; find ~/Library/Application\ Support -path '*Habilis*' -name 'crash-*.json' -exec cat {} \; 2>/dev/null | head -c 20000
           echo "--- crash or trace files"; find ~/Library/Application\ Support ~/.config ~/.local/share -path '*Habilis*' -type f 2>/dev/null | head -20
+      - name: File operations through the UI (#316)
+        if: always()
+        run: |
+          chmod +x tools/mac/ui-operations.sh
+          tools/mac/ui-operations.sh ./src/HabilisTerminal.App/bin/Release/net10.0/habi screens
       - name: Package for macOS (#276)
         if: always()
         run: |

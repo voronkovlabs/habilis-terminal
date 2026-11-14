@@ -22,26 +22,40 @@ public partial class MainWindow
     private void WireOverflow(ConsoleTab tab)
     {
         var host = tab.Host;
-        host.CommandOutputStarted += (row, rows, columns) =>
+        void Started()
         {
-            lock (tab.OverflowLock)
-            {
-                tab.Overflow.CommandStarted(row, rows, columns);
-                tab.OverflowPosted = (0, false);
-            }
-
+            tab.OverflowPosted = (0, false);
             Avalonia.Threading.Dispatcher.UIThread.Post(() =>
             {
                 // A new command grows from where the console is now; focus moving away stops it only for one command.
                 tab.OverflowBase = tab == _tab ? Workspace.OverlayRows : tab.OverlayRows;
                 tab.OverflowSuppressed = false;
             });
+        }
+
+        // PowerShell tells where the output starts (command-start); zsh and bash cannot, so the emulator's cursor at the
+        // command's OSC 133;C is taken instead (issue #312).
+        var markedByEmulator = host.Kind != ShellKind.Pwsh;
+        host.CommandOutputStarted += (row, rows, columns) =>
+        {
+            lock (tab.OverflowLock)
+            {
+                tab.Overflow.CommandStarted(row, rows, columns);
+                Started();
+            }
         };
         host.Output += text =>
         {
             (int Rows, bool Alternate) now;
             lock (tab.OverflowLock)
             {
+                // The emulator was fed this text first (ShellConnection subscribed before this).
+                if (markedByEmulator && tab.Connection.Emulator.TakeCommandMark() is { } mark)
+                {
+                    tab.Overflow.CommandStartedAtMark(mark.Row, mark.Rows, mark.Columns);
+                    Started();
+                }
+
                 tab.Overflow.Feed(text);
                 now = (tab.Overflow.OverflowRows, tab.Overflow.AlternateScreen);
                 if (now == tab.OverflowPosted)

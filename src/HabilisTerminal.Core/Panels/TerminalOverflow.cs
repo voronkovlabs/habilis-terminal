@@ -15,6 +15,7 @@ public sealed class TerminalOverflow
     private int _column;
     private int _columns = 80;
     private bool _active;
+    private bool _skipToMark;
     private State _state;
     private readonly System.Text.StringBuilder _sequence = new();
 
@@ -51,6 +52,16 @@ public sealed class TerminalOverflow
         AlternateScreen = false;
     }
 
+    /// <summary>
+    /// A command was accepted at an OSC 133;C that the emulator has already met in the text about to be fed (zsh and
+    /// bash, issue #312): what comes before that mark in the text is the prompt's, not the command's output.
+    /// </summary>
+    public void CommandStartedAtMark(int cursorRow, int consoleRows, int consoleColumns)
+    {
+        CommandStarted(cursorRow, consoleRows, consoleColumns);
+        _skipToMark = true;
+    }
+
     public void Feed(ReadOnlySpan<char> text)
     {
         foreach (var c in text)
@@ -58,7 +69,11 @@ public sealed class TerminalOverflow
             switch (_state)
             {
                 case State.Text:
-                    Text(c);
+                    if (!_skipToMark || c == '\x1b')
+                    {
+                        Text(c);
+                    }
+
                     break;
                 case State.Escape:
                     _state = c switch { '[' => State.Csi, ']' => State.Osc, _ => State.Text };
@@ -67,7 +82,11 @@ public sealed class TerminalOverflow
                 case State.Csi:
                     if (c is >= '@' and <= '~')
                     {
-                        Csi(_sequence.ToString(), c);
+                        if (!_skipToMark)
+                        {
+                            Csi(_sequence.ToString(), c);
+                        }
+
                         _state = State.Text;
                     }
                     else
@@ -78,11 +97,36 @@ public sealed class TerminalOverflow
                     break;
                 case State.Osc:
                     _state = c switch { '\a' => State.Text, '\x1b' => State.OscEscape, _ => State.Osc };
+                    if (_state == State.Osc)
+                    {
+                        _sequence.Append(c);
+                    }
+                    else if (_state == State.Text)
+                    {
+                        OscEnded();
+                    }
+
                     break;
                 case State.OscEscape:
                     _state = c == '\\' ? State.Text : State.Osc;
+                    if (_state == State.Text)
+                    {
+                        OscEnded();
+                    }
+
                     break;
             }
+        }
+
+        // The mark was in this text; if it was split from it, counting starts with the next text.
+        _skipToMark = false;
+    }
+
+    private void OscEnded()
+    {
+        if (_skipToMark && _sequence.Length == 5 && _sequence.ToString() == "133;C")
+        {
+            _skipToMark = false;
         }
     }
 

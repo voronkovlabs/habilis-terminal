@@ -208,11 +208,16 @@ internal sealed class PortableFileSystem : IFileSystemNative
     }
 }
 
-/// <summary>The user's trash folder (macOS: ~/.Trash; freedesktop: ~/.local/share/Trash).</summary>
+/// <summary>The Trash: on macOS Finder's (NSFileManager, issue #315); elsewhere the freedesktop trash folder.</summary>
 internal sealed class PortableRecycleBin : IRecycleBin
 {
     public string? CannotRecycleReason(string path)
     {
+        if (OperatingSystem.IsMacOS())
+        {
+            return null; // macOS picks the trash for the volume and refuses rather than deleting
+        }
+
         if (TrashFolder() is not { } trash)
         {
             return "there is no trash folder";
@@ -226,6 +231,12 @@ internal sealed class PortableRecycleBin : IRecycleBin
 
     public void Recycle(string path)
     {
+        if (OperatingSystem.IsMacOS())
+        {
+            MacTrash.Trash(Path.TrimEndingDirectorySeparator(Path.GetFullPath(path)));
+            return;
+        }
+
         var trash = TrashFolder() ?? throw new IOException("There is no trash folder.");
         var full = Path.TrimEndingDirectorySeparator(Path.GetFullPath(path));
         var files = OperatingSystem.IsMacOS() ? trash : Path.Combine(trash, "files");

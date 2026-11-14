@@ -34,6 +34,8 @@ public static class WindowsOnly
     public static bool IsWindows => OperatingSystem.IsWindows();
 
     public static bool IsUnix => !OperatingSystem.IsWindows();
+
+    public static bool IsMac => OperatingSystem.IsMacOS();
 }
 
 /// <summary>A test of the same features on a Mac or Linux (#260): skipped on Windows.</summary>
@@ -56,6 +58,18 @@ public sealed class UnixTheoryAttribute : TheoryAttribute
     {
         Skip = "Mac and Linux behaviour";
         SkipUnless = nameof(WindowsOnly.IsUnix);
+        SkipType = typeof(WindowsOnly);
+    }
+}
+
+/// <summary>A test of macOS behaviour only (the Trash, #315): skipped elsewhere.</summary>
+public sealed class MacFactAttribute : FactAttribute
+{
+    public MacFactAttribute([CallerFilePath] string? sourceFilePath = null, [CallerLineNumber] int sourceLineNumber = -1)
+        : base(sourceFilePath, sourceLineNumber)
+    {
+        Skip = "macOS behaviour";
+        SkipUnless = nameof(WindowsOnly.IsMac);
         SkipType = typeof(WindowsOnly);
     }
 }

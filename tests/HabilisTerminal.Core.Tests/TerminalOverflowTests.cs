@@ -82,4 +82,16 @@ public class TerminalOverflowTests
         Assert.False(overflow.AlternateScreen);
         Assert.Equal(1, overflow.OverflowRows);
     }
+
+    /// <summary>Issue #312: zsh and bash mark a command with OSC 133;C only; the prompt before the mark is not output.</summary>
+    [Fact]
+    public void A_start_at_the_emulators_mark_skips_the_text_before_the_mark()
+    {
+        var overflow = new TerminalOverflow();
+        overflow.CommandStartedAtMark(cursorRow: 7, consoleRows: 10, consoleColumns: 20); // rows 8..9 are free
+        overflow.Feed("\r\n\u001b]7731;habi;command-line;bHM=\a\u001b]133;C\a1\r\n2\r\n");
+        Assert.Equal(0, overflow.OverflowRows);
+        overflow.Feed("3\r\n4\r\n");
+        Assert.Equal(2, overflow.OverflowRows);
+    }
 }
