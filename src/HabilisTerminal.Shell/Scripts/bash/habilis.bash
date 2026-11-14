@@ -53,6 +53,7 @@ __habi_debug() {
     [ "$__habi_ready" = 1 ] || return 0
     case "$BASH_COMMAND" in
         '__habi_status=$?'*) return 0 ;; # Enter on an empty line: only the prompt runs
+        __habi_request*) return 0 ;; # a request from Habilis Terminal (bind -x), not the user's command
     esac
     __habi_ready=
     __habi_ran=1

@@ -209,7 +209,15 @@ public class UnixConsoleTests
 
         var target = shell.CreateDirectory("bash dir");
         var id = shell.Host.ChangeDirectory(target);
-        Assert.Equal("ok", await shell.WaitCompletedAsync(id));
+        var status = await shell.WaitCompletedAsync(id);
+        if (status != "ok")
+        {
+            // What bash bound and printed, to see why the request key went unanswered.
+            shell.Host.Write("bind -X; echo BIND-END\r");
+            await shell.WaitForTextAsync("BIND-END\r\n");
+            Assert.Fail($"cd: {status}\n{shell.Text[^Math.Min(3000, shell.Text.Length)..]}");
+        }
+
         await TestShell.WaitUntilAsync(() => SamePath(shell.Host.CurrentDirectory, target), "folder after cd");
 
         // Run from the panel: typed into the line.
