@@ -302,19 +302,26 @@ public partial class MainWindow
             {
                 _skippedUpdate = version;
                 SaveStateInBackground();
-                Toasts.Notify("update", "Update skipped", $"Habilis Terminal {version} is not offered again. F9 > Options > Check for updates still shows it.");
+                Toasts.Notify("update", "Update skipped", $"Habilis Terminal {version} is not offered again. F9 > Options > Check for updates brings it back.");
             }));
     }
 
     /// <summary>F9 > Options > Check for updates (issue #71): the answer in a notice.</summary>
     private async Task CheckForUpdatesAsync()
     {
+        // Asking by hand undoes "Skip this version": the skipped update can be installed after all (issue #298).
+        if (_skippedUpdate is not null)
+        {
+            _skippedUpdate = null;
+            SaveStateInBackground();
+        }
+
         Toasts.Notify("update", "Checking for updates…", $"Habilis Terminal {Updates.UpdateService.RunningVersion}");
         var check = await App.Updates.CheckNowAsync();
         switch (check.Kind)
         {
             case Updates.UpdateCheckKind.Ready:
-                OfferUpdate(check.Version); // asked for: shown even when skipped
+                OfferUpdate(check.Version);
                 break;
             case Updates.UpdateCheckKind.Available:
                 Toasts.Notify("update", "Update available",
