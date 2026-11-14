@@ -177,6 +177,32 @@ public class DeepDiagnosticsTests
         Assert.DoesNotContain("Machine:", body, StringComparison.Ordinal);
     }
 
+    [Fact]
+    public void Without_measured_cpu_operations_say_neither_asynchronous_nor_waiting()
+    {
+        var period = Period() with { Operations = [new PerfOperation("folder.size", "fixed", 2, 900, null, 800, [])], OperationCpu = false };
+
+        var body = PerfReport.Build([period], "1", "macOS", 1).Body;
+
+        Assert.Contains("measured on Windows only", body, StringComparison.Ordinal);
+        Assert.Contains("| folder.size | fixed | 2 | 900 | 450.0 |", body, StringComparison.Ordinal);
+        Assert.DoesNotContain("asynchronous", body, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void With_measured_cpu_an_operation_without_it_reads_as_asynchronous()
+    {
+        var period = Period() with
+        {
+            Operations = [new PerfOperation("key", null, 1, 100, 90, 100, []), new PerfOperation("panel.navigate", null, 1, 100, null, 100, [])],
+        };
+
+        var body = PerfReport.Build([period], "1", "W", 1).Body;
+
+        Assert.Contains("asynchronous", body, StringComparison.Ordinal);
+        Assert.Contains("counted by Windows", body, StringComparison.Ordinal);
+    }
+
     [DllImport("kernel32.dll")]
     private static extern uint GetCurrentThreadId();
 

@@ -133,14 +133,18 @@ public static class PerfReport
 
         AppendBusyStacks(text, periods);
         text.AppendLine("## Operations");
-        text.AppendLine("By total time. CPU is the measuring thread's, counted by Windows in steps of about 16 ms, so it means little for small totals. None means the operation has awaits in it, so waiting and work cannot be told apart.");
+        // Off Windows no operation has its CPU measured (issue #318), so "asynchronous" would say nothing true.
+        var cpuMeasured = periods.Count == 0 || periods.Any(p => p.OperationCpu);
+        text.AppendLine(cpuMeasured
+            ? "By total time. CPU is the measuring thread's, counted by Windows in steps of about 16 ms, so it means little for small totals. None means the operation has awaits in it, so waiting and work cannot be told apart."
+            : "By total time. The CPU an operation used is measured on Windows only.");
         text.AppendLine();
         text.AppendLine("| Operation | Detail | Count | Total ms | Mean ms | p95 ms | Longest ms | CPU share | Reads as |");
         text.AppendLine("|---|---|---:|---:|---:|---:|---:|---:|---|");
         foreach (var operation in operations.OrderByDescending(o => o.WallMs).Take(MaxOperations))
         {
             var share = operation.CpuMs is { } cpu ? Share(cpu, operation.WallMs) : "-";
-            var kind = operation.CpuMs is { } used ? Kind(used, operation.WallMs) : "asynchronous";
+            var kind = operation.CpuMs is { } used ? Kind(used, operation.WallMs) : cpuMeasured ? "asynchronous" : "-";
             var detail = operation.Name.StartsWith("plugin.", StringComparison.Ordinal) ? Reporting.ReportMasking.Plugin(operation.Detail) : operation.Detail ?? string.Empty;
             text.AppendLine(culture, $"| {Cell(operation.Name)} | {Cell(detail)} | {operation.Count} | {operation.WallMs:0} | {operation.WallMs / Math.Max(1, operation.Count):0.0} | {Percentile95(operation):0} | {operation.MaxWallMs:0} | {share} | {kind} |");
         }

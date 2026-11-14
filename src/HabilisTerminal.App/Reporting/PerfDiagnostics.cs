@@ -104,6 +104,12 @@ internal static class PerfDiagnostics
         {
             using var process = Process.GetCurrentProcess();
             Perf.RecordMilestone(name, (DateTime.Now - process.StartTime).TotalMilliseconds);
+
+            // The window is drawn: later stalls are not the start's (issue #319: hours later they still said "startup").
+            if (name == "startup.first-render")
+            {
+                _dispatched = null;
+            }
         }
     }
 
@@ -363,6 +369,13 @@ internal static class PerfDiagnostics
     /// </summary>
     private static void SampleThreads()
     {
+        // Off Windows .NET's thread times are not in milliseconds (issue #318: a Mac's threads added up to 2202 s of a
+        // process's 18.6 s), so the report has no CPU by thread there.
+        if (!OperatingSystem.IsWindows())
+        {
+            return;
+        }
+
         (int Id, string Name, double Used)? busiest = null;
         lock (ThreadGate)
         {

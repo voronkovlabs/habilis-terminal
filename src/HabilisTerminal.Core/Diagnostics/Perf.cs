@@ -51,6 +51,9 @@ public sealed record PerfPeriod(DateTime Start, DateTime End, IReadOnlyList<Perf
     public int? MachineCpu { get; init; }
 
     public IReadOnlyList<PerfBusyThread>? BusyStacks { get; init; }
+
+    /// <summary>False off Windows, where an operation's CPU is not measured (issue #318). Older data was all from Windows.</summary>
+    public bool OperationCpu { get; init; } = true;
 }
 
 /// <summary>
@@ -172,6 +175,7 @@ public static class Perf
             Threads = threads,
             WorkingSetMb = Environment.WorkingSet / 1048576.0,
             ManagedHeapMb = GC.GetTotalMemory(false) / 1048576.0,
+            OperationCpu = OperatingSystem.IsWindows(),
         };
         _periodStart = period.End;
         _cpuAtStart = cpu;
@@ -232,8 +236,9 @@ public static class Perf
         {
             _name = name;
             _detail = detail;
-            _withCpu = withCpu;
-            _startCpu = withCpu ? ThreadCpuMs(OperatingSystem.IsWindows() ? GetCurrentThread() : IntPtr.Zero) : 0;
+            // The thread's CPU is a Windows call; elsewhere an operation's CPU is unknown, not zero (issue #318).
+            _withCpu = withCpu && OperatingSystem.IsWindows();
+            _startCpu = _withCpu ? ThreadCpuMs(OperatingSystem.IsWindows() ? GetCurrentThread() : IntPtr.Zero) : 0;
             _onUiThread = withCpu && Environment.CurrentManagedThreadId == _uiThreadId;
             if (_onUiThread)
             {

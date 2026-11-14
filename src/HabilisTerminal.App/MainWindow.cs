@@ -493,7 +493,8 @@ public partial class MainWindow : Window
     {
         if (op == "cd" && status != "ok")
         {
-            _active.Message = status.StartsWith("error;", StringComparison.Ordinal) ? status[6..] : status;
+            _active.Message = status.StartsWith("error;", StringComparison.Ordinal) ? status[6..]
+                : status == "timeout" ? "The shell did not follow the panel to this folder in time" : status;
         }
     }
 

@@ -136,6 +136,10 @@ __habi_request() {
     case $habi_op in
         cd)
             if builtin cd -- "$habi_arg" 2>/dev/null; then
+                # The answer goes before the prompt's own hooks: a slow one (git status in a large repository) took
+                # longer than the window waits, and the panel said "timeout" (issue #318).
+                __habi_osc "7731;habi;ack;$habi_id;ok"
+                habi_id=
                 local hook
                 for hook in $precmd_functions; do
                     [[ $hook == __habi_precmd ]] && continue
@@ -166,7 +170,7 @@ __habi_request() {
             habi_status="error;unknown request '$habi_op'"
             ;;
     esac
-    __habi_osc "7731;habi;ack;$habi_id;$habi_status"
+    [[ -n $habi_id ]] && __habi_osc "7731;habi;ack;$habi_id;$habi_status"
 }
 
 zle -N __habi_request
