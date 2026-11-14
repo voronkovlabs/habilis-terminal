@@ -66,7 +66,8 @@ __habi_debug() {
 PROMPT_COMMAND="__habi_status=\$?${PROMPT_COMMAND:+; $PROMPT_COMMAND}; __habi_prompt"
 trap '__habi_debug' DEBUG
 
-# Requests from Habilis Terminal (cd only; see above): ESC [9024~ with the request in request.zsh, plain assignments.
+# Requests from Habilis Terminal (cd only; see above): Ctrl+^ with the request in request.zsh, plain assignments. bash 3.2
+# runs a bind -x only from a single key: on a sequence after ESC it fails with "cannot find keymap for command".
 __habi_request() {
     local file="$HABI_CHANNEL/request.zsh" habi_id= habi_op= habi_arg= habi_status=ok
     [ -f "$file" ] || return 0
@@ -84,4 +85,4 @@ __habi_request() {
     __habi_osc "7731;habi;ack;$habi_id;$habi_status"
 }
 
-bind -x '"\e[9024~": __habi_request' 2>/dev/null
+bind -x '"\C-^": __habi_request' 2>/dev/null

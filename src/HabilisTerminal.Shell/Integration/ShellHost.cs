@@ -62,6 +62,9 @@ public sealed class ShellHost : IDisposable
     /// <summary>The private key sequence the zsh integration binds to its request widget.</summary>
     public const string ZshRequestKey = "\u001b[9024~";
 
+    /// <summary>Ctrl+^ for bash: bash 3.2 (macOS) runs a bind -x only from a single key (#270).</summary>
+    public const string BashRequestKey = "\u001e";
+
     private readonly object _sync = new();
     private readonly ShellHostOptions _options;
     private readonly OscScanner _scanner = new();
@@ -620,7 +623,12 @@ public sealed class ShellHost : IDisposable
 
         WriteRequestFile(request);
         _timeoutTimer.Change(RequestTimeout, Timeout.InfiniteTimeSpan);
-        _session.Write(Kind is ShellKind.Zsh or ShellKind.Bash ? ZshRequestKey : Win32InputSequence.KeyPress(Win32InputSequence.VkF24));
+        _session.Write(Kind switch
+        {
+            ShellKind.Zsh => ZshRequestKey,
+            ShellKind.Bash => BashRequestKey,
+            _ => Win32InputSequence.KeyPress(Win32InputSequence.VkF24),
+        });
     }
 
     private void WriteRequestFile(Request request)
