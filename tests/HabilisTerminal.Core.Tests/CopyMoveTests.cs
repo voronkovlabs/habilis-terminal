@@ -75,7 +75,7 @@ public class CopyMoveTests
         Assert.Throws<OperationRefusedException>(() => Copy([directory], Path.Combine(directory, "inner") + Path.DirectorySeparatorChar, new ScriptedHandler()));
     }
 
-    [Fact]
+    [WindowsFact]
     public void Reserved_target_names_are_refused()
     {
         using var sandbox = new TestSandbox();

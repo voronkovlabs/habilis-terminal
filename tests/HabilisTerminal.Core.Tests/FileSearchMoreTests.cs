@@ -19,6 +19,8 @@ public sealed class FileSearchMoreTests : IDisposable
         return path;
     }
 
+    private static string Sys(string path) => path.Replace('\\', Path.DirectorySeparatorChar); // a found path joins the archive with the system's separator (#260)
+
     private List<string> Find(string mask, string? text, bool regex = false, bool matchCase = false, bool wholeWords = false, bool archives = false,
         SearchCache? cache = null, IContainerSearch? containers = null, bool folders = false)
     {
@@ -133,11 +135,11 @@ public sealed class FileSearchMoreTests : IDisposable
         });
 
         // Inside: entries whose names fit the mask and whose content holds the text. The pack's own bytes are not searched.
-        Assert.Equal([@"data.pack\docs\readme.txt", @"data.pack\notes.md", "plain.txt"], Find("*", "needle", archives: true, containers: containers));
-        Assert.Equal([@"data.pack\docs\readme.txt", "plain.txt"], Find("*.txt", "needle", archives: true, containers: containers));
+        Assert.Equal([Sys(@"data.pack\docs\readme.txt"), Sys(@"data.pack\notes.md"), "plain.txt"], Find("*", "needle", archives: true, containers: containers));
+        Assert.Equal([Sys(@"data.pack\docs\readme.txt"), "plain.txt"], Find("*.txt", "needle", archives: true, containers: containers));
 
         // By name: the archive and its entries.
-        Assert.Equal(["data.pack", @"data.pack\docs\other.txt", @"data.pack\docs\readme.txt", @"data.pack\notes.md", "plain.txt"],
+        Assert.Equal(["data.pack", Sys(@"data.pack\docs\other.txt"), Sys(@"data.pack\docs\readme.txt"), Sys(@"data.pack\notes.md"), "plain.txt"],
             Find("*", null, archives: true, containers: containers));
 
         // Without the option the archive is a plain file again.
@@ -170,7 +172,7 @@ public sealed class FileSearchMoreTests : IDisposable
         Assert.Equal(2, containers.Opened);
 
         var second = SearchCache.Open(directory, key);
-        Assert.Equal([@"data.pack\a.txt"], Find("*.txt", "needle", archives: true, cache: second, containers: containers));
+        Assert.Equal([Sys(@"data.pack\a.txt")], Find("*.txt", "needle", archives: true, cache: second, containers: containers));
         Assert.Equal(2, containers.Opened);
     }
 
