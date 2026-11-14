@@ -130,6 +130,57 @@ public class TextFileTests
         Assert.True(file.ChangedOnDisk());
     }
 
+    [UnixFact]
+    [System.Runtime.Versioning.UnsupportedOSPlatform("windows")]
+    public void Save_on_a_mac_keeps_the_permissions_and_leaves_no_temp_files()
+    {
+        using var sandbox = new TestSandbox();
+        var path = Path.Combine(sandbox.Path, "run.sh");
+        File.WriteAllText(path, "echo old");
+        var mode = UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute | UnixFileMode.GroupRead | UnixFileMode.GroupExecute;
+        File.SetUnixFileMode(path, mode);
+
+        TextFile.Load(path).Save("echo new");
+
+        Assert.Equal("echo new", File.ReadAllText(path));
+        Assert.Equal(mode, File.GetUnixFileMode(path));
+        Assert.Single(Directory.GetFiles(sandbox.Path, "*", SearchOption.AllDirectories));
+    }
+
+    [UnixFact]
+    [System.Runtime.Versioning.UnsupportedOSPlatform("windows")]
+    public void Read_only_files_on_a_mac_cannot_be_saved_until_writing_is_allowed()
+    {
+        using var sandbox = new TestSandbox();
+        var path = Path.Combine(sandbox.Path, "ro.txt");
+        File.WriteAllText(path, "x");
+        File.SetUnixFileMode(path, UnixFileMode.UserRead | UnixFileMode.GroupRead);
+        var file = TextFile.Load(path);
+
+        Assert.Throws<UnauthorizedAccessException>(() => file.Save("y"));
+        Assert.Equal("x", File.ReadAllText(path));
+        File.SetUnixFileMode(path, UnixFileMode.UserRead | UnixFileMode.UserWrite);
+        file.Save("y");
+
+        Assert.Equal("y", File.ReadAllText(path));
+        Assert.Single(Directory.GetFiles(sandbox.Path));
+    }
+
+    [UnixFact]
+    public void Saving_through_a_link_on_a_mac_writes_the_file_it_leads_to()
+    {
+        using var sandbox = new TestSandbox();
+        var real = Path.Combine(sandbox.Path, "real.txt");
+        var link = Path.Combine(sandbox.Path, "link.txt");
+        File.WriteAllText(real, "old");
+        File.CreateSymbolicLink(link, real);
+
+        TextFile.Load(link).Save("new");
+
+        Assert.Equal("new", File.ReadAllText(real));
+        Assert.NotNull(new FileInfo(link).LinkTarget);
+    }
+
     [WindowsFact]
     public void Read_only_files_cannot_be_saved_until_the_attribute_is_cleared()
     {

@@ -2,6 +2,7 @@ using System.IO;
 using HabilisTerminal.App.Panels;
 using HabilisTerminal.App.Search;
 using HabilisTerminal.Core.Search;
+using HabilisTerminal.Core.FileSystem;
 
 namespace HabilisTerminal.App;
 
@@ -120,8 +121,8 @@ public partial class MainWindow
             return;
         }
 
-        var folder = Path.GetDirectoryName(item.Path.TrimEnd('\\')) ?? item.Path;
-        await panel.NavigateAsync(folder, Path.GetFileName(item.Path.TrimEnd('\\')));
+        var folder = Path.GetDirectoryName(item.Path.TrimEndSeparator()) ?? item.Path;
+        await panel.NavigateAsync(folder, Path.GetFileName(item.Path.TrimEndSeparator()));
         panel.Focus();
     }
 
@@ -150,7 +151,7 @@ public partial class MainWindow
                         DeleteOldCopies(found);
                         var folder = Path.Combine(found, Path.GetRandomFileName());
                         Directory.CreateDirectory(folder);
-                        var target = Path.Combine(folder, Path.GetFileName(item.InnerPath!));
+                        var target = Path.Combine(folder, item.InnerPath!.Split('\\')[^1]);
                         await using (var source = await open(CancellationToken.None))
                         await using (var file = File.Create(target))
                         {
@@ -211,7 +212,7 @@ public partial class MainWindow
         var all = session.Since(0);
         var items = all.Where(i => i.Container is null).ToList();
         var root = session.CommonRoot ?? Path.GetPathRoot(items.Count > 0 ? items[0].Path : panel.CurrentPath) ?? panel.CurrentPath;
-        var names = items.Select(i => i.Path.StartsWith(root.TrimEnd('\\') + "\\", StringComparison.OrdinalIgnoreCase) ? Path.GetRelativePath(root, i.Path) : i.Path).ToList();
+        var names = items.Select(i => i.Path.StartsWith(root.WithEndSeparator(), StringComparison.OrdinalIgnoreCase) ? Path.GetRelativePath(root, i.Path) : i.Path).ToList();
         await panel.ShowFoundAsync(root, $"Found: {session.Options.Masks}", names);
         if (all.Count > items.Count)
         {

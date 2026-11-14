@@ -17,6 +17,7 @@ using HabilisTerminal.Core.Viewing;
 using HabilisTerminal.Themes;
 using AvaloniaEdit;
 using AvaloniaEdit.Highlighting;
+using HabilisTerminal.Core.FileSystem;
 
 namespace HabilisTerminal.App.Panels;
 
@@ -115,7 +116,7 @@ public sealed class QuickView : Grid, IDisposable
         var culture = CultureInfo.CurrentCulture;
         if (isDirectory)
         {
-            _message.Text = $"{Path.GetFileName(path.TrimEnd('\\'))}\n\n" + (folderSize is { } size ? $"Size: {PanelColumns.FormatCompactSize(size, culture)}" : "Folder (F3 computes its size)");
+            _message.Text = $"{Path.GetFileName(path.TrimEndSeparator())}\n\n" + (folderSize is { } size ? $"Size: {PanelColumns.FormatCompactSize(size, culture)}" : "Folder (F3 computes its size)");
             _message.IsVisible = true;
             return;
         }

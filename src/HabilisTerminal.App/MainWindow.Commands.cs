@@ -706,7 +706,7 @@ public partial class MainWindow
         var panel = _active;
         var items = _history.RecentFirst.Select(path => new QuickPickItem
         {
-            Label = Path.GetFileName(path.TrimEnd('\\')) is { Length: > 0 } name ? name : path,
+            Label = Path.GetFileName(path.TrimEndSeparator()) is { Length: > 0 } name ? name : path,
             Description = path,
             Icon = Codicon.History,
             Tag = path,
@@ -790,7 +790,7 @@ public partial class MainWindow
         {
             items.Add(new QuickPickItem
             {
-                Label = drive.Root.TrimEnd('\\'),
+                Label = drive.Root.TrimEndSeparator(),
                 Description = drive.Type.ToString(),
                 Icon = drive.Type switch
                 {
@@ -873,7 +873,7 @@ public partial class MainWindow
             return;
         }
 
-        var path = Path.GetFullPath(Core.Panels.TypedLocation.ToWindowsPath(clean));
+        var path = Path.GetFullPath(Core.Panels.TypedLocation.ToSystemPath(clean));
         if (await Task.Run(() => File.Exists(path)) && Path.GetDirectoryName(path) is { } folder)
         {
             await panel.NavigateAsync(folder, Path.GetFileName(path));
@@ -992,7 +992,7 @@ public partial class MainWindow
         }
 
         var action = drive.Type == DriveType.Network ? "Disconnect network drive" : "Eject";
-        if (!ThemedDialog.Show(this, $"{action} {drive.Root.TrimEnd('\\')}?", LabelBlock("The panels on it close."),
+        if (!ThemedDialog.Show(this, $"{action} {drive.Root.TrimEndSeparator()}?", LabelBlock("The panels on it close."),
             [new DialogButton<bool>("_OK", true, IsDefault: true), new DialogButton<bool>("Cancel", false, IsCancel: true)], false))
         {
             return;

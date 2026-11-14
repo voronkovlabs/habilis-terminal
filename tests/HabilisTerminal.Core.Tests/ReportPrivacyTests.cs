@@ -13,6 +13,11 @@ public class ReportPrivacyTests
     [InlineData(@"%USERPROFILE%\Documents\Project X\plan.md is locked", @"<path>\plan.md is locked")]
     [InlineData(@"A drive alone: C:\", @"A drive alone: C:\")]
     [InlineData("No path at all: 12:30, a:b", "No path at all: 12:30, a:b")]
+    [InlineData("Could not find file '/Users/me/work/client/plan.md'.", "Could not find file '<path>/plan.md'.")]
+    [InlineData("   at App.Run() in /Users/runner/work/app/Main.cs:line 12", "   at App.Run() in <path>/Main.cs:line 12")]
+    [InlineData("%USERPROFILE%/Documents/Project-X/plan.md", "<path>/plan.md")]
+    [InlineData("~/work/notes.txt is locked", "<path>/notes.txt is locked")]
+    [InlineData("See https://github.com/a/b/issues/1 and 1/2/2026, and/or /tmp", "See https://github.com/a/b/issues/1 and 1/2/2026, and/or /tmp")]
     public void A_path_keeps_only_its_last_part(string text, string expected) =>
         Assert.Equal(expected, ReportMasking.HidePaths(text));
 

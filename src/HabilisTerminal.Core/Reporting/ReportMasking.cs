@@ -21,17 +21,36 @@ public sealed partial class ReportMasking(string? userProfile, string? userName,
     /// Crash and performance reports go to a public tracker (issue #248): a full path names the user's folders, projects
     /// and tickets. Each path keeps only its last part, "&lt;path&gt;\name", enough to tell a file from a folder.
     /// </summary>
-    public static string HidePaths(string text) =>
-        string.IsNullOrEmpty(text) ? text : PathPattern().Replace(text, match =>
+    public static string HidePaths(string text)
+    {
+        if (string.IsNullOrEmpty(text))
+        {
+            return text;
+        }
+
+        text = PathPattern().Replace(text, match =>
         {
             var parts = match.Value.TrimEnd('\\').Split('\\');
             return parts.Length > 1 ? "<path>\\" + parts[^1] : "<path>";
         });
 
+        // A Mac or Linux path (#260): "/Users/me/work/notes.txt" becomes "<path>/notes.txt".
+        return UnixPathPattern().Replace(text, match =>
+        {
+            var line = match.Groups["line"].Value;
+            var path = match.Value[..^line.Length];
+            return "<path>/" + path[(path.LastIndexOf('/') + 1)..] + line;
+        });
+    }
+
     // A drive, a UNC share or an environment variable such as %USERPROFILE%, then one or more parts. A part ends at a
     // backslash, a quote, a line end or a character no file name has.
     [GeneratedRegex(@"(?:(?<![\p{L}\p{N}])[A-Za-z]:|\\\\[^\\\s'""<>|*?]+|%[A-Za-z_][A-Za-z0-9_]*%)(?:\\[^\\\r\n'""<>|*?:`]+)+(?::line \d+)?", RegexOptions.CultureInvariant)]
     private static partial Regex PathPattern();
+
+    // At least two parts after a slash, "~" or a %VARIABLE%, not inside a word, a URL ("https://a/b") or a date (1/2/3).
+    [GeneratedRegex(@"(?<![\p{L}\p{N}_/:.~%\\-])(?:~|%[A-Za-z_][A-Za-z0-9_]*%)?(?:/[^/\s'""<>|*?:`]+){2,}(?<line>:line \d+)?", RegexOptions.CultureInvariant)]
+    private static partial Regex UnixPathPattern();
 
     public static ReportMasking Current { get; } = new(
         Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), Environment.UserName, Environment.MachineName);

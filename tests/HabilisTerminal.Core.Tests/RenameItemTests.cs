@@ -71,4 +71,29 @@ public class RenameItemTests
         Assert.NotEmpty(error.Message);
         Assert.True(File.Exists(Path.Combine(sandbox.Path, "a.txt")));
     }
+
+    [UnixTheory]
+    [InlineData("")]
+    [InlineData("a/b.txt")]
+    [InlineData("..")]
+    public void A_bad_name_on_a_mac_is_refused_and_says_why(string name)
+    {
+        using var sandbox = new TestSandbox();
+        File.WriteAllText(Path.Combine(sandbox.Path, "a.txt"), "x");
+        var error = Assert.Throws<ArgumentException>(() => RenameItem.Rename(sandbox.Path, "a.txt", name));
+        Assert.NotEmpty(error.Message);
+        Assert.True(File.Exists(Path.Combine(sandbox.Path, "a.txt")));
+    }
+
+    [UnixTheory]
+    [InlineData("name.")]
+    [InlineData("CON")]
+    [InlineData(@"back\slash")]
+    public void Names_only_windows_refuses_are_fine_on_a_mac(string name)
+    {
+        using var sandbox = new TestSandbox();
+        File.WriteAllText(Path.Combine(sandbox.Path, "a.txt"), "x");
+        Assert.True(RenameItem.Rename(sandbox.Path, "a.txt", name));
+        Assert.Equal("x", File.ReadAllText(Path.Combine(sandbox.Path, name)));
+    }
 }

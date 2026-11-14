@@ -61,6 +61,24 @@ public sealed record TextFile(string Path, string Text, TextEncoding Encoding, b
     public TextFile Save(string text, string? path = null, TextEncoding? encoding = null, bool? withBom = null)
     {
         var target = System.IO.Path.GetFullPath(path ?? Path);
+        UnixFileMode? mode = null;
+        if (!OperatingSystem.IsWindows() && File.Exists(target))
+        {
+            // A rename puts a new file in place (#260): a link would become a file, the permissions the umask's, and a
+            // file without write permission would be overwritten all the same. So write where a link leads, keep the
+            // permissions and refuse what is read-only, as Windows' File.Replace does.
+            if (File.ResolveLinkTarget(target, returnFinalTarget: true) is { } final)
+            {
+                target = final.FullName;
+            }
+
+            mode = File.GetUnixFileMode(target);
+            if (!mode.Value.HasFlag(UnixFileMode.UserWrite))
+            {
+                throw new UnauthorizedAccessException($"'{System.IO.Path.GetFileName(target)}' is read-only.");
+            }
+        }
+
         DestructiveOperationGuard.Check(target);
         var targetEncoding = encoding ?? Encoding;
         var bom = withBom ?? (HasBom && targetEncoding.BomLength > 0);
@@ -80,6 +98,11 @@ public sealed record TextFile(string Path, string Text, TextEncoding Encoding, b
 
         try
         {
+            if (mode is { } keep && !OperatingSystem.IsWindows())
+            {
+                File.SetUnixFileMode(temporary, keep);
+            }
+
             if (File.Exists(target))
             {
                 File.Replace(temporary, target, destinationBackupFileName: null, ignoreMetadataErrors: true);

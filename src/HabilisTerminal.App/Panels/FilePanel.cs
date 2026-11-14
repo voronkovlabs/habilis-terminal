@@ -1340,7 +1340,7 @@ public sealed partial class FilePanel : Border
             return;
         }
 
-        var trimmed = State.Path.TrimEnd('\\');
+        var trimmed = State.Path.TrimEndSeparator();
         if (System.IO.Path.GetDirectoryName(trimmed) is { } parent && State.HasParent)
         {
             // The cursor lands on the directory we came from (Far).
@@ -1400,7 +1400,7 @@ public sealed partial class FilePanel : Border
             return;
         }
 
-        var name = State.Path.Length == 0 ? Side : System.IO.Path.GetFileName(State.Path.TrimEnd('\\'));
+        var name = State.Path.Length == 0 ? Side : System.IO.Path.GetFileName(State.Path.TrimEndSeparator());
         _title.Text = (string.IsNullOrEmpty(name) ? State.Path : name).ToUpperInvariant();
         _path.Text = State.Path;
     }

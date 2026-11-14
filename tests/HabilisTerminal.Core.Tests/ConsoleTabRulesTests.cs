@@ -54,6 +54,16 @@ public class ConsoleTabRulesTests
     public void The_parent_folder_is_shortened_at_home(string folder, string home, string expected) =>
         Assert.Equal(expected, ConsoleTabRules.ParentForDisplay(folder, home));
 
+    [UnixTheory]
+    [InlineData("/Users/me/work/app", "/Users/me", "~/work")]
+    [InlineData("/Users/me/app", "/Users/me", "~")]
+    [InlineData("/Users/meta/app", "/Users/me", "/Users/meta")]
+    [InlineData("/Volumes/data/app", "/Users/me", "/Volumes/data")]
+    [InlineData("/Users", "/Users/me", "/")]
+    [InlineData("/", "/Users/me", "")]
+    public void The_parent_folder_is_shortened_at_home_on_a_mac(string folder, string home, string expected) =>
+        Assert.Equal(expected, ConsoleTabRules.ParentForDisplay(folder, home));
+
     [Fact]
     public void A_new_tab_takes_the_first_free_colour()
     {

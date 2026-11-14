@@ -10,10 +10,14 @@ public static class TypedLocation
         return clean.Length >= 2 && clean[0] == clean[^1] && clean[0] is '"' or '\'' ? clean[1..^1].Trim() : clean;
     }
 
-    /// <summary>A full path (<c>C:\x</c>, <c>C:/x</c>, <c>\\server\share</c>); what only names something, or a bare <c>C:</c>, is not.</summary>
-    public static bool IsPath(string text) => Path.IsPathFullyQualified(ToWindowsPath(text));
+    /// <summary>
+    /// A full path (<c>C:\x</c>, <c>C:/x</c>, <c>\\server\share</c>; on a Mac <c>/x</c>); what only names something, or a
+    /// bare <c>C:</c>, is not.
+    /// </summary>
+    public static bool IsPath(string text) => Path.IsPathFullyQualified(ToSystemPath(text));
 
-    public static string ToWindowsPath(string text) => text.Replace('/', '\\');
+    /// <summary>On Windows forward slashes become backslashes; elsewhere a backslash is part of a name (#260).</summary>
+    public static string ToSystemPath(string text) => OperatingSystem.IsWindows() ? text.Replace('/', '\\') : text;
 
     /// <summary>
     /// What <c>goto</c> in the console means (issue #152). The same as a paste into the drive menu, and as it is typed by
@@ -33,6 +37,6 @@ public static class TypedLocation
             clean = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile) + clean[1..];
         }
 
-        return IsPath(clean) ? clean : Path.GetFullPath(ToWindowsPath(clean), currentFolder);
+        return IsPath(clean) ? clean : Path.GetFullPath(ToSystemPath(clean), currentFolder);
     }
 }

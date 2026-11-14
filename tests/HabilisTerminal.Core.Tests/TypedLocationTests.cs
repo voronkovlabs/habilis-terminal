@@ -42,4 +42,32 @@ public class TypedLocationTests
     [InlineData(@"Work\a", false)]
     [InlineData("s3://bucket/a/", false)]
     public void Only_a_full_path_counts(string text, bool expected) => Assert.Equal(expected, TypedLocation.IsPath(text));
+
+    [UnixTheory]
+    [InlineData("/Users/me/a.txt", "/Users/me/a.txt")]
+    [InlineData("'/Users/me/a b.txt'", "/Users/me/a b.txt")]
+    [InlineData("sub", "/here/sub")]
+    [InlineData("sub/a b.txt", "/here/sub/a b.txt")]
+    [InlineData("../x", "/x")]
+    [InlineData(@"a\b", @"/here/a\b")]
+    [InlineData("s3://bucket/a/", "s3://bucket/a/")]
+    public void Goto_on_a_mac_takes_full_paths_addresses_and_what_is_relative_to_the_shell(string text, string expected) =>
+        Assert.Equal(expected, TypedLocation.ForGoto(text, "/here", t => t.StartsWith("s3:", StringComparison.Ordinal)));
+
+    [UnixFact]
+    public void Goto_on_a_mac_knows_the_home_folder()
+    {
+        var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+        Assert.Equal(home, TypedLocation.ForGoto("~", "/here", _ => false));
+        Assert.Equal(Path.Combine(home, "docs"), TypedLocation.ForGoto("~/docs", "/here", _ => false));
+    }
+
+    [UnixTheory]
+    [InlineData("/", true)]
+    [InlineData("/Users/me/a.txt", true)]
+    [InlineData("Work", false)]
+    [InlineData("Work/a", false)]
+    [InlineData(@"C:\Work", false)]
+    [InlineData("s3://bucket/a/", false)]
+    public void Only_a_full_unix_path_counts(string text, bool expected) => Assert.Equal(expected, TypedLocation.IsPath(text));
 }

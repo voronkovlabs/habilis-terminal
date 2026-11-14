@@ -145,6 +145,26 @@ public class CopyMoveTests
         Assert.Single(handler.Confirmations);
     }
 
+    [UnixFact]
+    [System.Runtime.Versioning.UnsupportedOSPlatform("windows")]
+    public void Targets_without_write_permission_on_a_mac_need_a_separate_confirmation()
+    {
+        using var sandbox = new TestSandbox();
+        var source = Write(Path.Combine(sandbox.Path, "src", "a.txt"), "new");
+        var target = Write(Path.Combine(sandbox.Path, "dst", "a.txt"), "old");
+        File.SetUnixFileMode(target, UnixFileMode.UserRead | UnixFileMode.GroupRead);
+        var handler = new ScriptedHandler
+        {
+            OnConflict = _ => new ConflictDecision(ConflictAction.Overwrite),
+            OnConfirm = c => c.Kind == ConfirmationKind.OverwriteProtected ? ConfirmationAnswer.Yes : ConfirmationAnswer.Cancel,
+        };
+
+        Copy([source], Path.Combine(sandbox.Path, "dst") + Path.DirectorySeparatorChar, handler);
+
+        Assert.Equal("new", File.ReadAllText(target));
+        Assert.Single(handler.Confirmations);
+    }
+
     [Fact]
     public void Existing_file_policy_skips_without_asking()
     {

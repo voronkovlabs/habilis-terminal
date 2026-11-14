@@ -8,6 +8,7 @@ using Avalonia.Controls.Primitives;
 using Avalonia.Media;
 using HabilisTerminal.App.Panels;
 using HabilisTerminal.Core.Operations;
+using HabilisTerminal.Core.FileSystem;
 
 namespace HabilisTerminal.App.Widgets;
 
@@ -249,7 +250,7 @@ public sealed class OperationToasts
                 : progress.TotalItems > 0 ? (double)progress.DoneItems / progress.TotalItems : 0;
             if (progress.CurrentPath is { } current && !_control.Token.IsCancellationRequested)
             {
-                _current.Text = Path.GetFileName(current.TrimEnd('\\'));
+                _current.Text = Path.GetFileName(current.TrimEndSeparator());
                 _current.ToolTip = current;
             }
 

@@ -193,12 +193,12 @@ public static class FileSearch
             {
                 cancellationToken.ThrowIfCancellationRequested();
                 var inner = entry.InnerPath.Replace('/', '\\').Trim('\\');
-                if (inner.Length == 0 || !request.Mask.IsMatch(Path.GetFileName(inner)))
+                if (inner.Length == 0 || !request.Mask.IsMatch(inner.Split('\\')[^1]))
                 {
                     continue;
                 }
 
-                var item = new FoundItem(path + "\\" + inner, entry.IsFolder) { Container = path, InnerPath = inner };
+                var item = new FoundItem(path + Path.DirectorySeparatorChar + inner.Replace('\\', Path.DirectorySeparatorChar), entry.IsFolder) { Container = path, InnerPath = inner };
                 if (entry.IsFolder)
                 {
                     if (request.Folders && finder is null)

@@ -178,7 +178,7 @@ public static class OperationDialogs
     /// <summary>Yes / Yes to all / No / Cancel questions raised during an operation.</summary>
     public static ConfirmationAnswer Confirm(Window owner, Confirmation confirmation)
     {
-        var name = Path.GetFileName(confirmation.Path.TrimEnd('\\'));
+        var name = Path.GetFileName(confirmation.Path.TrimEndSeparator());
         var (title, question) = confirmation.Kind switch
         {
             ConfirmationKind.OverwriteProtected => ("Protected file", $"'{name}' is {confirmation.Detail}. Overwrite it?"),

@@ -112,7 +112,7 @@ internal sealed class FindSession : IDisposable
     }
 
     public string Display(FoundItem item) =>
-        CommonRoot is { } root && item.Path.StartsWith(root.TrimEnd('\\') + "\\", StringComparison.OrdinalIgnoreCase)
+        CommonRoot is { } root && item.Path.StartsWith(root.WithEndSeparator(), StringComparison.OrdinalIgnoreCase)
             ? System.IO.Path.GetRelativePath(root, item.Path)
             : item.Path;
 

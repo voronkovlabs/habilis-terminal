@@ -9,21 +9,25 @@ public static class PluginFiles
             fileName.EndsWith("." + e.TrimStart('.'), StringComparison.OrdinalIgnoreCase));
 
     /// <summary>
-    /// A location like <c>C:\a.zip\docs\sub</c>: the longest part that is a file, and the rest inside it. Null when no
-    /// part is a file.
+    /// A location like <c>C:\a.zip\docs\sub</c> (on a Mac <c>/data/a.zip/docs/sub</c>): the longest part that is a file,
+    /// and the rest inside it, with backslashes as plugins take it (#260). Null when no part is a file.
     /// </summary>
     public static (string File, string InnerPath)? SplitLocation(string location, Func<string, bool> fileExists)
     {
-        var file = location.TrimEnd('\\');
-        while (file.Length > 3)
+        var windows = OperatingSystem.IsWindows();
+        var separator = windows ? '\\' : '/';
+        var root = windows ? 3 : 1; // "C:\" or "/"
+        var file = location.TrimEnd(separator);
+        while (file.Length > root)
         {
             if (fileExists(file))
             {
-                return (file, location.Length > file.Length ? location[file.Length..].Trim('\\') : string.Empty);
+                var inner = location.Length > file.Length ? location[file.Length..].Trim(separator) : string.Empty;
+                return (file, inner.Replace(separator, '\\'));
             }
 
-            var cut = file.LastIndexOf('\\');
-            if (cut <= 2)
+            var cut = file.LastIndexOf(separator);
+            if (cut < root)
             {
                 return null;
             }

@@ -206,6 +206,48 @@ public class DeleteAndOtherOperationTests
         Assert.Throws<ArgumentException>(() => DirectoryCreator.Create(sandbox.Path, @"x\CON", multipleNames: false));
     }
 
+    [UnixFact]
+    public void Directory_creator_on_a_mac_handles_nesting_lists_and_errors()
+    {
+        using var sandbox = new TestSandbox();
+        File.WriteAllText(Path.Combine(sandbox.Path, "file"), "x");
+
+        var created = DirectoryCreator.Create(sandbox.Path, "a/b/c; second ;a", multipleNames: true);
+
+        Assert.Equal(3, created.Count);
+        Assert.True(Directory.Exists(Path.Combine(sandbox.Path, "a", "b", "c")));
+        Assert.True(Directory.Exists(Path.Combine(sandbox.Path, "second")));
+        Assert.Throws<IOException>(() => DirectoryCreator.Create(sandbox.Path, "file", multipleNames: false));
+        Assert.Throws<ArgumentException>(() => DirectoryCreator.Create(sandbox.Path, "x/..", multipleNames: false));
+        Assert.Equal(Path.Combine(sandbox.Path, "dot."), DirectoryCreator.Create(sandbox.Path, "dot.", multipleNames: false)[0]);
+    }
+
+    [UnixTheory]
+    [InlineData("report.txt", null)]
+    [InlineData("CON", null)]
+    [InlineData("name.", null)]
+    [InlineData("a/b", "characters")]
+    [InlineData("a:b", "characters")]
+    [InlineData("..", "not a valid")]
+    [InlineData("", "empty")]
+    public void Name_rules_on_a_mac(string name, string? errorContains)
+    {
+        if (name.Contains(':') && !OperatingSystem.IsMacOS())
+        {
+            return; // ':' is the Finder's own rule
+        }
+
+        var error = NameRules.Validate(name);
+        if (errorContains is null)
+        {
+            Assert.Null(error);
+        }
+        else
+        {
+            Assert.Contains(errorContains, error, StringComparison.OrdinalIgnoreCase);
+        }
+    }
+
     [WindowsTheory]
     [InlineData("report.txt", null)]
     [InlineData("CON", "reserved")]

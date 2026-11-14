@@ -9,6 +9,7 @@ using HabilisTerminal.App.Operations;
 using HabilisTerminal.App.Panels;
 using HabilisTerminal.App.Widgets;
 using HabilisTerminal.Core.Operations;
+using HabilisTerminal.Core.FileSystem;
 
 namespace HabilisTerminal.App;
 
@@ -34,7 +35,7 @@ public partial class MainWindow
 
         var target = Other(source);
         var names = entries.Select(e => e.Name).ToArray();
-        var initial = inPlace ? names[0] : target.CurrentPath.TrimEnd('\\') + "\\";
+        var initial = inPlace ? names[0] : target.CurrentPath.WithEndSeparator();
         var choice = OperationDialogs.CopyOrMove(this, move, names, initial);
         source.Focus();
         if (choice is not { } chosen)
@@ -61,7 +62,7 @@ public partial class MainWindow
             // The cursor goes to the last copied item in whichever panel shows it (Far).
             foreach (var panel in new[] { target, source })
             {
-                if (string.Equals(Path.GetDirectoryName(last), panel.CurrentPath.TrimEnd('\\'), StringComparison.OrdinalIgnoreCase))
+                if (string.Equals(Path.GetDirectoryName(last), panel.CurrentPath.TrimEndSeparator(), StringComparison.OrdinalIgnoreCase))
                 {
                     panel.State.TrySetCursor(Path.GetFileName(last));
                     panel.Refresh();
@@ -131,7 +132,7 @@ public partial class MainWindow
         {
             var created = DirectoryCreator.Create(panel.CurrentPath, chosen.Text, chosen.Multiple);
             await panel.ReloadAsync();
-            var first = Path.GetRelativePath(panel.CurrentPath, created[0]).Split('\\')[0];
+            var first = Path.GetRelativePath(panel.CurrentPath, created[0]).Split(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)[0];
             panel.State.TrySetCursor(first);
             panel.Refresh();
         }

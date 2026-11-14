@@ -107,6 +107,14 @@ public class PanelStateTests
         Assert.Equal(["..", "x"], Names(Create(@"\\server\share\dir", Dir("x"))));
     }
 
+    [UnixFact]
+    public void Parent_entry_is_first_except_at_the_unix_root()
+    {
+        Assert.Equal(["..", "sub", "a.txt"], Names(Create("/Users/me", File("a.txt"), Dir("sub"))));
+        Assert.Equal(["..", "x"], Names(Create("/Volumes", Dir("x"))));
+        Assert.Equal(["sub"], Names(Create("/", Dir("sub"))));
+    }
+
     [Fact]
     public void Refresh_keeps_cursor_on_the_same_name_and_selection_of_existing_names()
     {

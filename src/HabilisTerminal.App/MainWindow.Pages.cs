@@ -9,6 +9,7 @@ using HabilisTerminal.App.Panels;
 using HabilisTerminal.App.Viewing;
 using HabilisTerminal.Core.Panels;
 using HabilisTerminal.Core.Viewing;
+using HabilisTerminal.Core.FileSystem;
 
 namespace HabilisTerminal.App;
 
@@ -140,8 +141,8 @@ public partial class MainWindow
     private void OpenImage(string path, FilePanel returnTo)
     {
         List<string> files = [path];
-        var folder = Path.GetDirectoryName(path)?.TrimEnd('\\');
-        if (!returnTo.IsPlugin && string.Equals(folder, returnTo.CurrentPath.TrimEnd('\\'), StringComparison.OrdinalIgnoreCase))
+        var folder = Path.GetDirectoryName(path)?.TrimEndSeparator();
+        if (!returnTo.IsPlugin && string.Equals(folder, returnTo.CurrentPath.TrimEndSeparator(), StringComparison.OrdinalIgnoreCase))
         {
             var pictures = returnTo.State.Entries.Where(e => !e.IsDirectory && ImagePage.IsImage(e.Name)).Select(e => Path.Combine(returnTo.CurrentPath, e.Name)).ToList();
             if (pictures.Exists(p => string.Equals(p, path, StringComparison.OrdinalIgnoreCase)))
@@ -390,7 +391,7 @@ public partial class MainWindow
     {
         var directory = Path.GetDirectoryName(file)!;
         FilePanel.InvalidateFolderSizes(file); // the editor may have changed the file's size
-        if (!string.Equals(directory, panel.CurrentPath.TrimEnd('\\'), StringComparison.OrdinalIgnoreCase))
+        if (!string.Equals(directory, panel.CurrentPath.TrimEndSeparator(), StringComparison.OrdinalIgnoreCase))
         {
             await panel.NavigateAsync(directory, Path.GetFileName(file));
         }

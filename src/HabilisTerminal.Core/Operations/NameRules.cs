@@ -5,6 +5,7 @@ namespace HabilisTerminal.Core.Operations;
 /// <summary>
 /// Names Windows handles normally (SPEC §8): no reserved device names, no trailing dots or spaces, no invalid
 /// characters — even though <c>\\?\</c> paths would allow creating them (and nothing could delete them afterwards).
+/// Elsewhere (#260) only what the system forbids, '/' and NUL, and on a Mac ':' too, which the Finder shows as '/'.
 /// </summary>
 public static class NameRules
 {
@@ -15,7 +16,10 @@ public static class NameRules
         "LPT1", "LPT2", "LPT3", "LPT4", "LPT5", "LPT6", "LPT7", "LPT8", "LPT9", "LPT¹", "LPT²", "LPT³",
     };
 
-    private static readonly char[] InvalidCharacters = Path.GetInvalidFileNameChars();
+    private static readonly char[] InvalidCharacters =
+        OperatingSystem.IsMacOS() ? [.. Path.GetInvalidFileNameChars(), ':'] : Path.GetInvalidFileNameChars();
+
+    private static readonly char[] Separators = OperatingSystem.IsWindows() ? ['\\', '/'] : ['/'];
 
     /// <summary>Returns why the name is not allowed, or null when it is fine.</summary>
     public static string? Validate(string name)
@@ -35,6 +39,11 @@ public static class NameRules
             return $"The name contains characters that are not allowed: {string.Join(" ", name.Where(c => InvalidCharacters.Contains(c)).Distinct().Select(Describe))}.";
         }
 
+        if (!OperatingSystem.IsWindows())
+        {
+            return null;
+        }
+
         if (name.EndsWith('.') || name.EndsWith(' '))
         {
             return "The name must not end with a dot or a space.";
@@ -52,7 +61,7 @@ public static class NameRules
     /// <summary>Validates every component of a relative path such as <c>a\b\c</c>.</summary>
     public static string? ValidateRelativePath(string path)
     {
-        foreach (var part in path.Split(['\\', '/'], StringSplitOptions.RemoveEmptyEntries))
+        foreach (var part in path.Split(Separators, StringSplitOptions.RemoveEmptyEntries))
         {
             if (Validate(part) is { } error)
             {
