@@ -46,6 +46,11 @@ public partial class MainWindow
         _tabStrip.TabClosing += tab => CloseTab(tab);
         _tabStrip.NewTabRequested += NewTab;
         _hintButton = new ConsoleHintButton(this, Workspace, NewTab);
+
+        // A click on the edge's tab does what Esc does at the prompt: the panels come back, the keys stay in the console.
+        var edge = new ConsoleEdge(() => CollapseConsole(stopGrowing: true));
+        WorkspaceLayout.SetRole(edge, WorkspaceRole.ConsoleEdge);
+        Workspace.Children.Add(edge);
         Workspace.LayoutUpdated += (_, _) => UpdateHintButton();
     }
 

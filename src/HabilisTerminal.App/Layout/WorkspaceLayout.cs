@@ -14,6 +14,9 @@ public enum WorkspaceRole
     RightPanel,
     Terminal,
     ConsoleTabs,
+
+    /// <summary>The top edge of the console grown over the panels (issue #288), in the band just above it.</summary>
+    ConsoleEdge,
 }
 
 /// <summary>
@@ -138,8 +141,21 @@ public sealed class WorkspaceLayout : Panel
         WorkspaceRole.LeftPanel => left,
         WorkspaceRole.RightPanel => right,
         WorkspaceRole.ConsoleTabs => ShowsTabStrip ? new Rect(terminal.Left, terminal.Bottom, terminal.Width, StripHeight) : default,
+        WorkspaceRole.ConsoleEdge => EdgeSlot(terminal),
         _ => terminal,
     };
+
+    /// <summary>Above the console while it is grown over both panels and some of them still shows; nothing otherwise.</summary>
+    private Rect EdgeSlot(Rect terminal)
+    {
+        if (OverlayRows <= 0 || !LeftVisible || !RightVisible || terminal.Top <= 0)
+        {
+            return default;
+        }
+
+        var height = Math.Min(Widgets.ConsoleEdge.BandHeight, terminal.Top);
+        return new Rect(terminal.Left, terminal.Top - height, terminal.Width, height);
+    }
 
     /// <summary>A console not in front keeps its last size, so its shell gets no resize until it is shown.</summary>
     private static bool IsHiddenConsole(Control child) => GetRole(child) == WorkspaceRole.Terminal && child.IsVisible == false;
