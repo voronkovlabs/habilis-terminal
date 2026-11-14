@@ -171,8 +171,21 @@ __habi_request() {
 
 zle -N __habi_request
 
+# Esc (the window sends it as ESC [9028~, issue #270): on an empty line, while the panels are shown, the keys go to the
+# panel; on a line with text the line is cleared, as in Far.
+__habi_escape() {
+    if [[ -z $BUFFER && -f $HABI_CHANNEL/panels-shown ]]; then
+        __habi_osc '7731;habi;focus-panel'
+    else
+        BUFFER=
+    fi
+}
+
+zle -N __habi_escape
+
 for __habi_keymap in emacs viins vicmd; do
     bindkey -M $__habi_keymap '\e[9024~' __habi_request
+    bindkey -M $__habi_keymap '\e[9028~' __habi_escape
     bindkey -M $__habi_keymap '\e[9025~' __habi_gray_add
     bindkey -M $__habi_keymap '\e[9026~' __habi_gray_subtract
     bindkey -M $__habi_keymap '\e[9027~' __habi_gray_multiply

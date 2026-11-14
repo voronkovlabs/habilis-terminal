@@ -5,3 +5,4 @@
 *.zsh text eol=lf
 src/HabilisTerminal.Shell/Scripts/zsh/.z* text eol=lf
 tools/mac/*.sh text eol=lf
+*.bash text eol=lf

@@ -13,6 +13,8 @@
     <None Include="Scripts\zsh\.zprofile" Link="shell\zsh\.zprofile" CopyToOutputDirectory="PreserveNewest" />
     <None Include="Scripts\zsh\.zshrc" Link="shell\zsh\.zshrc" CopyToOutputDirectory="PreserveNewest" />
     <None Include="Scripts\zsh\.zlogin" Link="shell\zsh\.zlogin" CopyToOutputDirectory="PreserveNewest" />
+    <!-- bash (#270): its rcfile. -->
+    <None Include="Scripts\bash\habilis.bash" Link="shell\bash\habilis.bash" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
   <ItemGroup>
     <InternalsVisibleTo Include="HabilisTerminal.Shell.Tests" />

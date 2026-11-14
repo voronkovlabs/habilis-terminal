@@ -15,13 +15,14 @@ internal sealed partial class TestShell : IDisposable
     private readonly StringBuilder _output = new();
     private readonly List<(int Id, string Op, string Status)> _completed = [];
 
-    public TestShell(bool zsh = false)
+    public TestShell(bool zsh = false, string? program = null)
     {
+        zsh = zsh || program is not null;
         WorkingDirectory = Path.Combine(Path.GetTempPath(), "habi-tests", Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(WorkingDirectory);
 
         Host = new ShellHost(zsh
-            ? new ShellHostOptions("/bin/zsh", ShellScripts.IntegrationScriptPath, WorkingDirectory, LoadProfile: false)
+            ? new ShellHostOptions(program ?? "/bin/zsh", ShellScripts.IntegrationScriptPath, WorkingDirectory, LoadProfile: false)
             : new ShellHostOptions(
                 PwshLocator.Find() ?? throw new InvalidOperationException("pwsh.exe not found"),
                 ShellScripts.IntegrationScriptPath,

@@ -28,6 +28,12 @@ public enum ShellKind
     /// <summary>zsh: shell/zsh through ZDOTDIR, requests as ESC [9024~ (macOS and Linux).</summary>
     Zsh,
 
+    /// <summary>
+    /// bash: shell/bash/habilis.bash as its rcfile (#270): prompt marks, the folder, command lines and cd requests; run
+    /// and insert are typed into the line.
+    /// </summary>
+    Bash,
+
     /// <summary>Any other program: a plain console without integration.</summary>
     Other,
 }
@@ -207,6 +213,7 @@ public sealed class ShellHost : IDisposable
         {
             "pwsh" or "powershell" => ShellKind.Pwsh,
             "zsh" => ShellKind.Zsh,
+            "bash" => ShellKind.Bash,
             _ => ShellKind.Other,
         };
 
@@ -284,6 +291,24 @@ public sealed class ShellHost : IDisposable
         var extra = string.IsNullOrWhiteSpace(_options.ExtraArguments)
             ? []
             : _options.ExtraArguments.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        if (Kind == ShellKind.Bash)
+        {
+            // Not a login shell, which would ignore --rcfile: habilis.bash runs the login files itself.
+            environment["HABI_INTEGRATION"] = _options.Integration ? "1" : string.Empty;
+            if (!_options.LoadProfile)
+            {
+                environment["HABI_NO_PROFILE"] = "1";
+            }
+
+            if (!string.IsNullOrWhiteSpace(_options.InitCommand))
+            {
+                environment["HABI_INIT"] = _options.InitCommand;
+            }
+
+            var rcfile = Path.Combine(Path.GetDirectoryName(_options.ScriptPath) ?? AppContext.BaseDirectory, "bash", "habilis.bash");
+            return new PtyStartInfo(_options.PwshPath, string.Empty, _options.WorkingDirectory, columns, rows, environment, ["--rcfile", rcfile, "-i", .. extra]);
+        }
+
         return new PtyStartInfo(
             _options.PwshPath,
             string.Empty,
@@ -295,8 +320,14 @@ public sealed class ShellHost : IDisposable
             ArgumentZero: "-" + Path.GetFileName(_options.PwshPath));
     }
 
-    /// <summary>Input from the terminal control (keys, replies to terminal queries).</summary>
-    public void Write(string data) => _session?.Write(data);
+    /// <summary>
+    /// Input from the terminal control (keys, replies to terminal queries). For zsh a lone Esc goes as a key of its own
+    /// (#270): there Esc is the start of the Option keys and cannot be bound by itself.
+    /// </summary>
+    public void Write(string data) => _session?.Write(Kind == ShellKind.Zsh && data == "\u001b" ? ZshEscapeKey : data);
+
+    /// <summary>The private sequence habilis.zsh binds to Esc: the panel on an empty line, else the line cleared.</summary>
+    public const string ZshEscapeKey = "\u001b[9028~";
 
     public void Resize(int columns, int rows) => _session?.Resize(columns, rows);
 
@@ -573,16 +604,30 @@ public sealed class ShellHost : IDisposable
             _inFlightSince = DateTime.UtcNow;
         }
 
+        // bash 3.2 can neither run a line nor insert into it from a key binding (#270): those are typed.
+        if (Kind == ShellKind.Bash && request.Op != "cd")
+        {
+            var text = request.Arguments.Values.FirstOrDefault() ?? string.Empty;
+            _session.Write(request.Op switch
+            {
+                "run" => "\u0005\u0015" + text + "\r", // end of line, cut it (Ctrl+Y gives it back), then the command
+                "insert" => text,
+                _ => string.Empty,
+            });
+            CompleteInFlight(request.Id.ToString(System.Globalization.CultureInfo.InvariantCulture), "ok");
+            return;
+        }
+
         WriteRequestFile(request);
         _timeoutTimer.Change(RequestTimeout, Timeout.InfiniteTimeSpan);
-        _session.Write(Kind == ShellKind.Zsh ? ZshRequestKey : Win32InputSequence.KeyPress(Win32InputSequence.VkF24));
+        _session.Write(Kind is ShellKind.Zsh or ShellKind.Bash ? ZshRequestKey : Win32InputSequence.KeyPress(Win32InputSequence.VkF24));
     }
 
     private void WriteRequestFile(Request request)
     {
-        if (Kind == ShellKind.Zsh)
+        if (Kind is ShellKind.Zsh or ShellKind.Bash)
         {
-            WriteZshRequest(request);
+            WriteZshRequest(request); // plain assignments, which bash reads too
             return;
         }
 

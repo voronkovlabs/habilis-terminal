@@ -166,6 +166,57 @@ public class UnixConsoleTests
         Assert.Equal(2, keys.Count);
     }
 
+    [UnixFact]
+    public async Task Zsh_esc_gives_the_keys_to_the_panel_on_an_empty_line_and_clears_a_typed_one()
+    {
+        using var shell = new TestShell(zsh: true);
+        var asked = 0;
+        shell.Host.FocusPanelRequested += () => Interlocked.Increment(ref asked);
+        await shell.WaitIdleAsync();
+        shell.Host.PanelsShown = true;
+
+        shell.Host.Write("\u001b");
+        await TestShell.WaitUntilAsync(() => Volatile.Read(ref asked) == 1, "focus-panel");
+
+        // A typed line is cleared: Enter then runs nothing.
+        shell.Host.Write("echo should-not-run");
+        await Task.Delay(300);
+        shell.Host.Write("\u001b");
+        await Task.Delay(300);
+        shell.Host.Write("echo after-esc\r");
+        await shell.WaitForTextAsync("after-esc\r\n");
+        Assert.DoesNotContain("should-not-run\r\n", shell.Text, StringComparison.Ordinal);
+        Assert.Equal(1, Volatile.Read(ref asked));
+    }
+
+    [UnixFact]
+    public async Task Bash_reports_its_folder_commands_and_exit_codes_and_follows_cd()
+    {
+        // Issue #270; macOS keeps bash 3.2.
+        using var shell = new TestShell(program: "/bin/bash");
+        var lines = new ConcurrentQueue<string>();
+        var codes = new ConcurrentQueue<int?>();
+        shell.Host.CommandLineAccepted += lines.Enqueue;
+        shell.Host.CommandFinished += codes.Enqueue;
+        await shell.WaitIdleAsync();
+        await TestShell.WaitUntilAsync(() => SamePath(shell.Host.CurrentDirectory, shell.WorkingDirectory), "starting folder");
+
+        shell.Host.Write("echo hi-from-bash; false\r");
+        await shell.WaitForTextAsync("hi-from-bash");
+        await TestShell.WaitUntilAsync(() => !codes.IsEmpty, "command finished");
+        Assert.Equal("echo hi-from-bash; false", Assert.Single(lines));
+        Assert.Equal(1, Assert.Single(codes));
+
+        var target = shell.CreateDirectory("bash dir");
+        var id = shell.Host.ChangeDirectory(target);
+        Assert.Equal("ok", await shell.WaitCompletedAsync(id));
+        await TestShell.WaitUntilAsync(() => SamePath(shell.Host.CurrentDirectory, target), "folder after cd");
+
+        // Run from the panel: typed into the line.
+        Assert.Equal("ok", await shell.WaitCompletedAsync(shell.Host.Run("echo ran-in-bash")));
+        await shell.WaitForTextAsync("ran-in-bash\r\n");
+    }
+
     private static int CountOf(string text, string part)
     {
         var count = 0;
