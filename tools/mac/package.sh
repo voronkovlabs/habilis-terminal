@@ -22,9 +22,12 @@ for sdk in HabilisTerminal.Plugins.Sdk HabilisTerminal.Plugins.Sdk.Avalonia; do
 done
 for project in Habilis.Archives Habilis.Aws.S3 Habilis.Aws.Sqs Habilis.Aws.SageMaker Habilis.GitHub Habilis.Samples.Demo Habilis.Samples.FileFormat; do
   id=$(sed -n 's/.*"id": *"\([^"]*\)".*/\1/p' "plugins/$project/plugin.json" | head -1)
-  dotnet publish "plugins/$project" -c Release -o "$publish/plugins/$id" -nologo -v q
-  [ -f "plugins/$project/README.md" ] && cp "plugins/$project/README.md" "$publish/plugins/$id/"
-  rm -rf "$publish/plugins/$id/native/win-x64" "$publish/plugins/$id/native/win-arm64"
+  # No dot in the folder name (#305): codesign takes a dotted folder in Contents/MacOS for a nested bundle and refuses
+  # to sign. The app reads a plugin's id from its plugin.json, not from the folder.
+  folder="$publish/plugins/${id//./-}"
+  dotnet publish "plugins/$project" -c Release -o "$folder" -nologo -v q
+  [ -f "plugins/$project/README.md" ] && cp "plugins/$project/README.md" "$folder/"
+  rm -rf "$folder/native/win-x64" "$folder/native/win-arm64"
 done
 
 # The icon: habi.ico's largest frame, scaled to every size an .icns holds.
