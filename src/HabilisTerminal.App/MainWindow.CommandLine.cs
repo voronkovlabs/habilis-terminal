@@ -274,9 +274,12 @@ public partial class MainWindow
             return;
         }
 
-        if (!HandlePluginKey(panel, key, KeyModifiers.None) && !HandleWindowKey(panel, key, KeyModifiers.None))
+        if (!HandlePluginKey(panel, key, KeyModifiers.None) && !HandleWindowKey(panel, key, KeyModifiers.None) &&
+            !panel.HandleKey(key, KeyModifiers.None) && key == Key.Escape)
         {
-            panel.HandleKey(key, KeyModifiers.None);
+            // Esc on an empty line that the panel has no use for (no quick filter, no plugin cursor): the keys go to
+            // the command line, and the next Esc there brings them back (issue #290).
+            FocusTerminal();
         }
     }
 
