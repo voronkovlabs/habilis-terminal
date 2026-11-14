@@ -85,7 +85,7 @@ public static class IssueText
             .AppendLine("| | |")
             .AppendLine("|---|---|")
             .AppendLine(CultureInfo.InvariantCulture, $"| Version | {report.Version} |")
-            .AppendLine(CultureInfo.InvariantCulture, $"| Windows | {report.Os} |")
+            .AppendLine(CultureInfo.InvariantCulture, $"| System | {report.Os} |")
             .AppendLine(CultureInfo.InvariantCulture, $"| Time | {report.Time.ToUniversalTime():yyyy-MM-dd HH:mm:ss} UTC |")
             .AppendLine(CultureInfo.InvariantCulture, $"| Caught by | {report.Source} |")
             .AppendLine(CultureInfo.InvariantCulture, $"| Signature | `{report.Signature}` |")

@@ -102,28 +102,54 @@ public interface IOperationHandler
 /// <summary>Raised when the user chooses Cancel in a conflict, error or confirmation.</summary>
 public sealed class OperationCanceledByUserException() : OperationCanceledException("The operation was cancelled.");
 
-/// <summary>Pause / resume and cancellation shared by an operation and its UI.</summary>
+/// <summary>
+/// Pause / resume and cancellation shared by an operation and its UI. The UI may still ask after the operation has ended
+/// and disposed it (a progress update posted just before the end, issue #310): the token, the state and the buttons stay
+/// safe then and do nothing.
+/// </summary>
 public sealed class OperationControl : IDisposable
 {
     private readonly ManualResetEventSlim _running = new(initialState: true);
     private readonly CancellationTokenSource _cancellation = new();
+    private volatile bool _disposed;
 
-    public CancellationToken Token => _cancellation.Token;
+    public OperationControl() => Token = _cancellation.Token;
 
-    public bool IsPaused => !_running.IsSet;
+    /// <summary>Taken once: a token keeps answering after its source is disposed, the source's property does not.</summary>
+    public CancellationToken Token { get; }
 
-    public void Pause() => _running.Reset();
+    public bool IsPaused => !_disposed && !_running.IsSet;
 
-    public void Resume() => _running.Set();
+    public void Pause()
+    {
+        if (!_disposed)
+        {
+            _running.Reset();
+        }
+    }
+
+    public void Resume()
+    {
+        if (!_disposed)
+        {
+            _running.Set();
+        }
+    }
 
     public void Cancel()
     {
+        if (_disposed)
+        {
+            return;
+        }
+
         _cancellation.Cancel();
         _running.Set();
     }
 
     public void Dispose()
     {
+        _disposed = true;
         _running.Dispose();
         _cancellation.Dispose();
     }
