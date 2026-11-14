@@ -36,7 +36,7 @@ public sealed class LibArchiveTests
 
         using var archive = engine.Open(zip, anyFormat: false)!;
         Assert.Contains("ZIP", archive.Format.Name, StringComparison.OrdinalIgnoreCase);
-        Assert.False(archive.Format.CanWrite);
+        Assert.True(archive.Format.CanWrite);
         Assert.Equal(["docs\\guide\\intro.md", "readme.txt"], archive.Items.Where(i => !i.IsFolder).Select(i => i.Path).Order());
         Assert.Equal(5, archive.Items.Single(i => i.Path == "readme.txt").Size);
 
