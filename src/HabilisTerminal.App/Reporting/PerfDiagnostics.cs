@@ -116,11 +116,13 @@ internal static class PerfDiagnostics
         // Measuring starts while the window is being built, inside an operation the hooks did not see begin.
         _dispatched = "startup";
         Perf.Start(Environment.CurrentManagedThreadId);
-        _uiThreadId = (int)GetCurrentThreadId();
+        // Thread ids, handles and the stack helper are Windows calls (issue #307: on a Mac, turning the setting on crashed).
+        var windows = OperatingSystem.IsWindows();
+        _uiThreadId = windows ? (int)GetCurrentThreadId() : -1;
         // Avalonia's dispatcher has no operation hooks and no message filter (issue #253): a stall names no operation yet.
         _processorsAtPeriodStart = MachineLoad.ProcessorTimes();
-        _stacks = new StackSamplerClient();
-        var uiThread = OpenThread(ThreadQueryLimitedInformation, false, GetCurrentThreadId());
+        _stacks = windows ? new StackSamplerClient() : null;
+        var uiThread = windows ? OpenThread(ThreadQueryLimitedInformation, false, GetCurrentThreadId()) : IntPtr.Zero;
         _watchdog = new Thread(() => Watch(dispatcher, uiThread)) { IsBackground = true, Name = WatchdogName };
         _watchdog.Start();
         _flush = new Timer(_ => FlushAndMaybeSend(), null, FlushEvery, FlushEvery);
@@ -276,6 +278,11 @@ internal static class PerfDiagnostics
 
     private static string? DescriptionOf(uint threadId)
     {
+        if (!OperatingSystem.IsWindows())
+        {
+            return null;
+        }
+
         var handle = OpenThread(ThreadQueryLimitedInformation, false, threadId);
         if (handle == IntPtr.Zero)
         {
@@ -301,6 +308,11 @@ internal static class PerfDiagnostics
 
     private static int? MemoryLoad()
     {
+        if (!OperatingSystem.IsWindows())
+        {
+            return null;
+        }
+
         var status = new MemoryStatusEx { Length = (uint)Marshal.SizeOf<MemoryStatusEx>() };
         return GlobalMemoryStatusEx(ref status) ? (int)status.MemoryLoad : null;
     }

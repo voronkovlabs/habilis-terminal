@@ -72,6 +72,9 @@ jobs:
         if: always()
         run: |
           osascript -e 'quit app "Terminal"' || true
+          # Performance collection on (#307): turning it on crashed the app on a Mac. A settings.json beside habi also
+          # makes this a portable copy.
+          echo '{ "diagnostics.performance": true }' > ./src/HabilisTerminal.App/bin/Release/net10.0/settings.json
           # The runner's login shell is bash; a Mac's is zsh, which has the integration (#268).
           SHELL=/bin/zsh ./src/HabilisTerminal.App/bin/Release/net10.0/habi > habi.log 2>&1 &
           pid=$!
