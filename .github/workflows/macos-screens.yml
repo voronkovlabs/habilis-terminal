@@ -86,6 +86,13 @@ jobs:
           screencapture -x screens/7b-habilis-drives.png
           osascript -e 'tell application "System Events" to key code 53' || true
           sleep 1
+          # Get Info on a file (#274): Down to a file, then Ctrl+A (key code 0 is A).
+          osascript -e 'tell application "System Events" to key code 125' || true
+          osascript -e 'tell application "System Events" to key code 0 using control down' || true
+          sleep 2
+          screencapture -x screens/7e-habilis-get-info.png
+          osascript -e 'tell application "System Events" to key code 53' || true
+          sleep 1
           # The Mac's menu bar (#273): the app menu (item 1 is Apple's), then our Files menu.
           osascript -e 'tell application "System Events" to tell (first process whose unix id is '"$pid"') to click menu bar item 2 of menu bar 1' || true
           sleep 1
@@ -117,6 +124,7 @@ jobs:
         if: always()
         run: |
           dotnet tool restore
+          dotnet vpk pack -H 2>&1 | grep -iE "plist|bundle|icon|sign|entitle|notar|keychain" | head -30 || true
           chmod +x tools/mac/package.sh
           tools/mac/package.sh 0.0.1 osx-arm64 mac-package 2>&1 | tail -40
           # The app from the disk image: does it start as a Mac app (Dock name, icon)?

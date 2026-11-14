@@ -265,11 +265,15 @@ public static class OperationDialogs
         bool? State(FileAttributes flag) =>
             attributes.All(a => (a & flag) != 0) ? true : attributes.All(a => (a & flag) == 0) ? false : null;
 
-        var flags = new (string Label, FileAttributes Flag)[]
-        {
-            ("_Read-only", FileAttributes.ReadOnly), ("A_rchive", FileAttributes.Archive), ("_Hidden", FileAttributes.Hidden),
-            ("_System", FileAttributes.System), ("_Not content indexed", FileAttributes.NotContentIndexed), ("_Temporary", FileAttributes.Temporary),
-        };
+        // Off Windows (#274) a file has no archive, system or index flags: hidden (the Finder's) and its permissions.
+        var unix = !OperatingSystem.IsWindows();
+        var flags = unix
+            ? [("_Hidden", FileAttributes.Hidden)]
+            : new (string Label, FileAttributes Flag)[]
+            {
+                ("_Read-only", FileAttributes.ReadOnly), ("A_rchive", FileAttributes.Archive), ("_Hidden", FileAttributes.Hidden),
+                ("_System", FileAttributes.System), ("_Not content indexed", FileAttributes.NotContentIndexed), ("_Temporary", FileAttributes.Temporary),
+            };
         var boxes = flags.Select(f => new CheckBox { Content = f.Label, IsThreeState = paths.Count > 1, IsChecked = State(f.Flag), Tag = f.Flag }).ToArray();
         var compressed = new CheckBox { Content = "_Compressed", IsThreeState = paths.Count > 1, IsChecked = State(FileAttributes.Compressed) };
         var encrypted = new CheckBox { Content = "_Encrypted", IsThreeState = paths.Count > 1, IsChecked = State(FileAttributes.Encrypted) };
@@ -300,8 +304,18 @@ public static class OperationDialogs
             columns.Add(box);
         }
 
-        columns.Add(compressed);
-        columns.Add(encrypted);
+        if (unix)
+        {
+            compressed.IsVisible = encrypted.IsVisible = false;
+            compressed.IsChecked = encrypted.IsChecked = null; // left as they are
+        }
+        else
+        {
+            columns.Add(compressed);
+            columns.Add(encrypted);
+        }
+
+        var permissions = OperatingSystem.IsWindows() ? null : Permissions(paths);
 
         var dates = new Grid { Margin = new Thickness(0, 10, 0, 0) };
         dates.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
@@ -341,12 +355,22 @@ public static class OperationDialogs
             body.Children.Add(LinkSection(link));
         }
 
+        if (unix && paths.Count == 1 && UnixDetails(paths[0]) is { Length: > 0 } details)
+        {
+            body.Children.Add(Description(details, top: 4));
+        }
+
         body.Children.Add(columns.Panel);
+        if (permissions is not null)
+        {
+            body.Children.Add(permissions.Value.Panel);
+        }
+
         body.Children.Add(dates);
         body.Children.Add(Description(paths.Count > 1 ? "Empty dates are left unchanged." : string.Empty, top: 4));
         body.Children.Add(recursive);
 
-        var accepted = ThemedDialog.Show(owner, "Attributes", body,
+        var accepted = ThemedDialog.Show(owner, unix ? "Get Info" : "Attributes", body,
             [new DialogButton<bool>("Set", true, IsDefault: true), new DialogButton<bool>("Cancel", false, IsCancel: true)], false);
         if (!accepted)
         {
@@ -372,10 +396,26 @@ public static class OperationDialogs
                 ? value.ToUniversalTime()
                 : null;
 
+        UnixFileMode modeSet = 0, modeClear = 0;
+        foreach (var box in permissions?.Boxes ?? [])
+        {
+            var bit = (UnixFileMode)box.Tag!;
+            if (box.IsChecked == true)
+            {
+                modeSet |= bit;
+            }
+            else if (box.IsChecked == false)
+            {
+                modeClear |= bit;
+            }
+        }
+
         return new AttributeChange
         {
             Set = set,
             Clear = clear,
+            ModeSet = modeSet,
+            ModeClear = modeClear,
             Compressed = compressed.IsChecked,
             Encrypted = encrypted.IsChecked,
             CreationTimeUtc = Parse(created, single?.CreationTime),
@@ -383,6 +423,115 @@ public static class OperationDialogs
             LastAccessTimeUtc = Parse(accessed, single?.LastAccessTime),
             Recursive = recursive.IsChecked == true,
         };
+    }
+
+    /// <summary>Read, write and run for the owner, the group and everyone, as Get Info and ls show them (#274).</summary>
+    [System.Runtime.Versioning.UnsupportedOSPlatform("windows")]
+    private static (Grid Panel, CheckBox[] Boxes)? Permissions(IReadOnlyList<string> paths)
+    {
+        UnixFileMode[] modes;
+        try
+        {
+            modes = [.. paths.Select(File.GetUnixFileMode)];
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or PlatformNotSupportedException)
+        {
+            return null;
+        }
+
+        var grid = new Grid { Margin = new Thickness(0, 10, 0, 0) };
+        for (var c = 0; c < 4; c++)
+        {
+            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = c == 0 ? new GridLength(90) : new GridLength(80) });
+        }
+
+        var rows = new (string Who, UnixFileMode Read, UnixFileMode Write, UnixFileMode Run)[]
+        {
+            ("Owner", UnixFileMode.UserRead, UnixFileMode.UserWrite, UnixFileMode.UserExecute),
+            ("Group", UnixFileMode.GroupRead, UnixFileMode.GroupWrite, UnixFileMode.GroupExecute),
+            ("Everyone", UnixFileMode.OtherRead, UnixFileMode.OtherWrite, UnixFileMode.OtherExecute),
+        };
+        grid.RowDefinitions.Add(new RowDefinition());
+        var headers = new[] { "Permissions", "Read", "Write", "Run" };
+        for (var c = 0; c < headers.Length; c++)
+        {
+            var header = Description(headers[c], top: 0);
+            Grid.SetColumn(header, c);
+            grid.Children.Add(header);
+        }
+
+        var boxes = new List<CheckBox>();
+        for (var r = 0; r < rows.Length; r++)
+        {
+            grid.RowDefinitions.Add(new RowDefinition());
+            var who = Label(rows[r].Who);
+            Grid.SetRow(who, r + 1);
+            grid.Children.Add(who);
+            var bits = new[] { rows[r].Read, rows[r].Write, rows[r].Run };
+            for (var c = 0; c < bits.Length; c++)
+            {
+                var bit = bits[c];
+                var box = new CheckBox
+                {
+                    IsThreeState = paths.Count > 1,
+                    IsChecked = modes.All(m => (m & bit) != 0) ? true : modes.All(m => (m & bit) == 0) ? false : null,
+                    Tag = bit,
+                };
+                Grid.SetRow(box, r + 1);
+                Grid.SetColumn(box, c + 1);
+                grid.Children.Add(box);
+                boxes.Add(box);
+            }
+        }
+
+        return (grid, [.. boxes]);
+    }
+
+    /// <summary>Owner and group, and on a Mac the Finder's tags (stat and mdls, the system's own tools).</summary>
+    private static string UnixDetails(string path)
+    {
+        var lines = new List<string>();
+        if (Tool("stat", OperatingSystem.IsMacOS() ? ["-f", "%Su:%Sg", path] : ["-c", "%U:%G", path]) is { Length: > 0 } owner && owner.Split(':') is [var user, var group])
+        {
+            lines.Add($"Owner: {user}    Group: {group}");
+        }
+
+        if (OperatingSystem.IsMacOS() && Tool("mdls", ["-raw", "-name", "kMDItemUserTags", path]) is { } raw && raw.StartsWith('('))
+        {
+            var tags = raw.Trim('(', ')', ' ', '\n').Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries)
+                .Select(t => t.Trim('"').Split('\n')[0]).Where(t => t.Length > 0).ToArray();
+            if (tags.Length > 0)
+            {
+                lines.Add("Tags: " + string.Join(", ", tags));
+            }
+        }
+
+        return string.Join("\n", lines);
+    }
+
+    private static string? Tool(string name, IReadOnlyList<string> arguments)
+    {
+        try
+        {
+            var start = new System.Diagnostics.ProcessStartInfo(name) { RedirectStandardOutput = true, RedirectStandardError = true, UseShellExecute = false };
+            foreach (var argument in arguments)
+            {
+                start.ArgumentList.Add(argument);
+            }
+
+            using var process = System.Diagnostics.Process.Start(start);
+            if (process is null)
+            {
+                return null;
+            }
+
+            var output = process.StandardOutput.ReadToEnd().Trim();
+            return process.WaitForExit(3000) && process.ExitCode == 0 ? output : null;
+        }
+        catch (Exception ex) when (ex is System.ComponentModel.Win32Exception or InvalidOperationException)
+        {
+            return null;
+        }
     }
 
     /// <summary>Simple message with one OK button (refusals, validation errors).</summary>

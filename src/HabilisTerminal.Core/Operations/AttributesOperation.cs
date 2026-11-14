@@ -21,6 +21,12 @@ public sealed record AttributeChange
 
     public DateTime? LastAccessTimeUtc { get; init; }
 
+    /// <summary>Off Windows (#274): permission bits to switch on, as Get Info and chmod do.</summary>
+    public UnixFileMode ModeSet { get; init; }
+
+    /// <summary>Off Windows: permission bits to switch off.</summary>
+    public UnixFileMode ModeClear { get; init; }
+
     /// <summary>Apply to everything inside selected directories (links are not entered).</summary>
     public bool Recursive { get; init; }
 
@@ -89,8 +95,20 @@ public sealed class AttributesOperation : FileOperation
                 File.SetAttributes(path, updated & ~(FileAttributes.Directory | FileAttributes.ReparsePoint | FileAttributes.Compressed | FileAttributes.Encrypted));
             }
 
-            // Times on read-only files need the attribute off for a moment.
-            var readOnly = (updated & FileAttributes.ReadOnly) != 0 && !isDirectory;
+            // Off Windows the permissions (#274); read-only there is only what they say.
+            if (!OperatingSystem.IsWindows() && (_change.ModeSet | _change.ModeClear) != 0 && !isLink)
+            {
+                var mode = File.GetUnixFileMode(path);
+                var wanted = (mode & ~_change.ModeClear) | _change.ModeSet;
+                if (wanted != mode)
+                {
+                    File.SetUnixFileMode(path, wanted);
+                }
+            }
+
+            // Times on read-only files need the attribute off for a moment (Windows: off Windows it would rewrite the
+            // permissions).
+            var readOnly = OperatingSystem.IsWindows() && (updated & FileAttributes.ReadOnly) != 0 && !isDirectory;
             if (readOnly && (_change.CreationTimeUtc ?? _change.LastWriteTimeUtc ?? _change.LastAccessTimeUtc) is not null)
             {
                 File.SetAttributes(path, updated & ~FileAttributes.ReadOnly & ~FileAttributes.Directory);
