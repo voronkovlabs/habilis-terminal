@@ -2,8 +2,9 @@
 # Habilis Terminal for macOS (issue #276): Habilis Terminal.app through Velopack (an installer .pkg, a portable zip and
 # the update packages) and a disk image with the app and a link to /Applications. Runs on a macOS runner.
 #   tools/mac/package.sh <version> <rid: osx-arm64 | osx-x64> <output folder>
-# Unsigned: macOS asks the user to allow the app once (System Settings > Privacy & Security > Open Anyway) until an
-# Apple Developer ID signs and notarizes it (the owner's decision).
+# Ad-hoc signed (issue #305): macOS asks the user to allow the app once (System Settings > Privacy & Security > Open
+# Anyway) until an Apple Developer ID signs and notarizes it (#13, the owner's decision). Without any signature, macOS
+# on Apple Silicon calls a downloaded app damaged and offers only the Trash.
 set -euo pipefail
 version=$1
 rid=$2
@@ -59,13 +60,16 @@ plutil -lint "$plist"
 
 dotnet vpk pack --packId HabilisTerminal --packVersion "$version" --packDir "$app" --mainExe habi \
   --packTitle "Habilis Terminal" --packAuthors "Sergei Voronkov" --icon "$out/habi.icns" \
-  --bundleId com.voronkovlabs.habilisterminal --runtime "$rid" --channel "$rid" --outputDir "$out/releases"
+  --bundleId com.voronkovlabs.habilisterminal --runtime "$rid" --channel "$rid" --outputDir "$out/releases"   --signAppIdentity -
 
 # The disk image: the app from the portable zip, next to a link to /Applications to drag it onto.
 stage="$out/dmg-$rid"
 rm -rf "$stage"
 mkdir -p "$stage"
 ditto -x -k "$out/releases/HabilisTerminal-$rid-Portable.zip" "$stage"
+# A release never ships an app without a valid signature (#305).
+codesign --verify --deep --strict --verbose=2 "$stage"/*.app
+codesign -dv "$stage"/*.app 2>&1 | grep -E "Signature|Identifier|flags" || true
 ln -s /Applications "$stage/Applications"
 hdiutil create -volname "Habilis Terminal" -srcfolder "$stage" -ov -format UDZO "$out/HabilisTerminal-$version-$rid.dmg" > /dev/null
 /usr/libexec/PlistBuddy -c "Print :CFBundleDocumentTypes" "$stage"/*.app/Contents/Info.plist || echo "no document types in the packed bundle"

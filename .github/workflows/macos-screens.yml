@@ -140,7 +140,10 @@ jobs:
           hdiutil attach -nobrowse -readonly "mac-package/HabilisTerminal-0.0.1-osx-arm64.dmg" -mountpoint /tmp/habi-dmg
           ls -la /tmp/habi-dmg
           app=$(ls -d /tmp/habi-dmg/*.app | head -1); echo "app: $app"
-          codesign -dv "$app" 2>&1 | head -5 || true
+          codesign -dv "$app" 2>&1 | head -8 || true
+          # Signed, not damaged (#305): the seal holds, and Gatekeeper's verdict on a downloaded copy is printed.
+          codesign --verify --deep --strict --verbose=2 "$app" && echo "signature: valid" || echo "signature: INVALID"
+          spctl --assess --type execute -vv "$app" 2>&1 || true
           ditto "$app" "/tmp/HabilisTest.app"
           open "/tmp/HabilisTest.app"
           sleep 25
