@@ -21,6 +21,9 @@ public partial class MainWindow
     private const int RecentCommandCapacity = 10;
 
     private readonly List<string> _recentCommands = [];
+
+    /// <summary>The update version "Skip this version" set aside (issue #298).</summary>
+    private string? _skippedUpdate;
     private bool _commandLineOpen;
 
     /// <summary>What a command applies to, as it stands now.</summary>

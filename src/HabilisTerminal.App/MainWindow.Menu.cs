@@ -272,9 +272,39 @@ public partial class MainWindow
         Toasts.Notify("performance-report", title, text);
     }
 
-    private void OnUpdateReady(string version) =>
-        Toasts.Notify("update", "Update ready", $"Habilis Terminal {version} has been downloaded. It is installed when you exit, or now:",
-            ("Restart to update", RestartToUpdate));
+    /// <summary>The background check found and downloaded an update; one the user skipped stays quiet (issue #298).</summary>
+    private void OnUpdateReady(string version)
+    {
+        if (!string.Equals(version, _skippedUpdate, StringComparison.OrdinalIgnoreCase))
+        {
+            OfferUpdate(version);
+        }
+    }
+
+    /// <summary>The choice is the user's: now, after closing, or never for this version (issue #298).</summary>
+    private void OfferUpdate(string version)
+    {
+        if (App.Updates.InstallOnExit)
+        {
+            Toasts.Notify("update", "Update after closing", $"Habilis Terminal {version} is installed when you close the window.",
+                ("Restart to update", RestartToUpdate));
+            return;
+        }
+
+        Toasts.Notify("update", "Update ready", $"Habilis Terminal {version} has been downloaded.",
+            ("Restart to update", RestartToUpdate),
+            ("Update after closing", () =>
+            {
+                App.Updates.InstallAfterClosing();
+                Toasts.Notify("update", "Update after closing", $"Habilis Terminal {version} is installed when you close the window.");
+            }),
+            ("Skip this version", () =>
+            {
+                _skippedUpdate = version;
+                SaveStateInBackground();
+                Toasts.Notify("update", "Update skipped", $"Habilis Terminal {version} is not offered again. F9 > Options > Check for updates still shows it.");
+            }));
+    }
 
     /// <summary>F9 > Options > Check for updates (issue #71): the answer in a notice.</summary>
     private async Task CheckForUpdatesAsync()
@@ -284,7 +314,7 @@ public partial class MainWindow
         switch (check.Kind)
         {
             case Updates.UpdateCheckKind.Ready:
-                OnUpdateReady(check.Version);
+                OfferUpdate(check.Version); // asked for: shown even when skipped
                 break;
             case Updates.UpdateCheckKind.Available:
                 Toasts.Notify("update", "Update available",

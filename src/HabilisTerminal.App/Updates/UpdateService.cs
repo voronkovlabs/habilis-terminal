@@ -26,9 +26,10 @@ public sealed record UpdateCheck(UpdateCheckKind Kind, string Version, string? P
 
 /// <summary>
 /// Updates from GitHub Releases (SPEC §15). Installed copies check in the background after start and on request (F9 >
-/// Options > Check for updates): a found update is downloaded quietly; the window then offers "Restart to update", and
-/// otherwise it is applied when the app exits. Portable and development builds only learn on request whether a newer
-/// release exists.
+/// Options > Check for updates): a found update is downloaded quietly, and the window offers "Restart to update",
+/// "Update after closing" and "Skip this version" (issue #298). It is installed only when the user chose one of the
+/// first two; otherwise it is offered again on the next start. Portable and development builds only learn on request
+/// whether a newer release exists.
 /// </summary>
 public sealed class UpdateService
 {
@@ -41,6 +42,9 @@ public sealed class UpdateService
     private UpdateManager? _manager;
     private UpdateInfo? _ready;
     private Dispatcher? _dispatcher;
+
+    /// <summary>"Update after closing" was chosen: the downloaded update is installed when the app exits.</summary>
+    public bool InstallOnExit { get; private set; }
 
     /// <summary>An update was downloaded: its version, ready for <see cref="RestartToUpdate"/>.</summary>
     public event Action<string>? UpdateReady;
@@ -142,10 +146,13 @@ public sealed class UpdateService
         }
     }
 
-    /// <summary>Called on exit: a downloaded update is installed after the process ends, without restarting.</summary>
+    /// <summary>"Update after closing": the downloaded update goes in when the app exits (issue #298).</summary>
+    public void InstallAfterClosing() => InstallOnExit = _ready is not null;
+
+    /// <summary>Called on exit: a downloaded update the user asked for is installed after the process ends, without restarting.</summary>
     public void ApplyPendingOnExit()
     {
-        if (_manager is not null && _ready is not null)
+        if (InstallOnExit && _manager is not null && _ready is not null)
         {
             _manager.WaitExitThenApplyUpdates(_ready, silent: true, restart: false);
             _ready = null;
