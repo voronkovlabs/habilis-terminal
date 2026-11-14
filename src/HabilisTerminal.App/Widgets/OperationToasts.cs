@@ -112,10 +112,26 @@ public sealed class OperationToasts
             _popup.IsOpen = _stack.Children.Count > 0;
         }
 
-        var buttons = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right };
+        // Up to two buttons sit in a row on the right; more go into two columns of equal buttons (issue #303).
+        var grid = actions.Length + 1 > 2;
+        Panel buttons = grid
+            ? new Avalonia.Controls.Primitives.UniformGrid { Columns = 2, Margin = new Thickness(-3) }
+            : new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right };
+        Button MakeButton(string label)
+        {
+            var made = new Button { Content = label, MinWidth = 64 };
+            if (grid)
+            {
+                made.Margin = new Thickness(3);
+                made.HorizontalAlignment = HorizontalAlignment.Stretch;
+            }
+
+            return made;
+        }
+
         foreach (var (label, run) in actions)
         {
-            var button = new Button { Content = label, MinWidth = 64 };
+            var button = MakeButton(label);
             button.Click += (_, _) =>
             {
                 Close();
@@ -124,7 +140,7 @@ public sealed class OperationToasts
             buttons.Children.Add(button);
         }
 
-        var dismiss = new Button { Content = "Close", MinWidth = 64 };
+        var dismiss = MakeButton("Close");
         dismiss.Click += (_, _) => Close();
         buttons.Children.Add(dismiss);
         layout.Children.Add(buttons);

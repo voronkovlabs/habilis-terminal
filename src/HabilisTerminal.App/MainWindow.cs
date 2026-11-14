@@ -134,6 +134,13 @@ public partial class MainWindow : Window
             Reporting.PerfDiagnostics.RecordStartupMilestone("startup.window-loaded");
             StartStateTimer();
             App.Updates.UpdateReady += OnUpdateReady;
+
+            // Development trigger: HABI_TEST_UPDATE_NOTICE=<version> shows the update notice without an update (issue #303).
+            if (Environment.GetEnvironmentVariable("HABI_TEST_UPDATE_NOTICE") is { Length: > 0 } testVersion)
+            {
+                OfferUpdate(testVersion);
+            }
+
             await _left.NavigateAsync(leftStart, state.Left.CurrentName);
             await _right.NavigateAsync(rightStart, state.Right.CurrentName);
         };
