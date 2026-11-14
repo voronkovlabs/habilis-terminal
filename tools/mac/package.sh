@@ -13,6 +13,18 @@ mkdir -p "$out"
 
 dotnet publish src/HabilisTerminal.App -c Release -r "$rid" --self-contained true -p:Version="$version" -o "$publish"
 
+# The plugins that run off Windows (#276): the AWS ones and the samples. GitHub keeps its token in Windows' Credential
+# Manager and the archives plugin carries 7z.dll, so they are not in the Mac build yet.
+for sdk in HabilisTerminal.Plugins.Sdk HabilisTerminal.Plugins.Sdk.Avalonia; do
+  dotnet pack "src/$sdk" -c Release -o artifacts/nuget -nologo -v q
+  rm -rf "artifacts/packages/$(echo "$sdk" | tr '[:upper:]' '[:lower:]')"
+done
+for project in Habilis.Aws.S3 Habilis.Aws.Sqs Habilis.Aws.SageMaker Habilis.Samples.Demo Habilis.Samples.FileFormat; do
+  id=$(sed -n 's/.*"id": *"\([^"]*\)".*/\1/p' "plugins/$project/plugin.json" | head -1)
+  dotnet publish "plugins/$project" -c Release -o "$publish/plugins/$id" -nologo -v q
+  [ -f "plugins/$project/README.md" ] && cp "plugins/$project/README.md" "$publish/plugins/$id/"
+done
+
 # The icon: habi.ico's largest frame, scaled to every size an .icns holds.
 iconset="$out/habi.iconset"
 rm -rf "$iconset"
@@ -25,7 +37,26 @@ for size in 16 32 128 256 512; do
 done
 iconutil -c icns "$iconset" -o "$out/habi.icns"
 
-dotnet vpk pack --packId HabilisTerminal --packVersion "$version" --packDir "$publish" --mainExe habi \
+# The bundle first, so its Info.plist can say what the Dock and "Open With" may hand the app (#275): folders and any
+# file; then Velopack packs that bundle as it is.
+bundle_dir="$out/bundle"
+rm -rf "$bundle_dir"
+dotnet vpk bundle --packId HabilisTerminal --packVersion "$version" --packDir "$publish" --mainExe habi \
+  --packTitle "Habilis Terminal" --icon "$out/habi.icns" --bundleId com.voronkovlabs.habilisterminal --outputDir "$bundle_dir"
+app=$(ls -d "$bundle_dir"/*.app | head -1)
+plist="$app/Contents/Info.plist"
+/usr/libexec/PlistBuddy -c "Add :CFBundleDocumentTypes array" "$plist"
+/usr/libexec/PlistBuddy -c "Add :CFBundleDocumentTypes:0 dict" "$plist"
+/usr/libexec/PlistBuddy -c "Add :CFBundleDocumentTypes:0:CFBundleTypeName string Folder" "$plist"
+/usr/libexec/PlistBuddy -c "Add :CFBundleDocumentTypes:0:CFBundleTypeRole string Viewer" "$plist"
+/usr/libexec/PlistBuddy -c "Add :CFBundleDocumentTypes:0:LSHandlerRank string Alternate" "$plist"
+/usr/libexec/PlistBuddy -c "Add :CFBundleDocumentTypes:0:LSItemContentTypes array" "$plist"
+/usr/libexec/PlistBuddy -c "Add :CFBundleDocumentTypes:0:LSItemContentTypes:0 string public.folder" "$plist"
+/usr/libexec/PlistBuddy -c "Add :CFBundleDocumentTypes:0:LSItemContentTypes:1 string public.item" "$plist"
+/usr/libexec/PlistBuddy -c "Add :NSHumanReadableCopyright string 'Habilis Terminal, MIT License'" "$plist" || true
+plutil -lint "$plist"
+
+dotnet vpk pack --packId HabilisTerminal --packVersion "$version" --packDir "$app" --mainExe habi \
   --packTitle "Habilis Terminal" --packAuthors "Sergei Voronkov" --icon "$out/habi.icns" \
   --bundleId com.voronkovlabs.habilisterminal --runtime "$rid" --channel "$rid" --outputDir "$out/releases"
 
@@ -36,4 +67,6 @@ mkdir -p "$stage"
 ditto -x -k "$out/releases/HabilisTerminal-$rid-Portable.zip" "$stage"
 ln -s /Applications "$stage/Applications"
 hdiutil create -volname "Habilis Terminal" -srcfolder "$stage" -ov -format UDZO "$out/HabilisTerminal-$version-$rid.dmg" > /dev/null
+/usr/libexec/PlistBuddy -c "Print :CFBundleDocumentTypes" "$stage"/*.app/Contents/Info.plist || echo "no document types in the packed bundle"
+ls "$stage"/*.app/Contents/MacOS/plugins 2>/dev/null || echo "no plugins in the packed bundle"
 ls -la "$out/releases" "$out"/*.dmg

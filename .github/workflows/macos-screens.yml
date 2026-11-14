@@ -124,7 +124,7 @@ jobs:
         if: always()
         run: |
           dotnet tool restore
-          dotnet vpk pack -H 2>&1 | grep -iE "plist|bundle|icon|sign|entitle|notar|keychain" | head -30 || true
+
           chmod +x tools/mac/package.sh
           tools/mac/package.sh 0.0.1 osx-arm64 mac-package 2>&1 | tail -40
           # The app from the disk image: does it start as a Mac app (Dock name, icon)?

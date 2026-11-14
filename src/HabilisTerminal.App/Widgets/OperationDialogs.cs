@@ -465,6 +465,7 @@ public static class OperationDialogs
         {
             grid.RowDefinitions.Add(new RowDefinition());
             var who = Label(rows[r].Who);
+            who.VerticalAlignment = VerticalAlignment.Center;
             Grid.SetRow(who, r + 1);
             grid.Children.Add(who);
             var bits = new[] { rows[r].Read, rows[r].Write, rows[r].Run };
@@ -496,7 +497,7 @@ public static class OperationDialogs
             lines.Add($"Owner: {user}    Group: {group}");
         }
 
-        if (OperatingSystem.IsMacOS() && Tool("mdls", ["-raw", "-name", "kMDItemUserTags", path]) is { } raw && raw.StartsWith('('))
+        if (OperatingSystem.IsMacOS() && Tool("mdls", ["-raw", "-name", "kMDItemUserTags", path]) is { } raw && raw.StartsWith('(') && raw != "(null)")
         {
             var tags = raw.Trim('(', ')', ' ', '\n').Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries)
                 .Select(t => t.Trim('"').Split('\n')[0]).Where(t => t.Length > 0).ToArray();
