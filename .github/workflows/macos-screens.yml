@@ -33,13 +33,15 @@ jobs:
           dotnet test --project tests/HabilisTerminal.Themes.Tests -c Release --no-build
           dotnet test --project tests/HabilisTerminal.Core.Tests -c Release --no-build
           dotnet test --project tests/HabilisTerminal.App.Tests -c Release --no-build
-      - name: Plugin tests (GitHub and the Keychain, #280)
+      - name: Plugin tests (GitHub and the Keychain, #280; archives on libarchive, #281)
         run: |
           set -e
           for sdk in HabilisTerminal.Plugins.Sdk HabilisTerminal.Plugins.Sdk.Avalonia; do
             dotnet pack "src/$sdk" -c Release -o artifacts/nuget -nologo -v q
           done
           dotnet test --project plugins/Habilis.GitHub.Tests -c Release
+          # The 7-Zip tests need 7z.dll: only the libarchive ones run here.
+          dotnet test --project plugins/Habilis.Archives.Tests -c Release --filter-class Habilis.Archives.Tests.LibArchiveTests
       - name: Console tests (pty and zsh, #268)
         run: |
           set -o pipefail

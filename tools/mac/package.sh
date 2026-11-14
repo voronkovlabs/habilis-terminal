@@ -13,16 +13,17 @@ mkdir -p "$out"
 
 dotnet publish src/HabilisTerminal.App -c Release -r "$rid" --self-contained true -p:Version="$version" -o "$publish"
 
-# The plugins that run off Windows (#276): the AWS ones, GitHub (its token in the Keychain, #280) and the samples. The
-# archives plugin carries 7z.dll, so it is not in the Mac build yet.
+# The plugins that run off Windows (#276): the AWS ones, GitHub (its token in the Keychain, #280), archives (on the
+# system's libarchive, #281; its Windows 7z.dll stays out) and the samples.
 for sdk in HabilisTerminal.Plugins.Sdk HabilisTerminal.Plugins.Sdk.Avalonia; do
   dotnet pack "src/$sdk" -c Release -o artifacts/nuget -nologo -v q
   rm -rf "artifacts/packages/$(echo "$sdk" | tr '[:upper:]' '[:lower:]')"
 done
-for project in Habilis.Aws.S3 Habilis.Aws.Sqs Habilis.Aws.SageMaker Habilis.GitHub Habilis.Samples.Demo Habilis.Samples.FileFormat; do
+for project in Habilis.Archives Habilis.Aws.S3 Habilis.Aws.Sqs Habilis.Aws.SageMaker Habilis.GitHub Habilis.Samples.Demo Habilis.Samples.FileFormat; do
   id=$(sed -n 's/.*"id": *"\([^"]*\)".*/\1/p' "plugins/$project/plugin.json" | head -1)
   dotnet publish "plugins/$project" -c Release -o "$publish/plugins/$id" -nologo -v q
   [ -f "plugins/$project/README.md" ] && cp "plugins/$project/README.md" "$publish/plugins/$id/"
+  rm -rf "$publish/plugins/$id/native/win-x64" "$publish/plugins/$id/native/win-arm64"
 done
 
 # The icon: habi.ico's largest frame, scaled to every size an .icns holds.

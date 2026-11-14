@@ -11,3 +11,9 @@ Opens archives as folders in a panel, on 7-Zip's `7z.dll` (`native/<arch>/`, lic
   searched: quick for zip, slower for solid 7z. Encrypted entries are found by name only, as a search never asks for a password.
 
 Without `7z.dll` the plugin claims no files, and Enter opens them in their program.
+
+**On a Mac** the plugin uses the system's own libarchive (`/usr/lib/libarchive.2.dylib`, the library behind `tar`)
+instead, so nothing is shipped or downloaded (#281). It reads zip, 7z, rar, tar with gz / bz2 / xz / zst, cab, lha,
+cpio, iso, xar and more, and a lone compressed file (`log.gz`) shows the file inside. It only reads: F5 copies out and
+F3 views, but archives are not changed, and an encrypted 7z or rar does not open (libarchive does not decrypt them;
+encrypted zip works).

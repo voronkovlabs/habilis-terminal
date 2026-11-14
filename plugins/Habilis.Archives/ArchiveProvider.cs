@@ -15,12 +15,12 @@ public sealed class ArchiveProvider : IPanelProvider, IGetFiles, IPutFiles, IDel
     private static readonly IReadOnlyList<PanelLayout> ArchiveLayouts =
         [new PanelLayout("Archive", [PanelColumn.Size, PanelColumn.Modified])];
 
-    private readonly SevenZipLibrary _library;
+    private readonly IArchiveEngine _library;
     private readonly Func<string, string?> _askPassword;
     private readonly Stack<Level> _levels = new();
     private string _folder = string.Empty;
 
-    private ArchiveProvider(SevenZipLibrary library, SevenZipArchive archive, Func<string, string?> askPassword)
+    private ArchiveProvider(IArchiveEngine library, IArchive archive, Func<string, string?> askPassword)
     {
         _library = library;
         _askPassword = askPassword;
@@ -29,7 +29,9 @@ public sealed class ArchiveProvider : IPanelProvider, IGetFiles, IPutFiles, IDel
 
     public string Title => $"{Top.Archive.Format.Name}: {Path.GetFileName(Top.DisplayPath)}";
 
-    public string Location => Top.DisplayPath + (_folder.Length > 0 ? "\\" + _folder : string.Empty);
+    // The archive's file as the system writes it, then the folder inside with the system's separator (#281):
+    // PluginFiles.SplitLocation in the app reads it back.
+    public string Location => Top.DisplayPath + (_folder.Length > 0 ? Path.DirectorySeparatorChar + _folder.Replace('\\', Path.DirectorySeparatorChar) : string.Empty);
 
     public IReadOnlyList<PanelLayout> Layouts => ArchiveLayouts;
 
@@ -83,9 +85,9 @@ public sealed class ArchiveProvider : IPanelProvider, IGetFiles, IPutFiles, IDel
     /// </summary>
     /// <param name="askPassword">Asked for encrypted archives, with the text of the question; null cancels.</param>
     /// <exception cref="IOException">The file cannot be read.</exception>
-    public static ArchiveProvider? TryOpen(string path, bool anyFormat, Func<string, string?> askPassword, SevenZipLibrary? library = null)
+    public static ArchiveProvider? TryOpen(string path, bool anyFormat, Func<string, string?> askPassword, IArchiveEngine? library = null)
     {
-        library ??= SevenZipLibrary.Default;
+        library ??= ArchiveEngines.Default;
         var archive = library?.Open(path, anyFormat, wrong => askPassword(PasswordPrompt(Path.GetFileName(path), wrong)));
         return archive is null ? null : new ArchiveProvider(library!, archive, askPassword);
     }
@@ -95,7 +97,7 @@ public sealed class ArchiveProvider : IPanelProvider, IGetFiles, IPutFiles, IDel
     /// 7z.dll is missing or no format accepts the file.
     /// </summary>
     /// <exception cref="IOException">The file cannot be read.</exception>
-    public static ArchiveProvider? TryOpen(string path, string innerPath, bool anyFormat, Func<string, string?> askPassword, SevenZipLibrary? library = null)
+    public static ArchiveProvider? TryOpen(string path, string innerPath, bool anyFormat, Func<string, string?> askPassword, IArchiveEngine? library = null)
     {
         if (TryOpen(path, anyFormat, askPassword, library) is not { } provider)
         {
@@ -111,16 +113,16 @@ public sealed class ArchiveProvider : IPanelProvider, IGetFiles, IPutFiles, IDel
     }
 
     /// <summary>The extensions Enter opens as folders: what is an archive to the user and 7-Zip here reads.</summary>
-    public static IReadOnlyList<string> ExtensionsOpenedOnEnter(SevenZipLibrary? library = null)
+    public static IReadOnlyList<string> ExtensionsOpenedOnEnter(IArchiveEngine? library = null)
     {
-        library ??= SevenZipLibrary.Default;
+        library ??= ArchiveEngines.Default;
         return library is null ? [] : [.. OpenedOnEnter.Where(library.Extensions.Contains)];
     }
 
     /// <summary>True when the extension is that of an archive (Enter tries to open such files as folders).</summary>
-    public static bool HasArchiveExtension(string name, SevenZipLibrary? library = null)
+    public static bool HasArchiveExtension(string name, IArchiveEngine? library = null)
     {
-        library ??= SevenZipLibrary.Default;
+        library ??= ArchiveEngines.Default;
         var extension = Path.GetExtension(name).TrimStart('.');
         return library is not null && extension.Length > 0 && library.Extensions.Contains(extension) && OpenedOnEnter.Contains(extension);
     }
@@ -178,7 +180,7 @@ public sealed class ArchiveProvider : IPanelProvider, IGetFiles, IPutFiles, IDel
             return false;
         }
 
-        _levels.Push(new Level(nested, Location + "\\" + entry.Name, _folder, folder));
+        _levels.Push(new Level(nested, Location + Path.DirectorySeparatorChar + entry.Name, _folder, folder));
         _folder = string.Empty;
         return true;
     }
@@ -216,12 +218,12 @@ public sealed class ArchiveProvider : IPanelProvider, IGetFiles, IPutFiles, IDel
                 emptyFolders.Add(target);
                 foreach (var folder in tree.FoldersUnder(path))
                 {
-                    emptyFolders.Add(Path.Combine(target, folder[(path.Length + 1)..]));
+                    emptyFolders.Add(Path.Combine(target, Local(folder[(path.Length + 1)..])));
                 }
 
                 foreach (var item in tree.ItemsUnder(path))
                 {
-                    targets[item.Index] = Path.Combine(target, item.Path[(path.Length + 1)..]);
+                    targets[item.Index] = Path.Combine(target, Local(item.Path[(path.Length + 1)..]));
                 }
             }
             else if (tree.Find(path)?.Item is { } item)
@@ -311,7 +313,7 @@ public sealed class ArchiveProvider : IPanelProvider, IGetFiles, IPutFiles, IDel
                 var options = new EnumerationOptions { RecurseSubdirectories = true, AttributesToSkip = 0 };
                 foreach (var info in new DirectoryInfo(local).EnumerateFileSystemInfos("*", options))
                 {
-                    var inner = ArchiveTree.Combine(path, Path.GetRelativePath(local, info.FullName));
+                    var inner = ArchiveTree.Combine(path, Path.GetRelativePath(local, info.FullName).Replace(Path.DirectorySeparatorChar, '\\'));
                     add.Add(info is DirectoryInfo folder ? FolderItem(inner, folder) : FileItem(inner, (FileInfo)info));
                 }
             }
@@ -419,7 +421,10 @@ public sealed class ArchiveProvider : IPanelProvider, IGetFiles, IPutFiles, IDel
     // 7z.dll objects have no COM proxies, so they are created and used on thread-pool (MTA) threads only: an object
     // created on the UI thread (STA) could not be called from the pool, where extraction and updates run.
 
-    private Task<SevenZipArchive?> OpenOnPoolAsync(string path, bool anyFormat, Func<bool, string?> password) =>
+    /// <summary>A path inside the archive ('\') as a relative path of this system.</summary>
+    private static string Local(string inner) => inner.Replace('\\', Path.DirectorySeparatorChar);
+
+    private Task<IArchive?> OpenOnPoolAsync(string path, bool anyFormat, Func<bool, string?> password) =>
         Task.Run(() => _library.Open(path, anyFormat, password));
 
     private void EnsureWritable()
@@ -569,7 +574,7 @@ public sealed class ArchiveProvider : IPanelProvider, IGetFiles, IPutFiles, IDel
     }
 
     /// <summary>One open archive: the outer one, or one inside it opened from <see cref="TempFolder"/>.</summary>
-    private sealed record Level(SevenZipArchive Archive, string DisplayPath, string OuterFolder, string? TempFolder) : IDisposable
+    private sealed record Level(IArchive Archive, string DisplayPath, string OuterFolder, string? TempFolder) : IDisposable
     {
         public ArchiveTree Tree { get; } = new(Archive.Items);
 

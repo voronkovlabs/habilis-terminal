@@ -12,7 +12,8 @@ public sealed record NewArchiveItem(string Path, string? SourceFile, long Size, 
 }
 
 /// <summary>An open archive: its items, extraction and updated copies. Not thread-safe; one operation at a time.</summary>
-public sealed class SevenZipArchive : IDisposable
+[System.Runtime.Versioning.SupportedOSPlatform("windows")]
+public sealed class SevenZipArchive : IArchive
 {
     private readonly IInArchive _archive;
     private readonly InStream _input;

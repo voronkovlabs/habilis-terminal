@@ -9,10 +9,10 @@ public class ArchiveTests
     private static readonly DateTime Stamp = new(2025, 3, 4, 5, 6, 8, DateTimeKind.Utc);
 
     /// <summary>A 7z with encrypted names, password "sesame", holding inside.txt with "hello". Made with 7-Zip.</summary>
-    private const string EncryptedNames7z = "N3q8ryccAASNCHnvkAAAAAAAAAAvAAAAAAAAAIR7NrnJfgVuMOXUEEBQ/WnSFj3zafZta04OZ6HpWR2zZCx9XegfPzNvqya1WXPY7tHbA6nKgBt52xmO3UYf+khKjYRUb8BUJNo2T8rDknPt2UvW26eZDFn1OuY+/NR0GHUa5H7NS9dAo8qJM/XYQBqKdbVdcGe567ZCycqz87ojE1NWuBoCaZlJXKx5CZGAbWpA4RMXBhABCYCAAAcLAQABJAbxBwESUw88gm4v0zRo6C9e3uuZcj02DHIKAYkjHO4AAA==";
+    internal const string EncryptedNames7z = "N3q8ryccAASNCHnvkAAAAAAAAAAvAAAAAAAAAIR7NrnJfgVuMOXUEEBQ/WnSFj3zafZta04OZ6HpWR2zZCx9XegfPzNvqya1WXPY7tHbA6nKgBt52xmO3UYf+khKjYRUb8BUJNo2T8rDknPt2UvW26eZDFn1OuY+/NR0GHUa5H7NS9dAo8qJM/XYQBqKdbVdcGe567ZCycqz87ojE1NWuBoCaZlJXKx5CZGAbWpA4RMXBhABCYCAAAcLAQABJAbxBwESUw88gm4v0zRo6C9e3uuZcj02DHIKAYkjHO4AAA==";
 
     /// <summary>A zip with the older cipher: the plugin writes no passwords, and .NET's zip neither.</summary>
-    private static string MakeEncryptedZip(TestSandbox sandbox, string password, string name, string content)
+    internal static string MakeEncryptedZip(TestSandbox sandbox, string password, string name, string content)
     {
         uint[] table = Enumerable.Range(0, 256).Select(n =>
         {
@@ -95,7 +95,7 @@ public class ArchiveTests
         return path;
     }
 
-    private static TransferRequest CopyOut(string target, string name) =>
+    internal static TransferRequest CopyOut(string target, string name) =>
         new([new PanelEntry(name)], target, move: false, _ => Task.FromResult(OverwriteChoice.Overwrite));
 
     [Fact]
@@ -422,7 +422,7 @@ public class ArchiveTests
         return path;
     }
 
-    private sealed class CountingProgress : IOperationProgress
+    internal sealed class CountingProgress : IOperationProgress
     {
         public int Items { get; private set; }
 

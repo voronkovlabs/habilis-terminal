@@ -9,14 +9,14 @@ namespace Habilis.Archives;
 /// </summary>
 public sealed class ArchivesPlugin : Plugin
 {
-    private SevenZipLibrary? _library;
+    private IArchiveEngine? _library;
 
     public override IEnumerable<string> FileExtensions => ArchiveProvider.ExtensionsOpenedOnEnter(_library);
 
     public override void Initialize(IPluginHost host)
     {
         base.Initialize(host);
-        _library = SevenZipLibrary.TryLoad(SevenZipLibrary.PathIn(host.PluginDirectory));
+        _library = ArchiveEngines.Load(host.PluginDirectory);
     }
 
     public override Task<IPanelProvider?> OpenFileAsync(FileOpenRequest request, CancellationToken cancellationToken)
@@ -24,7 +24,7 @@ public sealed class ArchivesPlugin : Plugin
         ArgumentNullException.ThrowIfNull(request);
         if (_library is null)
         {
-            throw new PluginException($"{SevenZipLibrary.FileName} is missing: archives cannot be opened.");
+            throw new PluginException($"{ArchiveEngines.MissingName} is missing: archives cannot be opened.");
         }
 
         try
@@ -49,7 +49,7 @@ public sealed class ArchivesPlugin : Plugin
     }
 
     /// <summary>The entries of one archive for the search; public for tests.</summary>
-    public static async IAsyncEnumerable<SearchEntry> SearchArchive(SevenZipLibrary library, string path, [EnumeratorCancellation] CancellationToken cancellationToken)
+    public static async IAsyncEnumerable<SearchEntry> SearchArchive(IArchiveEngine library, string path, [EnumeratorCancellation] CancellationToken cancellationToken)
     {
         await Task.CompletedTask.ConfigureAwait(false);
         using var archive = OpenForSearch(library, path);
@@ -68,7 +68,7 @@ public sealed class ArchivesPlugin : Plugin
         }
     }
 
-    private static SevenZipArchive? OpenForSearch(SevenZipLibrary library, string path)
+    private static IArchive? OpenForSearch(IArchiveEngine library, string path)
     {
         try
         {
@@ -81,7 +81,7 @@ public sealed class ArchivesPlugin : Plugin
     }
 
     /// <summary>One entry to a temporary file that goes away when the stream is closed.</summary>
-    private static FileStream Unpack(SevenZipArchive archive, ArchiveItem item, CancellationToken cancellationToken)
+    private static FileStream Unpack(IArchive archive, ArchiveItem item, CancellationToken cancellationToken)
     {
         var target = Path.Combine(Path.GetTempPath(), "habi-search-" + Path.GetRandomFileName());
         try

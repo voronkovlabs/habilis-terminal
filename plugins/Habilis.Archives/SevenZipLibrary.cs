@@ -9,7 +9,8 @@ public sealed record ArchiveFormat(string Name, Guid ClassId, IReadOnlyList<stri
 /// 7z.dll (7-Zip, LGPL), loaded once from the application folder (issue #51). Lists the formats it reads and opens
 /// archives with them. Not available when the DLL is missing or does not match the process architecture.
 /// </summary>
-public sealed class SevenZipLibrary
+[System.Runtime.Versioning.SupportedOSPlatform("windows")]
+public sealed class SevenZipLibrary : IArchiveEngine
 {
     public const string FileName = "7z.dll";
 
@@ -78,7 +79,7 @@ public sealed class SevenZipLibrary
     /// <param name="password">Asked when the archive's headers are encrypted; null cancels. True: the last one was wrong.</param>
     /// <exception cref="IOException">The file cannot be read.</exception>
     /// <exception cref="OperationCanceledException">The question for the password was cancelled.</exception>
-    public SevenZipArchive? Open(string path, bool anyFormat, Func<bool, string?>? password = null)
+    public IArchive? Open(string path, bool anyFormat, Func<bool, string?>? password = null)
     {
         var extension = Path.GetExtension(path).TrimStart('.');
         var byExtension = Formats.Where(f => f.Extensions.Contains(extension, StringComparer.OrdinalIgnoreCase)).ToList();
