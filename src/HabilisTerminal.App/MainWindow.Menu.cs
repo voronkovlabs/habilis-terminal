@@ -94,6 +94,7 @@ public partial class MainWindow
                 MenuRow("window.help"),
                 MenuRow("app.feedback"),
                 MenuRow("app.performance"),
+                MenuRow("app.panelErrors"),
                 MenuRow("app.updates"),
                 MenuRow("app.about"),
             ]),
@@ -237,6 +238,18 @@ public partial class MainWindow
         }
 
         Close();
+    }
+
+    /// <summary>F9, Options: the panel error log in the viewer (issue #292).</summary>
+    private void ShowPanelErrors()
+    {
+        if (Core.Reporting.PanelErrors.LogFile is not { } file || !File.Exists(file) || Core.Reporting.PanelErrors.Recent(1).Count == 0)
+        {
+            Toasts.Notify("panel-errors", "No panel errors", "Messages panels show in red are kept here.");
+            return;
+        }
+
+        OpenViewer(file, _active);
     }
 
     /// <summary>F9, Options (issue #130). Measuring is off by default, so say how to turn it on.</summary>

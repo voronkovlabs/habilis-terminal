@@ -39,7 +39,8 @@ public static class IssueText
     /// <summary>The text the user reviews before sending: the same body that goes to GitHub.</summary>
     public static string CrashPreview(CrashReport report, ReportMasking masking) => Crash(report, masking).Body;
 
-    public static IssueDraft Feedback(string? title, string text, string version, string os, ReportMasking masking)
+    /// <param name="appendix">More for the body after the versions, such as the latest panel errors (issue #292).</param>
+    public static IssueDraft Feedback(string? title, string text, string version, string os, ReportMasking masking, string? appendix = null)
     {
         var trimmed = text.Trim();
         var heading = string.IsNullOrWhiteSpace(title) ? FirstLine(trimmed) : title.Trim();
@@ -54,6 +55,7 @@ public static class IssueText
             .AppendLine("---")
             .Append(CultureInfo.InvariantCulture, $"Habilis Terminal {version} · {os}")
             .AppendLine()
+            .Append(string.IsNullOrEmpty(appendix) ? string.Empty : Environment.NewLine + appendix)
             .ToString();
         return new IssueDraft(Cut(masking.Mask(heading), TitleLength), masking.Mask(body), [FeedbackLabel]);
     }

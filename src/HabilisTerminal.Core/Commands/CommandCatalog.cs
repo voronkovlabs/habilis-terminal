@@ -267,6 +267,7 @@ public static class CommandCatalog
         new("settings.iconTheme", Window, "File icon theme…", null, Anywhere),
         new("app.feedback", Window, "Send feedback…", null, Workspace),
         new("app.performance", Window, "Send performance report", null, Workspace),
+        new("app.panelErrors", Window, "Panel error log", null, Workspace) { Help = "The messages panels showed in red, newest last" },
         new("app.updates", Window, "Check for updates", null, Workspace),
         new("app.about", Window, "About Habilis Terminal", null, Workspace),
     ];

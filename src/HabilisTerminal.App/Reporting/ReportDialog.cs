@@ -153,9 +153,11 @@ internal sealed class ReportDialog : Widgets.ModalWindow
     public static void ShowFeedback(Window owner)
     {
         ReportDialog? dialog = null;
-        IssueDraft Draft() => IssueText.Feedback(dialog!._title!.Text, dialog._text.Text ?? string.Empty, ReportSender.Version, ReportEnvironment.Windows(), ReportMasking.Current);
+        IssueDraft Draft() => IssueText.Feedback(dialog!._title!.Text, dialog._text.Text ?? string.Empty, ReportSender.Version, ReportEnvironment.Windows(), ReportMasking.Current,
+            PanelErrors.Section(ReportMasking.Current, "### Recent panel errors"));
         var intro = "Tell us about problems and wishes. It becomes a public issue on GitHub (voronkovlabs/habilis-terminal) " +
-                    "with the Habilis Terminal and Windows versions; your profile folder, user name and computer name are hidden.";
+                    "with the Habilis Terminal and Windows versions and the last panel errors (F9 > Options > Panel error log); " +
+                    "paths, your profile folder, user name and computer name are hidden.";
         dialog = new ReportDialog("Send feedback", intro, isFeedback: true, string.Empty, Draft, () => ReportSender.SendFeedbackAsync(Draft())) { ModalOwner = owner };
         dialog.ShowModal();
     }

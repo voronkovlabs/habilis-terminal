@@ -357,6 +357,12 @@ public sealed partial class FilePanel : Border
         get => _message.IsVisible ? _message.Text : null;
         set
         {
+            // Each new message goes to the panel error log too (issue #292); "Loading…" is no message to keep.
+            if (!string.IsNullOrEmpty(value) && value != _message.Text && value != "Loading…")
+            {
+                Core.Reporting.PanelErrors.Record(Side, value);
+            }
+
             _message.Text = value ?? string.Empty;
             _message.IsVisible = !(string.IsNullOrEmpty(value));
         }

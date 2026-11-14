@@ -517,6 +517,11 @@ internal static class PerfDiagnostics
             }
 
             var draft = PerfReport.Build(periods, ReportSender.Version, ReportEnvironment.Windows(), Environment.ProcessorCount);
+            if (PanelErrors.Section(ReportMasking.Current) is { Length: > 0 } errors)
+            {
+                // What the panels said in red explains many a slow moment (issue #292).
+                draft = draft with { Body = draft.Body + Environment.NewLine + errors };
+            }
             var preview = Path.Combine(store.Directory, "last-report.md");
             File.WriteAllText(preview, draft.Body);
             var result = DryRun is { } dry

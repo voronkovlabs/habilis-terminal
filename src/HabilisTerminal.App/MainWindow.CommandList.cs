@@ -172,6 +172,7 @@ public partial class MainWindow
         "settings.iconTheme" => () => Fire(PickIconThemeAsync()),
         "app.feedback" => ShowFeedback,
         "app.performance" => () => Fire(SendPerformanceReportAsync()),
+        "app.panelErrors" => ShowPanelErrors,
         "app.updates" => () => Fire(CheckForUpdatesAsync()),
         "app.about" => ShowAbout,
         _ when command.Section is CommandCatalog.Viewer or CommandCatalog.Editor || command.Id == "window.close" => () => PressKey(command.Keys!),

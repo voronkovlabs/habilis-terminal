@@ -105,6 +105,7 @@ public partial class App : Application
         SettingsStore.WriteSchema(Paths.SchemaFile);
         TryCreateDirectory(Paths.ThemesDirectory);
         State = new StateStore(Paths.StateFile);
+        Core.Reporting.PanelErrors.Initialize(Paths.PanelErrorsFile);
 
         if (!EnsurePowerShell())
         {
