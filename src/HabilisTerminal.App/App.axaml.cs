@@ -57,6 +57,7 @@ public partial class App : Application
     public override void Initialize()
     {
         AvaloniaXamlLoader.Load(this);
+        KeepScrollBarsBesideContent();
 
         // The Mac's app menu must be there before the first window, or the system keeps Avalonia's own (#273).
         if (OperatingSystem.IsMacOS())
@@ -70,6 +71,22 @@ public partial class App : Application
             });
         }
     }
+
+    /// <summary>
+    /// Fluent's ScrollViewer spans its content over the scroll bars' column and row, so an always-shown bar covered the
+    /// shortcuts at the right edge of the command list (issue #314). The template sets the span itself, which beats any
+    /// style, so it is set here as a local value once the template is applied.
+    /// </summary>
+    private static void KeepScrollBarsBesideContent() =>
+        Avalonia.Controls.Primitives.TemplatedControl.TemplateAppliedEvent.AddClassHandler<ScrollViewer>((_, e) =>
+        {
+            if (e.NameScope.Find<Avalonia.Controls.Presenters.ScrollContentPresenter>("PART_ContentPresenter") is { } presenter)
+            {
+                Grid.SetColumnSpan(presenter, 1);
+                Grid.SetRowSpan(presenter, 1);
+                MainWindow.Trace($"scroll viewer: content beside the bars, {presenter.Parent?.GetType().Name}");
+            }
+        });
 
     /// <summary>A command of the Mac's app menu, for the main window to run (#273).</summary>
     public static event Action<string>? MacAppMenuCommand;
