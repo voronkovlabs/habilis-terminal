@@ -94,8 +94,10 @@ internal sealed class ConsoleHintButton
         _wanted = console is not null;
         if (console is { } area)
         {
-            var x = Math.Max(0, area.Right - Size - CornerGap);
-            var y = Math.Max(0, area.Bottom - Size - CornerGap);
+            // The area is inside the zoom's layout transform, the popup's offsets are not (issue #361).
+            var zoom = UiZoom.Factor;
+            var x = Math.Max(0, (area.Right - Size - CornerGap) * zoom);
+            var y = Math.Max(0, (area.Bottom - Size - CornerGap) * zoom);
             if (_popup.HorizontalOffset != x || _popup.VerticalOffset != y)
             {
                 _popup.HorizontalOffset = x;
