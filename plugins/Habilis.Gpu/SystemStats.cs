@@ -17,6 +17,31 @@ internal sealed record ProcessUse(int Pid, string Name, string Kind, double? Gpu
     public string? CommandLine { get; init; }
 }
 
+/// <summary>Which processes the list shows (issue #353).</summary>
+internal static class ProcessFilter
+{
+    /// <summary>Below this much video memory a process that does not load the GPU is left out: desktop graphics.</summary>
+    public const double MinMemoryMiB = 100;
+
+    /// <summary>A process with at least this GPU load is shown whatever its memory.</summary>
+    public const double MinLoadPercent = 1;
+
+    /// <summary>
+    /// Processes worth showing, with memory no GPU could hold made unknown: Windows' "GPU Process Memory" counter gave a
+    /// remote desktop agent about 14 million MiB on a 22 GiB card. A process whose memory nobody knows is kept when
+    /// nvidia-smi lists it as compute, since memory cannot rule it out.
+    /// </summary>
+    public static IReadOnlyList<ProcessUse> Shown(IReadOnlyList<ProcessUse> processes, IReadOnlyList<GpuSample> gpus)
+    {
+        var known = gpus.Select(g => g.MemoryTotalMiB).Where(t => t is > 0).Select(t => t!.Value).ToList();
+        var limit = known.Count > 0 ? known.Sum() : 1024 * 1024; // without totals: more than 1 TiB is nonsense
+        return processes
+            .Select(p => p.GpuMemoryMiB > limit ? p with { GpuMemoryMiB = null } : p)
+            .Where(p => p.GpuPercent >= MinLoadPercent || p.GpuMemoryMiB >= MinMemoryMiB || (p.GpuMemoryMiB is null && p.Kind == "Compute"))
+            .ToList();
+    }
+}
+
 /// <summary>Everything the nvtop view shows at one moment.</summary>
 internal sealed record LocalSample(GpuSnapshot Gpus, SystemSample System, IReadOnlyList<ProcessUse> Processes);
 

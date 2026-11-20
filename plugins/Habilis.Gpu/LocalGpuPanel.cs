@@ -256,7 +256,8 @@ internal sealed class LocalGpuPanel : IPanelProvider, IQuickViewEntry, IViewEntr
         try
         {
             var gpus = await _source.SampleAsync(cancellationToken).ConfigureAwait(false);
-            var (system, processes) = await Task.Run(() => _system.Sample(gpus.Processes), cancellationToken).ConfigureAwait(false);
+            var (system, all) = await Task.Run(() => _system.Sample(gpus.Processes), cancellationToken).ConfigureAwait(false);
+            var processes = ProcessFilter.Shown(all, gpus.Gpus);
             Record(gpus);
             _cpu.Add(system.CpuPercent);
             _ram.Add(system.RamPercent);

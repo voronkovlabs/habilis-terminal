@@ -227,7 +227,7 @@ internal sealed class NvtopView : Control
                 TextChart.Value(process.GpuMemoryMiB, " MiB"),
                 TextChart.Value(process.CpuPercent, "%"),
                 TextChart.Value(process.RamMiB, " MiB"),
-                process.Name,
+                process.CommandLine ?? process.Name, // the whole command line in the row, as nvtop (issue #353); the tooltip shows what does not fit
             ], y, tone);
             y += line;
             shown++;

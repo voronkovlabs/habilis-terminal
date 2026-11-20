@@ -20,6 +20,26 @@ public sealed class GpuTests
         """;
 
     [Fact]
+    public void The_list_keeps_processes_that_hold_video_memory_or_load_the_gpu()
+    {
+        var gpus = NvidiaSmiFormat.ParseGpus(TwoGpus);
+        ProcessUse[] all =
+        [
+            new(1, "python", "Compute", 51, 1675, 15, 2306),
+            new(2, "dcvagent", "Compute", 0, 14565559, null, 149),
+            new(3, "explorer", "Compute", 0, 116, 0, 227),
+            new(4, "csrss", "Graphic", 0, 35, null, 5),
+            new(5, "busy", "Graphic", 3, 2, 1, 10),
+            new(6, "unknown", "Graphic", 0, null, 0, 10),
+        ];
+
+        var shown = ProcessFilter.Shown(all, gpus);
+
+        Assert.Equal(["python", "dcvagent", "explorer", "busy"], shown.Select(p => p.Name));
+        Assert.Null(shown.Single(p => p.Name == "dcvagent").GpuMemoryMiB);
+    }
+
+    [Fact]
     public void Nvidia_smi_csv_parses_with_missing_values_and_commas_in_process_names()
     {
         var gpus = NvidiaSmiFormat.ParseGpus(TwoGpus);
