@@ -1180,8 +1180,8 @@ public sealed partial class FilePanel : Border
     }
 
     /// <summary>
-    /// While the filter's box is open: Backspace edits, Esc clears the filter, Enter keeps it and closes the box, and any
-    /// other key closes the box, keeps the filter and is processed normally.
+    /// While the filter's box is open: Backspace edits, Esc clears the filter, and any other key (Enter too: it opens the
+    /// item at once, issue #355) closes the box, keeps the filter and is processed normally.
     /// </summary>
     private bool HandleQuickFilterKey(Key key, KeyModifiers modifiers)
     {
@@ -1201,10 +1201,6 @@ public sealed partial class FilePanel : Border
                 return true;
             case Key.Escape:
                 ClearQuickFilter();
-                return true;
-            case Key.Enter when modifiers == KeyModifiers.None:
-                CloseQuickSearch();
-                Refresh();
                 return true;
             case Key.LeftShift or Key.RightShift or Key.LeftCtrl or Key.RightCtrl or Key.LeftAlt or Key.RightAlt or Key.System:
                 return false;
