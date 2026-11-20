@@ -19,8 +19,6 @@ namespace HabilisTerminal.App.Panels;
 /// </summary>
 public sealed class FileListView : Control
 {
-    private const double HeaderHeight = 22;
-    private const double IconWidth = 20;
     private const double CellPadding = 6;
     private const double SeparatorGrip = 4;
     private const double ScrollbarWidth = 2;
@@ -40,6 +38,11 @@ public sealed class FileListView : Control
     private readonly Dictionary<(string Text, IBrush IBrush, bool Bold), FormattedText> _textCache = [];
 
     public static double RowHeight { get; private set; } = 22;
+
+    /// <summary>Icons, their cell and the header grow with the panel font, as the rows do (issue #360).</summary>
+    private static double Scale => FontSize / 13;
+    private static double HeaderHeight => Math.Round(22 * Scale);
+    private static double IconWidth => Math.Round(20 * Scale);
 
     /// <summary>The <c>panels.fontFamily</c> / <c>panels.fontSize</c> settings; rows grow with the font. Callers re-layout.</summary>
     public static void SetFont(string family, double size)
@@ -637,7 +640,7 @@ public sealed class FileListView : Control
             {
                 using (Core.Diagnostics.Perf.Measure("panel.render.icon"))
                 {
-                    DrawIcon(dc, item, x + CellPadding, cell.Y + 3);
+                    DrawIcon(dc, item, x + CellPadding, cell.Y + Math.Round((RowHeight - (IconProvider.Size * Scale)) / 2));
                 }
 
                 var nameLeft = x + CellPadding + IconWidth;
@@ -687,6 +690,14 @@ public sealed class FileListView : Control
     }
 
     private void DrawIcon(DrawingContext dc, PanelItem item, double x, double y)
+    {
+        using (dc.PushTransform(Matrix.CreateScale(Scale, Scale) * Matrix.CreateTranslation(x, y)))
+        {
+            DrawIconAtOrigin(dc, item, 0, 0);
+        }
+    }
+
+    private void DrawIconAtOrigin(DrawingContext dc, PanelItem item, double x, double y)
     {
         // A plugin row may point to a local executable whose real Windows icon represents it.
         if (!item.IsParent && _state!.Extension?.IconPath(item.Entry) is { } path && IconProvider.DrawSystem(dc, path, x, y))
