@@ -43,6 +43,7 @@ public sealed class OperationToasts
         _stack.SizeChanged += (_, _) => Reposition();
         target.SizeChanged += (_, _) => Reposition();
         owner.PositionChanged += (_, _) => Reposition();
+        UiZoom.Changed += Reposition;
         owner.PropertyChanged += (_, e) =>
         {
             if (e.Property == Window.WindowStateProperty)
@@ -164,8 +165,10 @@ public sealed class OperationToasts
 
     private void Reposition()
     {
-        _popup.HorizontalOffset = Math.Max(0, _target.ActualWidth - CardWidth - 32);
-        _popup.VerticalOffset = Math.Max(0, _target.ActualHeight - _stack.ActualHeight - 48); // above the console's button and tabs
+        // The target and the cards are inside the zoom's layout transform, the popup's offsets are not (issue #362).
+        var zoom = UiZoom.Factor;
+        _popup.HorizontalOffset = Math.Max(0, (_target.ActualWidth - CardWidth - 32) * zoom);
+        _popup.VerticalOffset = Math.Max(0, (_target.ActualHeight - _stack.ActualHeight - 48) * zoom); // above the console's button and tabs
 
         // Popups only move when an offset actually changes.
         _popup.HorizontalOffset += 0.01;
