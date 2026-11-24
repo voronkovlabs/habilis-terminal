@@ -54,6 +54,14 @@ public partial class MainWindow
         Workspace.LayoutUpdated += (_, _) => UpdateHintButton();
     }
 
+    /// <summary>The console's command blocks mode (#266): the shell script reads the flag at each prompt.</summary>
+    private void ApplyCommandBlocks(ConsoleTab tab)
+    {
+        var on = _settings.TerminalCommandBlocks && tab.Host.Kind == ShellKind.Pwsh;
+        tab.Host.CommandBlocks = on;
+        tab.Terminal.CommandSeparators = on;
+    }
+
     private ConsoleTab CreateTab(string folder)
     {
         var pwsh = App.FindPwsh() ?? throw new InvalidOperationException("PowerShell 7 (pwsh.exe) was not found.");
@@ -120,6 +128,7 @@ public partial class MainWindow
         WireTerminalMouse(tab);
         Workspace.Children.Insert(0, tab.Terminal);
         _tabs.Add(tab);
+        ApplyCommandBlocks(tab);
         return tab;
     }
 

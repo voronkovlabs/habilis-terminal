@@ -39,6 +39,7 @@ public static class SettingsCatalog
         new("terminal.fontFamily", Terminal, "Font Family", "Font of the terminal.", SettingKind.Text, "Cascadia Mono"),
         new("terminal.fontSize", Terminal, "Font Size", "Font size of the terminal, in points.", SettingKind.Number, 11, Minimum: 6, Maximum: 48),
         new("terminal.defaultRows", Terminal, "Default Rows", "Terminal height in rows below the panels on first start.", SettingKind.Number, 12, Minimum: 2, Maximum: 200),
+        new("terminal.commandBlocks", Terminal, "Command Blocks", "The prompt shows the folder and the git branch on a line of its own above a short PS>, and a thin line separates the commands, as in the IDEA terminal. PowerShell only.", SettingKind.Toggle, false),
         new("terminal.multilinePasteWarning", Terminal, "Multi-line Paste Warning", "Ask before pasting text with several lines.", SettingKind.Toggle, true),
         new("shell.path", Terminal, "Shell Path", "Path to the shell. Empty: PowerShell 7 on Windows, the login shell ($SHELL, zsh) on macOS and Linux.", SettingKind.Text, "", RequiresRestart: true),
         new("shell.args", Terminal, "Shell Arguments", "Extra arguments for pwsh, e.g. -NoProfile.", SettingKind.Text, "", RequiresRestart: true),

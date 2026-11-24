@@ -179,6 +179,13 @@ public sealed class ShellHost : IDisposable
     /// and Tab come back through <see cref="PanelKeyReturned"/> instead of acting in the line. A flag file in the
     /// channel, which the integration script checks on those keys.
     /// </summary>
+    /// <summary>The prompt shows the folder on a line of its own above a short "PS>" (#266); read by the shell script.</summary>
+    public bool CommandBlocks
+    {
+        get => File.Exists(Path.Combine(ChannelDirectory, "command-blocks"));
+        set => SetFlag("command-blocks", value);
+    }
+
     public bool PanelMode
     {
         get => File.Exists(Path.Combine(ChannelDirectory, "panel-mode"));

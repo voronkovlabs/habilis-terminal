@@ -37,6 +37,8 @@ public sealed class AppSettings
 
     public bool TerminalMultilinePasteWarning => Get<bool>("terminal.multilinePasteWarning");
 
+    public bool TerminalCommandBlocks => Get<bool>("terminal.commandBlocks");
+
     public string ShellPath => Get<string>("shell.path");
 
     public string ShellArgs => Get<string>("shell.args");

@@ -76,6 +76,9 @@ public sealed class TermLine
     /// <summary>The text went on to the next line by itself (a soft wrap): copying joins them.</summary>
     public bool Wrapped { get; set; }
 
+    /// <summary>A shell prompt starts on this line (OSC 133;A): the console may draw a line between commands (#266).</summary>
+    public bool PromptStart { get; set; }
+
     public void Clear(CellStyle style) => Fill(0, Cells.Length, style);
 
     public void Fill(int from, int to, CellStyle style)

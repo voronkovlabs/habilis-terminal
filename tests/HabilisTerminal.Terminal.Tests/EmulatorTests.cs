@@ -282,6 +282,19 @@ public sealed class EmulatorTests
         Assert.Null(emulator.TakeCommandMark());
     }
 
+    /// <summary>Issue #266: a prompt's start marks its line, for the line between commands; scrolling keeps it, a clear drops it.</summary>
+    [Fact]
+    public void A_prompt_start_marks_its_line()
+    {
+        var t = new TerminalEmulator(20, 4, scrollback: 50);
+        t.Feed("\u001b]133;A\a~\r\nPS> ls\r\nfile\r\n\u001b]133;A\a~\r\nPS> ");
+        var marked = Enumerable.Range(0, t.LineCount).Where(i => t.Line(i).PromptStart).Select(i => t.Line(i).Text(0, 20).Trim()).ToArray();
+        Assert.Equal(["~", "~"], marked);
+
+        t.Feed("\u001b[2J");
+        Assert.DoesNotContain(Enumerable.Range(t.ScrollbackCount, t.Rows), i => t.Line(i).PromptStart);
+    }
+
     /// <summary>Issue #312: on a Unix pty the console grown over the panels shows the lines above, not blank rows below.</summary>
     [Fact]
     public void A_taller_screen_takes_its_new_rows_from_the_scrollback()

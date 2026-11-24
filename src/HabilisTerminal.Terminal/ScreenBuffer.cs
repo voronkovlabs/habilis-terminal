@@ -57,6 +57,7 @@ internal sealed class ScreenBuffer(int columns, int rows, int scrollbackLimit)
         _lines.RemoveAt(start + top);
         line.Clear(style);
         line.Wrapped = false;
+        line.PromptStart = false;
         _lines.Insert(start + bottom, line);
     }
 
@@ -68,6 +69,7 @@ internal sealed class ScreenBuffer(int columns, int rows, int scrollbackLimit)
         _lines.RemoveAt(start + bottom);
         line.Clear(style);
         line.Wrapped = false;
+        line.PromptStart = false;
         _lines.Insert(start + top, line);
     }
 

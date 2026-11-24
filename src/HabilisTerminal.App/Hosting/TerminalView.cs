@@ -240,6 +240,22 @@ public sealed class TerminalView : Control
         return Color.FromRgb(Level(index / 36), Level(index / 6 % 6), Level(index % 6));
     }
 
+    /// <summary>The console's command blocks mode draws a line above each prompt (#266).</summary>
+    public bool CommandSeparators
+    {
+        get => _commandSeparators;
+        set
+        {
+            if (_commandSeparators != value)
+            {
+                _commandSeparators = value;
+                InvalidateVisual();
+            }
+        }
+    }
+
+    private bool _commandSeparators;
+
     public override void Render(DrawingContext context)
     {
         using var measure = Core.Diagnostics.Perf.Measure("console.render");
@@ -266,7 +282,16 @@ public sealed class TerminalView : Control
                     continue;
                 }
 
-                DrawLine(context, _emulator.Line(index), row, index + _emulator.DroppedLines, selection);
+                var line = _emulator.Line(index);
+                DrawLine(context, line, row, index + _emulator.DroppedLines, selection);
+                if (CommandSeparators && line.PromptStart && index + _emulator.DroppedLines > 0)
+                {
+                    // A thin line between commands, drawn rather than printed: it is not text, not copied (#266).
+                    var color = _palette.Foreground;
+                    var pen = new Pen(new SolidColorBrush(Color.FromArgb(56, color.R, color.G, color.B)), 1);
+                    var top = (row * _cell.Height) + 0.5;
+                    context.DrawLine(pen, new Point(0, top), new Point(Bounds.Width, top));
+                }
             }
 
             if (_scroll == 0 && _emulator.CursorVisible && (_cursorOn || !IsFocused))

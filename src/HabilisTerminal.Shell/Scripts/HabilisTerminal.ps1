@@ -34,6 +34,84 @@ function global:__HabiDrawUnicode {
     [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
 }
 
+# Command blocks (#266), a setting: the folder and the git branch on a dim line of their own, then a short "PS> ". The
+# console draws a thin line above each prompt. The user's own prompt is not called in this mode.
+function global:__HabiBlockPrompt($location) {
+    $esc = [char]0x1b
+    $path = $location.Path
+    $branch = $null
+    if ($location.Provider.Name -eq 'FileSystem') {
+        $path = $location.ProviderPath
+        $homePath = [Environment]::GetFolderPath('UserProfile').TrimEnd('\')
+        if ($homePath -and ($path -eq $homePath -or $path.StartsWith("$homePath\", [StringComparison]::OrdinalIgnoreCase))) {
+            $path = '~' + $path.Substring($homePath.Length)
+        }
+
+        $branch = __HabiGitBranch $location.ProviderPath
+    }
+
+    $line = "$esc[90m"
+    if ($env:CONDA_DEFAULT_ENV) {
+        $line += "($env:CONDA_DEFAULT_ENV) "
+    }
+
+    $line += $path
+    if ($branch) {
+        $line += "  $esc[36m$branch"
+    }
+
+    __HabiExtraPromptLines 1
+    "$line$esc[0m`nPS> "
+}
+
+# PSReadLine redraws the prompt's last line only unless told how many lines come before it.
+function global:__HabiExtraPromptLines([int] $Count) {
+    if ((Get-Command Set-PSReadLineOption -ErrorAction Ignore) -and (Get-PSReadLineOption).ExtraPromptLineCount -ne $Count) {
+        Set-PSReadLineOption -ExtraPromptLineCount $Count
+    }
+}
+
+# The branch from .git\HEAD, without running git: a prompt must stay fast.
+function global:__HabiGitBranch([string] $Folder) {
+    try {
+        $dir = [System.IO.DirectoryInfo]::new($Folder)
+        while ($dir) {
+            $git = Join-Path $dir.FullName '.git'
+            $head = $null
+            if ([System.IO.Directory]::Exists($git)) {
+                $head = Join-Path $git 'HEAD'
+            }
+            elseif ([System.IO.File]::Exists($git)) {
+                $target = ([System.IO.File]::ReadAllText($git) -replace '^gitdir:\s*', '').Trim()
+                if (-not [System.IO.Path]::IsPathRooted($target)) {
+                    $target = Join-Path $dir.FullName $target
+                }
+
+                $head = Join-Path $target 'HEAD'
+            }
+
+            if ($head) {
+                if (-not [System.IO.File]::Exists($head)) {
+                    return $null
+                }
+
+                $text = [System.IO.File]::ReadAllText($head).Trim()
+                if ($text -match '^ref:\s*refs/heads/(.+)$') {
+                    return $Matches[1]
+                }
+
+                return $text.Substring(0, [Math]::Min(7, $text.Length))
+            }
+
+            $dir = $dir.Parent
+        }
+    }
+    catch {
+    }
+
+    $null
+}
+
 function global:prompt {
     # Must be the first statement: the status of the user's last command.
     $commandSucceeded = $global:?
@@ -62,7 +140,14 @@ function global:prompt {
         Write-Error 'failure' -ErrorAction Ignore
     }
 
-    [void] $result.Append((& $state.OriginalPrompt) -join '')
+    if (Test-Path -LiteralPath (Join-Path $state.Channel 'command-blocks')) {
+        [void] $result.Append((__HabiBlockPrompt $location))
+    }
+    else {
+        __HabiExtraPromptLines 0
+        [void] $result.Append((& $state.OriginalPrompt) -join '')
+    }
+
     [void] $result.Append((__HabiOsc '133;B'))
     $result.ToString()
 }

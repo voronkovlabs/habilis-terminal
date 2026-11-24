@@ -429,6 +429,10 @@ public sealed class TerminalEmulator : IVtHandler
         {
             _commandMark = (_y, Rows, Columns);
         }
+        else if (payload == "133;A" && !AlternateScreen)
+        {
+            _screen.Row(_y).PromptStart = true;
+        }
 
         var separator = payload.IndexOf(';', StringComparison.Ordinal);
         var code = separator < 0 ? payload : payload[..separator];
@@ -810,6 +814,7 @@ public sealed class TerminalEmulator : IVtHandler
         var line = _screen.Row(row);
         line.Clear(_style.Erased);
         line.Wrapped = false;
+        line.PromptStart = false;
     }
 
     private void InsertCells(int count)

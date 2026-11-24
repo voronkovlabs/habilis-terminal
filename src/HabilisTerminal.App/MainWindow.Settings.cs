@@ -92,6 +92,15 @@ public partial class MainWindow
             }
         }
 
+        if (previous is not null && previous.TerminalCommandBlocks != settings.TerminalCommandBlocks)
+        {
+            // Shown from the next prompt on; lines already printed keep their look.
+            foreach (var tab in _tabs)
+            {
+                ApplyCommandBlocks(tab);
+            }
+        }
+
         if (previous is not null && IsLoaded && (previous.TerminalFontFamily != settings.TerminalFontFamily || previous.TerminalFontSize != settings.TerminalFontSize))
         {
             ApplyTerminalTheme(_themes.Current);
