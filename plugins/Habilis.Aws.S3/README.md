@@ -52,7 +52,7 @@ F9 > Options > Plugins > S3 Browser, or the panel's **Settings** command. Change
 |---|---|---|
 | AWS profile | `default` | The profile from the AWS config and credentials files. |
 | Default region | `us-east-1` | The region the bucket list is requested from. Each bucket is then reached in its own region. |
-| Parallel transfers | 8 (1..64) | Requests running at once, counting both files and parts of large files. |
+| Parallel transfers | 32 (1..128) | Requests running at once, counting both files and parts of large files. |
 | Part size, MB | 16 (5..512) | Larger files are uploaded and downloaded in parts of this size. The size is raised automatically when a file would need more than 10,000 parts. |
 | Request timeout, seconds | 60 (5..600) | Applies to each request. One part of a large file is one request. |
 | Regions offered | five common regions | Offered first in the region list. |

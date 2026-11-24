@@ -9,7 +9,7 @@ internal sealed record S3Settings
 {
     public const int MinimumPartSizeMb = 5;
     public const int MaximumPartSizeMb = 512;
-    public const int MaximumParallel = 64;
+    public const int MaximumParallel = 128;
 
     public string CredentialsFile { get; init; } = string.Empty;
 
@@ -21,7 +21,7 @@ internal sealed record S3Settings
     public IReadOnlyList<string> Regions { get; init; } = ["us-east-1", "us-east-2", "us-west-2", "eu-west-1", "eu-central-1"];
 
     /// <summary>Requests running at once: files, and parts of large files.</summary>
-    public int MaxParallel { get; init; } = 8;
+    public int MaxParallel { get; init; } = 32;
 
     /// <summary>Files larger than this are transferred in parts of this size.</summary>
     public int PartSizeMb { get; init; } = 16;
