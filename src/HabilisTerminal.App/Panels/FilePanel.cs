@@ -84,6 +84,7 @@ public sealed partial class FilePanel : Border
 
         _list.State = State;
         _list.ItemClicked += OnItemClicked;
+        _list.WheelMoved += Move;
         _list.ContextMenuRequested += OnContextMenuRequested;
         _list.CustomHeaderClicked += key =>
         {

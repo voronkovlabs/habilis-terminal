@@ -71,6 +71,9 @@ public sealed class FileListView : Control
     /// <summary>Left click on an item: index, click count.</summary>
     public event Action<int, int>? ItemClicked;
 
+    /// <summary>The wheel turned this many names (negative: up); the panel moves its cursor.</summary>
+    public event Action<int>? WheelMoved;
+
     /// <summary>Right click: the item index (-1 for empty space) and the click point in physical screen pixels.</summary>
     public event Action<int, PixelPoint>? ContextMenuRequested;
 
@@ -438,12 +441,23 @@ public sealed class FileListView : Control
             return;
         }
 
-        // Three rows a notch (a column's worth in several columns); a trackpad's fractions add up (#275).
-        var step = ColumnCount == 1 ? 3 : RowsPerColumn;
-        var rows = _wheel.Take(e.Delta.Y, step);
-        if (rows != 0)
+        // As in Far, a notch moves the cursor to the next or previous name and the list follows it (issue #373); a
+        // trackpad's fractions add up (#275). Without a listener the view only scrolls, three rows a notch.
+        if (WheelMoved is { } moved)
         {
-            ScrollBy(-rows);
+            var items = _wheel.Take(e.Delta.Y, 1);
+            if (items != 0)
+            {
+                moved(-items);
+            }
+        }
+        else
+        {
+            var rows = _wheel.Take(e.Delta.Y, ColumnCount == 1 ? 3 : RowsPerColumn);
+            if (rows != 0)
+            {
+                ScrollBy(-rows);
+            }
         }
 
         e.Handled = true;
