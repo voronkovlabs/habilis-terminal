@@ -34,9 +34,11 @@ internal static class TextEditorTheme
         editor.TextArea.TextView.CurrentLineBackground = Brush(theme, "editor.lineHighlightBackground");
         editor.TextArea.TextView.CurrentLineBorder = new Pen(Brush(theme, "editor.lineHighlightBorder", "editor.lineHighlightBackground"), 1);
 
-        // A link keeps its token's colour and is only underlined, as in VS Code; the default dark blue is barely seen on a
-        // dark background (issue #377).
-        editor.TextArea.TextView.LinkTextForegroundBrush = null;
+        // A link is drawn in the theme's string colour and underlined, as VS Code shows a URL in a string; the default dark
+        // blue is barely seen on a dark background (issue #377). AvaloniaEdit draws a link over the token colour, and with
+        // no brush not at all.
+        var stringColor = TokenColors(theme).Where(t => t.Scope == "string").Select(t => (Color?)t.Color).LastOrDefault();
+        editor.TextArea.TextView.LinkTextForegroundBrush = stringColor is { } linkColor ? new SolidColorBrush(linkColor) : editor.Foreground;
         RecolorSyntax(editor, theme);
         SyntaxColors.Recolor(editor, theme);
     }
