@@ -105,6 +105,9 @@ public sealed class ViewerPage : DockPanel, IDisposable, IPage
     public void Dispose()
     {
         _closed = true;
+
+        // A render may still be queued for the view: it must not read a closed file (issue #372).
+        _view.Document = null;
         _document?.Dispose();
     }
 
