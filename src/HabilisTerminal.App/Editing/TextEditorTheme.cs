@@ -33,6 +33,10 @@ internal static class TextEditorTheme
         editor.TextArea.Caret.CaretBrush = Brush(theme, "editorCursor.foreground", "editor.foreground");
         editor.TextArea.TextView.CurrentLineBackground = Brush(theme, "editor.lineHighlightBackground");
         editor.TextArea.TextView.CurrentLineBorder = new Pen(Brush(theme, "editor.lineHighlightBorder", "editor.lineHighlightBackground"), 1);
+
+        // A link keeps its token's colour and is only underlined, as in VS Code; the default dark blue is barely seen on a
+        // dark background (issue #377).
+        editor.TextArea.TextView.LinkTextForegroundBrush = null;
         RecolorSyntax(editor, theme);
         SyntaxColors.Recolor(editor, theme);
     }
