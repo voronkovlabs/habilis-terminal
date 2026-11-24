@@ -18,6 +18,9 @@ public class ReportPrivacyTests
     [InlineData("%USERPROFILE%/Documents/Project-X/plan.md", "<path>/plan.md")]
     [InlineData("~/work/notes.txt is locked", "<path>/notes.txt is locked")]
     [InlineData("See https://github.com/a/b/issues/1 and 1/2/2026, and/or /tmp", "See https://github.com/a/b/issues/1 and 1/2/2026, and/or /tmp")]
+    [InlineData("Error calling AssumeRole for role arn:aws:iam::123456789012:role/SomeRole", "Error calling AssumeRole for role <arn>")]
+    [InlineData("Listing s3://my-bucket/ failed.", "Listing s3://<bucket>/ failed.")]
+    [InlineData("Copying s3://my-bucket/team/data/file.bin failed", "Copying s3://<path>/file.bin failed")]
     public void A_path_keeps_only_its_last_part(string text, string expected) =>
         Assert.Equal(expected, ReportMasking.HidePaths(text));
 

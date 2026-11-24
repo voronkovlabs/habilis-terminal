@@ -28,6 +28,15 @@ public sealed partial class ReportMasking(string? userProfile, string? userName,
             return text;
         }
 
+        // Cloud names say whose account and buckets they are (issue #375): an ARN goes whole, an S3 address keeps its
+        // last part as a path does.
+        text = ArnPattern().Replace(text, "<arn>");
+        text = S3Pattern().Replace(text, match =>
+        {
+            var parts = match.Groups["rest"].Value.TrimEnd('/').Split('/');
+            return parts.Length > 1 ? "s3://<path>/" + parts[^1] : "s3://<bucket>" + (match.Value.EndsWith('/') ? "/" : string.Empty);
+        });
+
         text = PathPattern().Replace(text, match =>
         {
             var parts = match.Value.TrimEnd('\\').Split('\\');
@@ -42,6 +51,12 @@ public sealed partial class ReportMasking(string? userProfile, string? userName,
             return "<path>/" + path[(path.LastIndexOf('/') + 1)..] + line;
         });
     }
+
+    [GeneratedRegex(@"\barn:aws[a-z-]*:[^\s'""<>|`,;)]+", RegexOptions.CultureInvariant)]
+    private static partial Regex ArnPattern();
+
+    [GeneratedRegex(@"\bs3://(?<rest>[^\s'""<>|`,;)]+)", RegexOptions.CultureInvariant | RegexOptions.IgnoreCase)]
+    private static partial Regex S3Pattern();
 
     // A drive, a UNC share or an environment variable such as %USERPROFILE%, then one or more parts. A part ends at a
     // backslash, a quote, a line end or a character no file name has.
