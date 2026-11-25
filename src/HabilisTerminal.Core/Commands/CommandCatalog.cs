@@ -212,6 +212,7 @@ public static class CommandCatalog
         new("sort.selectedFirst", Panels, "Selected first", "Shift+F12", HasPanel),
         new("panel.hidden", Panels, "Show hidden files", "Ctrl+H", Local) { Help = "Hidden and system files" },
         new("panel.reread", Panels, "Re-read", "Ctrl+R", HasPanel),
+        new("panel.favorite", Panels, "Add to Favorites", "Ctrl+D", HasPanel) { Help = "The current folder in the Change Drive menu's Favorites; again removes it" },
         new("panel.info", Panels, "Info panel", "Ctrl+L", HasPanel) { Help = "Info panel in the other panel (shows a hidden one; again hides it)" },
         new("panel.quickView", Panels, "Quick view", "Ctrl+Q", HasPanel) { Help = "Quick view in the other panel (shows a hidden one; again hides it); on a PDF the mouse wheel turns pages" },
         new("panel.compare", Panels, "Compare folders", null, c => Local(c) && !c.OtherIsPlugin),

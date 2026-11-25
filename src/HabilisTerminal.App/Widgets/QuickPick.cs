@@ -37,8 +37,11 @@ public sealed record QuickPickOptions
     /// <summary>Opens over the target, as wide as it or wider, as if typing in the target itself.</summary>
     public bool OverTarget { get; init; }
 
-    /// <summary>Del on an item (e.g. disconnect a drive); the item list is not changed automatically.</summary>
-    public Action<QuickPickItem>? OnDelete { get; init; }
+    /// <summary>Del on an item (e.g. disconnect a drive); true takes the item out of the list (a favorite, #385).</summary>
+    public Func<QuickPickItem, bool>? OnDelete { get; init; }
+
+    /// <summary>The list may grow down to the bottom of the window (the drive menu, #385) instead of a fixed height.</summary>
+    public bool FillDown { get; init; }
 
     /// <summary>Keys that close the pick with the selected item and the key as <see cref="QuickPickResult.Command"/> (F4 in the drive menu).</summary>
     public IReadOnlyList<Key> CommandKeys { get; init; } = [];
@@ -53,7 +56,7 @@ public sealed record QuickPickResult(QuickPickItem? Item, string Text, Key? Comm
 /// <summary>A VS Code-like quick pick shown in a popup over its target (drive menu, history, sort menu, input).</summary>
 public sealed class QuickPick : UserControl
 {
-    private readonly IReadOnlyList<QuickPickItem> _items;
+    private readonly List<QuickPickItem> _items;
     private readonly QuickPickOptions _options;
     private readonly TaskCompletionSource<QuickPickResult?> _result = new();
     private readonly TextBlock _title = new() { Margin = new Thickness(4, 0, 4, 6), FontSize = 12 };
@@ -64,7 +67,7 @@ public sealed class QuickPick : UserControl
 
     private QuickPick(IReadOnlyList<QuickPickItem> items, QuickPickOptions options)
     {
-        _items = items;
+        _items = [.. items];
         _options = options;
         Width = 520;
         FontFamily = new FontFamily("Segoe UI");
@@ -149,6 +152,16 @@ public sealed class QuickPick : UserControl
         {
             popup.HorizontalOffset = Math.Max(0, (width - pick.Width) / 2) * UiZoom.Factor;
             popup.VerticalOffset = 4 * UiZoom.Factor;
+        }
+
+        if (options.FillDown && TopLevel.GetTopLevel(target) is { } top && target.TranslatePoint(default, top) is { } origin)
+        {
+            // The title and the filter box above the list, the shadow and a little air below (#385).
+            const double Above = 76;
+            const double Below = 12;
+            var windowHeight = top.ClientSize.Height / UiZoom.Factor;
+            var available = windowHeight - (origin.Y / UiZoom.Factor) - 4 - Above - Below;
+            pick._list.MaxHeight = Math.Max(160, available);
         }
 
         popup.Closed += (_, _) => pick._result.TrySetResult(null);
@@ -304,7 +317,21 @@ public sealed class QuickPick : UserControl
                 e.Handled = true;
                 break;
             case Key.Delete when text.Length == 0 && _options.OnDelete is { } onDelete && _list.SelectedItem is QuickPickItem item:
-                onDelete(item);
+                if (onDelete(item))
+                {
+                    var index = _items.IndexOf(item);
+                    _items.RemoveAt(index);
+
+                    // A group's first item carries its header: the next one of the group takes it over.
+                    if (item.Group is { } group && index < _items.Count && _items[index].Group is null && item.Section is not null && _items[index].Section == item.Section)
+                    {
+                        _items[index].Group = group;
+                    }
+
+                    ApplyFilter();
+                    _list.SelectedIndex = Math.Min(index, _list.ItemCount - 1);
+                }
+
                 e.Handled = true;
                 break;
             case var key when _options.CommandKeys.Contains(key) && e.KeyModifiers == KeyModifiers.None && _list.SelectedItem is QuickPickItem selected:

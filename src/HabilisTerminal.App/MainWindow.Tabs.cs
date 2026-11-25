@@ -54,6 +54,25 @@ public partial class MainWindow
         Workspace.LayoutUpdated += (_, _) => UpdateHintButton();
     }
 
+    /// <summary>Ctrl+D (issue #385): the panel's folder or plugin location into the favorites, or out of them.</summary>
+    private void ToggleFavorite(FilePanel panel)
+    {
+        var location = panel.CurrentPath;
+        // The star in the header appearing or going away is the answer.
+        _favorites.Toggle(location);
+        UpdateFavoriteMarks();
+        SaveStateInBackground();
+    }
+
+    /// <summary>A star in the header of a panel that shows a favorite (issue #385).</summary>
+    private void UpdateFavoriteMarks()
+    {
+        foreach (var panel in AllPanels())
+        {
+            panel.IsFavorite = _favorites.Contains(panel.CurrentPath);
+        }
+    }
+
     /// <summary>Tells the shells whether the active panel shows a plugin: "cd name" then goes to it (#381).</summary>
     private void UpdatePluginPanelFlag()
     {
@@ -172,6 +191,8 @@ public partial class MainWindow
     {
         panel.Navigated += OnPanelNavigated;
         panel.Navigated += (_, _) => UpdatePluginPanelFlag();
+        panel.Navigated += (_, _) => UpdateFavoriteMarks();
+        panel.FavoriteToggled += ToggleFavorite;
         panel.ExecuteRequested += OnPanelExecuteRequested;
         panel.OpensAsFolder = _plugins.OpensAsFolder;
         panel.FileAsFolderRequested += (p, item, anyFormat) => Fire(OpenFileAsFolderAsync(p, item, anyFormat));
@@ -187,6 +208,7 @@ public partial class MainWindow
         {
             _history.Add(location);
             UpdatePluginPanelFlag();
+            UpdateFavoriteMarks();
         };
         panel.PluginEntryActivated += (p, entry) => Fire(PluginViewAsync(p, entry));
         panel.WaitToasts = () => Toasts;

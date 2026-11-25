@@ -31,6 +31,7 @@ public partial class MainWindow : Window
     private readonly ThemeService _themes = new();
     private readonly FolderHistory _history = new();
     private Core.Plugins.PluginHotkeys _pluginHotkeys = new();
+    private Core.Panels.Favorites _favorites = new();
     private readonly Dictionary<string, string> _lastPathPerDrive = new(StringComparer.OrdinalIgnoreCase);
     private FilePanel _left = new("Left");
     private FilePanel _right = new("Right");

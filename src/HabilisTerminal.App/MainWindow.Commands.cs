@@ -801,7 +801,7 @@ public partial class MainWindow
                 },
                 Hotkey = drive.Root[0],
                 Tag = drive,
-                IsCurrent = select is null && string.Equals(drive.Root, currentRoot, StringComparison.OrdinalIgnoreCase),
+                IsCurrent = select is null && string.Equals(drive.Root, currentRoot, StringComparison.OrdinalIgnoreCase) && !_favorites.Contains(panel.CurrentPath),
                 Detail = "…",
             });
         }
@@ -811,6 +811,13 @@ public partial class MainWindow
 
         // Everything but the drives gets a hotkey: 1, 2, 3... unless F4 assigned another (issues #66, #72).
         var extras = new List<(DriveMenuEntry Entry, string Label, string Description, string Icon, string Group, char? DefaultHotkey)>();
+
+        // Ctrl+D in a panel adds its folder here (#385); Del removes one, F4 changes its hotkey as for the others.
+        foreach (var favorite in _favorites.Items)
+        {
+            extras.Add((new DriveMenuEntry(("favorites", favorite), favorite), Core.Panels.Favorites.Title(favorite), favorite, Codicon.Star, "Favorites", null));
+        }
+
         foreach (var (plugin, entry) in _plugins.DriveMenuItems())
         {
             extras.Add((new DriveMenuEntry((plugin.Id, entry.Title), (plugin, entry)), entry.Title, plugin.Name, Codicon.Folder, "Plugins", entry.DefaultHotkey));
@@ -832,10 +839,11 @@ public partial class MainWindow
                 Label = hotkeys[i] is { } key ? $"{key}: {label}" : label,
                 Description = description,
                 Group = group != lastGroup ? group : null,
+                Section = group,
                 Icon = icon,
                 Hotkey = hotkeys[i],
                 Tag = entry,
-                IsCurrent = select == entry.Key,
+                IsCurrent = select == entry.Key || (select is null && entry.Key.Id == "favorites" && entry.Target is string here && new Core.Panels.Favorites([here]).Contains(panel.CurrentPath)),
             });
             lastGroup = group;
         }
@@ -851,7 +859,21 @@ public partial class MainWindow
             Title = $"Change drive ({panel.Side.ToLowerInvariant()} panel)",
             Placeholder = "Drive letter, hotkey or name, or paste a path or address · F4 changes an item's hotkey",
             IsFreeText = IsPastedLocation,
-            OnDelete = item => DisconnectOrEject(item),
+            OnDelete = item =>
+            {
+                // Del on a favorite takes it out of the favorites (#385).
+                if (item.Tag is DriveMenuEntry { Key.Id: "favorites", Target: string favorite })
+                {
+                    _favorites.Remove(favorite);
+                    UpdateFavoriteMarks();
+                    SaveStateInBackground();
+                    return true;
+                }
+
+                DisconnectOrEject(item);
+                return false;
+            },
+            FillDown = true,
             CommandKeys = [Key.F4],
         });
     }

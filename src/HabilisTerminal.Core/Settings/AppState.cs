@@ -78,6 +78,9 @@ public sealed record AppState
 
     /// <summary>Hotkeys of plugin items in the drive menu ("pluginId/title" → key, issue #66).</summary>
     public IReadOnlyDictionary<string, string> PluginHotkeys { get; init; } = new Dictionary<string, string>();
+
+    /// <summary>Favorite folders and plugin locations, in the order they were added (issue #385).</summary>
+    public IReadOnlyList<string> Favorites { get; init; } = [];
 }
 
 /// <summary>

@@ -30,6 +30,7 @@ internal static class Codicon
     }
 
     public const string Folder = "";
+    public const string Star = "\uEB59";
     public const string Home = "";
     public const string Desktop = "";
     public const string Download = "";

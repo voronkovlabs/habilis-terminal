@@ -34,6 +34,7 @@ public sealed partial class FilePanel : Border
     private int _quickViewVersion;
     private FilePanel? _quickViewSource;
     private readonly TextBlock _title = new();
+    private readonly TextBlock _star = new() { Text = "★", IsVisible = false, Margin = new Thickness(0, 0, 5, 0), VerticalAlignment = VerticalAlignment.Center };
     private readonly TextBlock _path = new();
     private readonly TextBlock _filterClear = new();
     private Border _filterClearTarget = null!;
@@ -116,6 +117,11 @@ public sealed partial class FilePanel : Border
         _status.TextTrimming = TextTrimming.CharacterEllipsis;
 
         var header = new DockPanel { Margin = new Thickness(10, 6, 10, 6), LastChildFill = true };
+        DockPanel.SetDock(_star, Dock.Left);
+        header.Children.Add(_star);
+        _star.FontSize = 12;
+        _star.Foreground = PanelPalette.MarkedForeground;
+        Avalonia.Controls.ToolTip.SetTip(_star, "In Favorites: Alt+F1 / Alt+F2 lists it, Ctrl+D removes it");
         DockPanel.SetDock(_title, Dock.Left);
         header.Children.Add(_title);
 
@@ -190,6 +196,16 @@ public sealed partial class FilePanel : Border
 
     /// <summary>A directory was opened (navigation or refresh to another path).</summary>
     public event Action<FilePanel, string>? Navigated;
+
+    /// <summary>The folder shown is a favorite: a star before the title (issue #385).</summary>
+    public bool IsFavorite
+    {
+        get => _star.IsVisible;
+        set => _star.IsVisible = value;
+    }
+
+    /// <summary>Ctrl+D: the current folder goes into the favorites, or out of them (issue #385).</summary>
+    public event Action<FilePanel>? FavoriteToggled;
 
     /// <summary>Enter on a file: run it through the shell.</summary>
     public event Action<FilePanel, PanelItem>? ExecuteRequested;
@@ -376,6 +392,7 @@ public sealed partial class FilePanel : Border
     {
         Background = PanelPalette.Background;
         _title.Foreground = PanelPalette.Foreground;
+        _star.Foreground = PanelPalette.MarkedForeground;
         _path.Foreground = PanelPalette.DescriptionForeground;
         _filterClear.Foreground = PanelPalette.Foreground;
         _message.Foreground = PanelPalette.ErrorForeground;
@@ -865,6 +882,9 @@ public sealed partial class FilePanel : Border
                 return true;
             case Key.R when modifiers == KeyModifiers.Control:
                 _ = RefreshAsync();
+                return true;
+            case Key.D when modifiers == KeyModifiers.Control:
+                FavoriteToggled?.Invoke(this);
                 return true;
             case Key.F12 when modifiers == KeyModifiers.Shift:
                 State.SetSelectedFirst(!State.SelectedFirst);

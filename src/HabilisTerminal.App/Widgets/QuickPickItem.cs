@@ -24,7 +24,10 @@ public sealed class QuickPickItem : INotifyPropertyChanged
     public char? Hotkey { get; init; }
 
     /// <summary>Group header shown above this item (e.g. "Places").</summary>
-    public string? Group { get; init; }
+    public string? Group { get; set; }
+
+    /// <summary>The group this item belongs to, header or not: the next item takes the header when the first is deleted.</summary>
+    public string? Section { get; init; }
 
     public object? Tag { get; init; }
 
