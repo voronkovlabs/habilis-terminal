@@ -68,7 +68,7 @@ Fields with no value are left out.
 
 | Method | Params | Result |
 |---|---|---|
-| `api.version` | | `{ api, sdk, host }`: this protocol's version (1), the SDK the app implements, the app's version |
+| `api.version` | | `{ api, sdk, host }`: this protocol's version (2), the SDK the app implements, the app's version |
 | `plugins.list` | | An array of `{ id, name, version, sdk, folder, source, state, error, errorDetail, collectible, buildId }` |
 | `plugins.load` | `{ folder }`: a full path | An outcome |
 | `plugins.reload` | `{ id }` | An outcome |
@@ -78,6 +78,27 @@ Fields with no value are left out.
 | `commands.list` | | What the command line (Ctrl+Shift+P) would show now, in its order: an array of `{ id, title, section, keys }`. A panel opened with `panels.open` counts |
 
 In a list, `state` is `loaded`, `failed` or `disabled` (turned off in the plugin manager, so not running). `folder` is where it runs from, `source` where a reload reads it. `error` is the message and `errorDetail` the whole exception.
+
+### Control methods (API 2)
+
+These drive the whole app, for Claude through `habi mcp` (see [claude-control.md](claude-control.md)). They work only while Settings, Claude Control is not `off`; otherwise they fail with `disabled`. `side` is `left` or `right` (the active panel when left out); `rows` limits the rows a panel lists (200).
+
+| Method | Params | Result |
+|---|---|---|
+| `app.state` | `rows` | `{ activePanel, left, right, page, consoleFolder, shellState, consoleTabs }` |
+| `panels.get` | `side`, `rows` | A panel: `{ side, active, visible, location, plugin, title, message, cursor, marked, count, rows }`, a row being `{ name, folder, size, modified, marked }` |
+| `panels.navigate` | `target`, `side` | A panel. A file's path opens its folder with the cursor on it |
+| `panels.activate` | `side` | A panel |
+| `panels.cursor` | `name`, `side` | A panel |
+| `panels.select` | `names`, `mode` (`set`, `add`, `remove`, `clear`), `side` | A panel |
+| `commands.run` | `id` (from `commands.list`) | `{ ran }`. `not_found` when it does not apply now |
+| `console.run` | `command`, `timeoutMs` (60000) | `{ finished, exitCode, output }`. `busy` while another command runs; `declined` when the user said no (`ask`) |
+| `console.read` | `lines` (100) | `{ text }` |
+| `files.view`, `files.edit` | `path` | The app state |
+| `pages.close` | | The app state |
+| `window.screenshot` | | `{ width, height, png }`, the PNG in base64 |
+| `settings.get` | `key` | An array of `{ key, title, kind, value, default }` |
+| `settings.set` | `key`, `value` | The setting. `api.control` itself is refused |
 
 A panel state is the active panel's `{ plugin, location, title, message, count, entries }`, with `entries` as `{ name, isFolder, size }`, at most 1000, without `..`. `plugin` and `title` are left out for a local folder.
 

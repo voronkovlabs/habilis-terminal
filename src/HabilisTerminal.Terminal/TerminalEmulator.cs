@@ -220,6 +220,46 @@ public sealed class TerminalEmulator : IVtHandler
         Changed?.Invoke();
     }
 
+    /// <summary>The last line with any text on it (a line index as in <see cref="Line"/>), or 0.</summary>
+    public int LastTextLine()
+    {
+        lock (SyncRoot)
+        {
+            for (var i = LineCount - 1; i > 0; i--)
+            {
+                if (Line(i).Text().TrimEnd().Length > 0)
+                {
+                    return i;
+                }
+            }
+
+            return 0;
+        }
+    }
+
+    /// <summary>
+    /// What a command printed (issue #387): the lines after <paramref name="commandLine"/> (counted from the first line
+    /// ever, as <see cref="DroppedLines"/> + a line index), up to the prompt that followed, found by its OSC 133;A mark.
+    /// </summary>
+    public string OutputAfter(long commandLine)
+    {
+        lock (SyncRoot)
+        {
+            var first = (int)Math.Max(0, commandLine + 1 - DroppedLines);
+            var end = LastTextLine();
+            for (var i = end; i >= first; i--)
+            {
+                if (Line(i).PromptStart)
+                {
+                    end = i - 1;
+                    break;
+                }
+            }
+
+            return first > end ? string.Empty : TextBetween(first, 0, end, int.MaxValue).TrimEnd();
+        }
+    }
+
     /// <summary>The text between two points (line index as in <see cref="Line"/>, column), soft wraps joined.</summary>
     public string TextBetween(int startLine, int startColumn, int endLine, int endColumn)
     {

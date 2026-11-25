@@ -295,6 +295,19 @@ public sealed class EmulatorTests
         Assert.DoesNotContain(Enumerable.Range(t.ScrollbackCount, t.Rows), i => t.Line(i).PromptStart);
     }
 
+    /// <summary>Issue #387: what a command printed is the text after its line, up to the next prompt's mark.</summary>
+    [Fact]
+    public void The_output_of_a_command_ends_at_the_next_prompt()
+    {
+        var t = new TerminalEmulator(30, 6, scrollback: 50);
+        t.Feed("\u001b]133;A\aPS> ");
+        var commandLine = t.DroppedLines + t.ScrollbackCount + t.CursorY;
+        t.Feed("dir\r\none\r\ntwo\r\n\u001b]133;A\aPS> ");
+
+        Assert.Equal("one" + Environment.NewLine + "two", t.OutputAfter(commandLine));
+        Assert.Equal("PS>", t.Line(t.LastTextLine()).Text().Trim());
+    }
+
     /// <summary>Issue #312: on a Unix pty the console grown over the panels shows the lines above, not blank rows below.</summary>
     [Fact]
     public void A_taller_screen_takes_its_new_rows_from_the_scrollback()

@@ -18,7 +18,7 @@ public partial class MainWindow : IPluginApiHandler
     {
         PluginLoader.CleanShadowCopies(PluginShadowRoot);
         var version = typeof(MainWindow).Assembly.GetName().Version ?? new Version(0, 0);
-        _pluginApi = new PluginApiServer(PluginApiServer.PipeNameFor(Environment.ProcessId), this, version);
+        _pluginApi = new PluginApiServer(PluginApiServer.PipeNameFor(Environment.ProcessId), this, version, this) { ControlCalled = OnControlCalled };
         _pluginApi.Start();
         Closed += (_, _) => _pluginApi?.Dispose();
     }

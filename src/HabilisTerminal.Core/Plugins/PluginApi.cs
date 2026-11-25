@@ -34,6 +34,8 @@ public sealed class PluginApiException(string code, string message) : Exception(
     public const string LoadFailed = "load_failed";
     public const string IncompatibleSdk = "incompatible_sdk";
     public const string Internal = "internal";
+    public const string Disabled = "disabled";
+    public const string Declined = "declined";
 
     public string Code { get; } = code;
 }
@@ -62,9 +64,16 @@ public interface IPluginApiHandler
 /// The API for loading and unloading plugins while the app runs (issue #150, docs/plugin-api.md): one JSON object per
 /// line, over a named pipe only the current Windows user can open.
 /// </summary>
-public sealed class PluginApiServer(string pipeName, IPluginApiHandler handler, Version hostVersion) : IDisposable
+public sealed class PluginApiServer(string pipeName, IPluginApiHandler handler, Version hostVersion, Control.IControlApiHandler? control = null) : IDisposable
 {
-    public const int ApiVersion = 1;
+    /// <summary>2: the control methods (issue #387), on when the user turned Claude control on.</summary>
+    public const int ApiVersion = 2;
+
+    /// <summary>Rows a panel reports unless the request asks for another number.</summary>
+    public const int DefaultRows = 200;
+
+    /// <summary>Called for every control request with its method and parameters, for the journal and the title mark.</summary>
+    public Action<string, string>? ControlCalled { get; set; }
 
     private static readonly JsonSerializerOptions Options = new()
     {
@@ -161,8 +170,72 @@ public sealed class PluginApiServer(string pipeName, IPluginApiHandler handler, 
         "panels.open" => await handler.OpenPanelAsync(Text(root, "target")).ConfigureAwait(false),
         "panels.state" => await handler.PanelStateAsync().ConfigureAwait(false),
         "commands.list" => await handler.ListCommandsAsync().ConfigureAwait(false),
+        _ when method is not null && ControlMethods.Contains(method) => await ControlAsync(method, root).ConfigureAwait(false),
         _ => throw new PluginApiException(PluginApiException.UnknownMethod, $"There is no method \"{method}\"."),
     };
+
+    /// <summary>The methods of the control API (issue #387, docs/plugin-api.md).</summary>
+    public static IReadOnlySet<string> ControlMethods { get; } = new HashSet<string>(StringComparer.Ordinal)
+    {
+        "app.state", "panels.get", "panels.navigate", "panels.activate", "panels.cursor", "panels.select", "commands.run",
+        "console.run", "console.read", "files.view", "files.edit", "pages.close", "window.screenshot", "settings.get", "settings.set",
+    };
+
+    private async Task<object?> ControlAsync(string method, JsonElement root)
+    {
+        if (control is null || control.Mode == Control.ControlMode.Off)
+        {
+            throw new PluginApiException(PluginApiException.Disabled, "Claude control is off. Turn it on in Settings, Claude Control (api.control).");
+        }
+
+        var parameters = root.TryGetProperty("params", out var given) && given.ValueKind == JsonValueKind.Object ? given.GetRawText() : "{}";
+        ControlCalled?.Invoke(method, parameters);
+        var rows = Number(root, "rows") ?? DefaultRows;
+        return method switch
+        {
+            "app.state" => await control.StateAsync(rows).ConfigureAwait(false),
+            "panels.get" => await control.PanelAsync(Optional(root, "side"), rows).ConfigureAwait(false),
+            "panels.navigate" => await control.NavigateAsync(Optional(root, "side"), Text(root, "target"), rows).ConfigureAwait(false),
+            "panels.activate" => await control.ActivateAsync(Text(root, "side"), rows).ConfigureAwait(false),
+            "panels.cursor" => await control.CursorAsync(Optional(root, "side"), Text(root, "name"), rows).ConfigureAwait(false),
+            "panels.select" => await control.SelectAsync(Optional(root, "side"), Names(root), Optional(root, "mode") ?? "set", rows).ConfigureAwait(false),
+            "commands.run" => await RunCommandAsync(Text(root, "id")).ConfigureAwait(false),
+            "console.run" => await control.ConsoleRunAsync(Text(root, "command"), Number(root, "timeoutMs") ?? 60_000).ConfigureAwait(false),
+            "console.read" => new { text = await control.ConsoleReadAsync(Number(root, "lines") ?? 100).ConfigureAwait(false) },
+            "files.view" => await control.OpenFileAsync(Text(root, "path"), edit: false).ConfigureAwait(false),
+            "files.edit" => await control.OpenFileAsync(Text(root, "path"), edit: true).ConfigureAwait(false),
+            "pages.close" => await control.ClosePageAsync().ConfigureAwait(false),
+            "window.screenshot" => await control.ScreenshotAsync().ConfigureAwait(false),
+            "settings.get" => await control.SettingsAsync(Optional(root, "key")).ConfigureAwait(false),
+            "settings.set" => await control.SetSettingAsync(Text(root, "key"), Value(root)).ConfigureAwait(false),
+            _ => throw new PluginApiException(PluginApiException.UnknownMethod, $"There is no method \"{method}\"."),
+        };
+    }
+
+    private async Task<object> RunCommandAsync(string id)
+    {
+        await control!.RunCommandAsync(id).ConfigureAwait(false);
+        return new { ran = id };
+    }
+
+    private static JsonElement? Parameter(JsonElement root, string name) =>
+        root.TryGetProperty("params", out var parameters) && parameters.ValueKind == JsonValueKind.Object && parameters.TryGetProperty(name, out var value)
+            ? value
+            : null;
+
+    private static string? Optional(JsonElement root, string name) =>
+        Parameter(root, name) is { ValueKind: JsonValueKind.String } value && value.GetString() is { Length: > 0 } text ? text : null;
+
+    private static int? Number(JsonElement root, string name) =>
+        Parameter(root, name) is { ValueKind: JsonValueKind.Number } value && value.TryGetInt32(out var number) ? number : null;
+
+    private static IReadOnlyList<string> Names(JsonElement root) =>
+        Parameter(root, "names") is { ValueKind: JsonValueKind.Array } array
+            ? [.. array.EnumerateArray().Where(e => e.ValueKind == JsonValueKind.String).Select(e => e.GetString()!)]
+            : [];
+
+    private static JsonElement Value(JsonElement root) =>
+        Parameter(root, "value") is { } value ? value.Clone() : throw new PluginApiException(PluginApiException.BadRequest, "params.value is required.");
 
     private async Task AcceptLoopAsync()
     {

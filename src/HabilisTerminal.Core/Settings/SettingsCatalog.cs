@@ -17,8 +17,9 @@ public static class SettingsCatalog
     public const string Viewer = "Viewer";
     public const string Editor = "Editor";
     public const string Diagnostics = "Diagnostics";
+    public const string Claude = "Claude";
 
-    public static IReadOnlyList<string> Categories { get; } = [Appearance, Panels, Terminal, FileOperations, Confirmations, Viewer, Editor, Diagnostics];
+    public static IReadOnlyList<string> Categories { get; } = [Appearance, Panels, Terminal, FileOperations, Confirmations, Viewer, Editor, Claude, Diagnostics];
 
     public static IReadOnlyList<SettingDefinition> All { get; } =
     [
@@ -26,6 +27,7 @@ public static class SettingsCatalog
             "\"auto\" follows the Windows light / dark mode. Otherwise a built-in theme name or the file name of a VS Code color theme in the themes folder.",
             SettingKind.Text, "auto", ["auto", "dark_modern", "light_modern", "dark_plus", "light_plus", "dark_vs", "light_vs", "hc_black", "hc_light", "far", "matrix"]),
         new("useAccentColor", Appearance, "Use Accent Color", "Tint focus and selection with the Windows accent color.", SettingKind.Toggle, true),
+        new("api.control", Claude, "Claude Control", "Lets Claude drive this app through \"habi mcp\" (an MCP server): see and move the panels, run commands, run console commands, open files, change settings. Ask: console commands and settings changes need your OK. Off by default.", SettingKind.Choice, "off", ["off", "ask", "trusted"]),
         new("iconTheme", Appearance, "File Icon Theme", "Icons in the file panels.", SettingKind.Choice, "material", ["seti", "material"]),
 
         new("panels.fontFamily", Panels, "Font Family", "Font of the file panels.", SettingKind.Text, "Segoe UI"),

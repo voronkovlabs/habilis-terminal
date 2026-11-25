@@ -19,6 +19,9 @@ public sealed class AppSettings
 
     public string IconTheme => Get<string>("iconTheme");
 
+    /// <summary>Claude control (issue #387): "off", "ask" or "trusted".</summary>
+    public string ApiControl => Get<string>("api.control");
+
     public string PanelsFontFamily => Get<string>("panels.fontFamily");
 
     public int PanelsFontSize => Get<int>("panels.fontSize");
