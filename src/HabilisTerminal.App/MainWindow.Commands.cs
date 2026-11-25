@@ -829,7 +829,14 @@ public partial class MainWindow
             extras.Add((new DriveMenuEntry(("places", name), path), name, path, icon, "Places", null));
         }
 
-        var hotkeys = _pluginHotkeys.Resolve([.. extras.Select(e => (e.Entry.Key.Id, e.Entry.Key.Title, e.DefaultHotkey))], drives.Select(d => d.Root[0]));
+        // Favorites are listed first but get their keys last, so the plugins and places keep theirs (#385).
+        var order = Enumerable.Range(0, extras.Count).OrderBy(i => extras[i].Group == "Favorites" ? 1 : 0).ToList();
+        var resolved = _pluginHotkeys.Resolve([.. order.Select(i => (extras[i].Entry.Key.Id, extras[i].Entry.Key.Title, extras[i].DefaultHotkey))], drives.Select(d => d.Root[0]));
+        var hotkeys = new char?[extras.Count];
+        for (var k = 0; k < order.Count; k++)
+        {
+            hotkeys[order[k]] = resolved[k];
+        }
         string? lastGroup = null;
         for (var i = 0; i < extras.Count; i++)
         {

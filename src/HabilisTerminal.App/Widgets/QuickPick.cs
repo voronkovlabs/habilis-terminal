@@ -328,6 +328,8 @@ public sealed class QuickPick : UserControl
                         _items[index].Group = group;
                     }
 
+                    // The same list again would not redraw it.
+                    _list.ItemsSource = null;
                     ApplyFilter();
                     _list.SelectedIndex = Math.Min(index, _list.ItemCount - 1);
                 }
