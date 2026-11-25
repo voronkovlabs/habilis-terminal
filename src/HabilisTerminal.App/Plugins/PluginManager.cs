@@ -100,7 +100,8 @@ internal sealed class PluginManager
         }
 
         var prefix = address[..colon];
-        return Loaded.FirstOrDefault(p => Guard(p, () => p.Instance!.Prefixes.ToList(), []).Any(x => string.Equals(x, prefix, StringComparison.OrdinalIgnoreCase)));
+        return Loaded.FirstOrDefault(p => Guard(p, () => p.Instance!.Prefixes.ToList(), []).Any(x => string.Equals(x, prefix, StringComparison.OrdinalIgnoreCase)))
+            ?? Loaded.FirstOrDefault(p => Guard(p, () => p.Instance!.HandlesAddress(address), false)); // a service URL (#382)
     }
 
     /// <summary>All registered prefixes (for the command-line hook).</summary>

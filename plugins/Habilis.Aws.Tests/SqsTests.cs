@@ -31,6 +31,24 @@ public class SqsTests
         Assert.Contains(panel.Info, l => l is { Label: "Queues hidden", Value: "1" });
     }
 
+    /// <summary>Issue #382: "cd" with a queue's URL opens its region with the cursor on it; Ctrl+Shift+C copies the URL.</summary>
+    [Fact]
+    public async Task A_queue_url_opens_its_region_with_the_queue_under_the_cursor()
+    {
+        var plugin = new SqsPlugin();
+        Assert.True(plugin.HandlesAddress("https://sqs.eu-west-1.amazonaws.com/123456789012/orders"));
+        Assert.True(plugin.HandlesAddress("https://sqs.us-east-1.amazonaws.com/999999999/Sample-queue.fifo/"));
+        Assert.False(plugin.HandlesAddress("https://github.com/a/b"));
+        Assert.False(plugin.HandlesAddress("https://sqs.eu-west-1.amazonaws.com/123456789012/"));
+
+        var panel = await OpenAsync(new FakeHost(), new FakeSqs(["orders", "payments"]), "https://sqs.eu-west-1.amazonaws.com/123456789012/payments");
+        Assert.Equal("payments", panel.InitialCursor);
+        Assert.EndsWith("/eu-west-1", panel.Location, StringComparison.Ordinal);
+
+        var entries = await Listing.AllAsync(panel);
+        Assert.Equal(Base + "payments", ((IPanelProvider)panel).EntryAddress(entries.Single(e => e.Name == "payments")));
+    }
+
     [Fact]
     public async Task Pages_come_as_separate_batches()
     {

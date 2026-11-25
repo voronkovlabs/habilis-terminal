@@ -62,6 +62,9 @@ internal sealed partial class S3Panel : IPanelProvider, IPanelCommands, IGetFile
 
     public string Location => _location.Address;
 
+    /// <summary>The object an address named, when it opened its folder (#381).</summary>
+    public string? InitialCursor { get; private set; }
+
     internal S3Location Current => _location;
 
     internal AwsSession Session => _session;
@@ -462,6 +465,9 @@ internal sealed partial class S3Panel : IPanelProvider, IPanelCommands, IGetFile
             var region = await RegionOfAsync(bucket, cancellationToken).ConfigureAwait(false);
             if (await Api.HeadObjectAsync(region, bucket, _location.Prefix[..^1], cancellationToken).ConfigureAwait(false) is not null)
             {
+                // The file gets the cursor in its folder (#381).
+                var key = _location.Prefix[..^1];
+                InitialCursor = key[(key.LastIndexOf('/') + 1)..];
                 _location = _location.Up();
             }
         }

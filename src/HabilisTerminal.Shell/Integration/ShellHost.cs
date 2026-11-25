@@ -115,6 +115,9 @@ public sealed class ShellHost : IDisposable
     /// <summary>Enter on "goto &lt;text&gt;": the text, which the shell did not run (issue #152). Background thread.</summary>
     public event Action<string>? GotoEntered;
 
+    /// <summary>"cd" to a place that is not a local folder while a plugin panel is active, or to a URL (#381, #382).</summary>
+    public event Action<string>? PluginCdEntered;
+
     /// <summary>
     /// Enter on "cd" with a path that has %VARIABLES% or leads to a file (issue #245): the full path, which exists and
     /// which the shell did not run. Background thread.
@@ -184,6 +187,13 @@ public sealed class ShellHost : IDisposable
     {
         get => File.Exists(Path.Combine(ChannelDirectory, "command-blocks"));
         set => SetFlag("command-blocks", value);
+    }
+
+    /// <summary>The active panel shows a plugin: "cd" to a name that is no local folder goes to the plugin (#381).</summary>
+    public bool PluginPanel
+    {
+        get => File.Exists(Path.Combine(ChannelDirectory, "plugin-panel"));
+        set => SetFlag("plugin-panel", value);
     }
 
     public bool PanelMode
@@ -515,6 +525,18 @@ public sealed class ShellHost : IDisposable
                 try
                 {
                     CdEntered?.Invoke(System.Text.Encoding.UTF8.GetString(Convert.FromBase64String(cd.Arguments[0])));
+                }
+                catch (FormatException)
+                {
+                    // A garbled message: nowhere to go.
+                }
+
+                break;
+
+            case ShellEvent.Message { Name: "plugin-cd" } cd when cd.Arguments.Count == 1:
+                try
+                {
+                    PluginCdEntered?.Invoke(System.Text.Encoding.UTF8.GetString(Convert.FromBase64String(cd.Arguments[0])));
                 }
                 catch (FormatException)
                 {

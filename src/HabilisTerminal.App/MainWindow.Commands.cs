@@ -481,7 +481,7 @@ public partial class MainWindow
 
     private static void CopyNames(FilePanel panel, bool fullPaths)
     {
-        var names = panel.State.TargetEntries().Select(e => fullPaths ? FullPath(panel, e.Name) : e.Name).ToArray();
+        var names = panel.State.TargetEntries().Select(e => fullPaths ? panel.AddressOf(e) ?? FullPath(panel, e.Name) : e.Name).ToArray();
         if (names.Length == 0)
         {
             names = [fullPaths ? panel.CurrentPath : panel.State.Current.Name];
@@ -892,6 +892,28 @@ public partial class MainWindow
         LeaveOtherContent(_active);
         await OpenPastedLocationAsync(_active, path);
         SyncShellDirectory();
+    }
+
+    /// <summary>
+    /// "cd" to a place that is no local folder (#381, #382): a plugin address or URL opens its plugin; with a plugin
+    /// panel active, a name relative to its location goes there, as in Far.
+    /// </summary>
+    private async Task OnPluginCdAsync(string text)
+    {
+        var target = text.Trim().Trim('"', '\'');
+        if (_plugins.ForAddress(target) is null && _active.IsPlugin && Core.Panels.PluginAddress.Resolve(_active.CurrentPath, target) is { } resolved)
+        {
+            target = resolved;
+        }
+
+        if (_plugins.ForAddress(target) is null)
+        {
+            _active.Message = $"Cannot find “{text.Trim()}”: no such folder, and no plugin opens it";
+            return;
+        }
+
+        LeaveOtherContent(_active);
+        await NavigateOrOpenAsync(_active, target);
     }
 
     /// <summary>"goto" in the console (issue #152): the active panel goes there, as a paste into the drive menu does.</summary>

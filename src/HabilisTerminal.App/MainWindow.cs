@@ -415,6 +415,7 @@ public partial class MainWindow : Window
         _left.IsActive = panel == _left;
         _right.IsActive = panel == _right;
         UpdatePanelKeys();
+        UpdatePluginPanelFlag();
     }
 
     private void OnPanelFocused(FilePanel panel)

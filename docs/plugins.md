@@ -150,6 +150,7 @@ public abstract class Plugin
     public virtual IEnumerable<PluginMenuItem> DriveMenuItems { get; } // Alt+F1 / Alt+F2
     public virtual IEnumerable<string> Prefixes { get; }               // "s3", "sqs"...
     public virtual IEnumerable<string> AddressCommands { get; }        // SDK 1.4: "cd", for "cd s3://bucket/"
+    public virtual bool HandlesAddress(string address);                // SDK 1.9: an address without a prefix, e.g. a queue's URL for "cd <url>"
     public virtual Task<IPanelProvider?> OpenAddressAsync(string address, CancellationToken token);
     public virtual IEnumerable<string> FileExtensions { get; }         // SDK 1.5: "zip", "tar.gz": opened as a folder
     public virtual Task<IPanelProvider?> OpenFileAsync(FileOpenRequest request, CancellationToken token); // SDK 1.5
@@ -213,6 +214,8 @@ public interface IPanelProvider : IAsyncDisposable
     bool DefaultSortDescending { get; }                   // direction of DefaultSortKey
     bool StartsWithoutCursor { get; }                     // optional cursorless initial view
     bool FreezeOrderWhileCursorVisible { get; }           // stable rows until Escape hides the cursor
+    string? InitialCursor { get; }                        // SDK 1.9: the name the cursor goes to on the first listing
+    string? EntryAddress(PanelEntry entry);               // SDK 1.9: what Ctrl+Shift+C copies for an entry, e.g. a queue's URL
     IAsyncEnumerable<IReadOnlyList<PanelEntry>> ListAsync(CancellationToken token);  // batches
     Task<bool> EnterAsync(PanelEntry entry, CancellationToken token);  // a folder: change location
     Task<bool> GoUpAsync(CancellationToken token);        // false at the top: the host leaves the plugin
@@ -327,7 +330,9 @@ as "<plugin> failed: <message>". Plugin calls run off the UI thread or are await
   opens the same way with `InnerPath`. ".." at the top returns to the file's folder with the cursor on the file.
 - The command line: Enter on a line starting with a registered prefix and a colon (`s3:`, `sqs:`, `sm:`) opens the
   plugin panel instead of running the line in PowerShell (PSReadLine Enter handler, as for Tab). So does a line with a
-  command the plugin registered in front of such an address (`AddressCommands`: `cd s3://bucket/`).
+  command the plugin registered in front of such an address (`AddressCommands`: `cd s3://bucket/`). While a plugin
+panel is active, `cd name` to no local folder is resolved against the panel's location (`s3://bucket/a/` and `b/c.txt`
+give `s3://bucket/a/b/c.txt`), as in Far; `cd <url>` goes to the plugin whose `HandlesAddress` takes it (SDK 1.9).
 - F11 lists the plugins' menu items; the plugin manager (Alt+Shift+F9) lists all plugins, also failed and turned off, and opens
   their configuration; F9 > Commands > Plugin panel commands lists the commands of the plugin panel with their keys.
 - After a plugin command the host re-lists the panel. Ctrl+1... switch the provider's layouts, Ctrl+F12 adds its sort

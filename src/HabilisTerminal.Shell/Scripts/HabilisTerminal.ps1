@@ -282,6 +282,26 @@ function global:__HabiEnter($key, $arg) {
             __HabiSendLine $line 'cd-path' (Resolve-Path -LiteralPath $expanded).ProviderPath
             return
         }
+
+        # No such local place: with a plugin panel active the name is the plugin's, relative to where it is, as in Far
+        # (#381); a URL may be a plugin's too, such as a queue's (#382). The host says so when nothing takes it.
+        # A plugin's own prefix ("cd s3://...") is caught below, as an address command.
+        $url = $false
+        if ($target -match '^([A-Za-z][A-Za-z0-9+.-]*)://') {
+            $scheme = $Matches[1]
+            $known = foreach ($name in 'prefixes', 'commands') {
+                $file = Join-Path $state.Channel $name
+                if (Test-Path -LiteralPath $file) {
+                    @(Get-Content -LiteralPath $file -Encoding utf8) | Where-Object { $_ -eq $scheme -or $_ -match "^\S+ $([regex]::Escape($scheme))$" }
+                }
+            }
+            $url = -not $known
+        }
+
+        if (-not $exists -and ($url -or (Test-Path -LiteralPath (Join-Path $state.Channel 'plugin-panel')))) {
+            __HabiSendLine $line 'plugin-cd' $target
+            return
+        }
     }
 
     $prefixes = Join-Path $state.Channel 'prefixes'

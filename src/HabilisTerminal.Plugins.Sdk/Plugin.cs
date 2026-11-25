@@ -32,6 +32,12 @@ public abstract class Plugin
     public virtual IEnumerable<string> AddressCommands => [];
 
     /// <summary>
+    /// An address without one of <see cref="Prefixes"/> that this plugin opens all the same, such as a service's URL
+    /// (SDK 1.9). "cd" with it in the console calls <see cref="OpenAddressAsync"/>; a plain line still runs in the shell.
+    /// </summary>
+    public virtual bool HandlesAddress(string address) => false;
+
+    /// <summary>
     /// Opens a panel for an address: a command line starting with one of <see cref="Prefixes"/> or one of
     /// <see cref="AddressCommands"/>, or a location the plugin reported earlier through
     /// <see cref="IPanelProvider.Location"/> (folder history). Null: nothing to open.

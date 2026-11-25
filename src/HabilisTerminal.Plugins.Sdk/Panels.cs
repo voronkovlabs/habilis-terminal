@@ -39,6 +39,18 @@ public interface IPanelProvider : IAsyncDisposable
     bool FreezeOrderWhileCursorVisible => false;
 
     /// <summary>
+    /// The name the cursor goes to on the first listing (SDK 1.9), e.g. the object or queue an address named. Null: the
+    /// first row.
+    /// </summary>
+    string? InitialCursor => null;
+
+    /// <summary>
+    /// An entry's own address (SDK 1.9), copied by Ctrl+Shift+C instead of the location and the name, e.g. a queue's
+    /// URL. Null: the location and the name.
+    /// </summary>
+    string? EntryAddress(PanelEntry entry) => null;
+
+    /// <summary>
     /// Lists the current location in batches: the host shows the first batch at once. Throw
     /// <see cref="PluginException"/> for errors; the host keeps the previous listing and shows the message.
     /// </summary>

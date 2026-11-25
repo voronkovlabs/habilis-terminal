@@ -45,6 +45,12 @@ public sealed partial class FilePanel
     /// <summary>The local folder the panel returns to when it leaves the plugin; the current folder otherwise.</summary>
     public string LocalPath => _session?.ReturnPath ?? State.Path;
 
+    /// <summary>A plugin entry's own address (a queue's URL, #382), or null: the location and the name.</summary>
+    public string? AddressOf(FileEntry row) =>
+        _session is { } session && session.Entries.TryGetValue(RowKey(row), out var entry)
+            ? PluginManager.Guard(session.Plugin, () => session.Provider.EntryAddress(entry), null)
+            : null;
+
     /// <summary>The plugin entry of a row, or null (".." or a folder listing).</summary>
     public PanelEntry? EntryOf(PanelItem item) =>
         _session is { } session && !item.IsParent && session.Entries.TryGetValue(RowKey(item.Entry), out var entry) ? entry : null;
@@ -85,7 +91,8 @@ public sealed partial class FilePanel
         // The plugin's columns must not show the folder's rows while the first listing loads (issue #62).
         State.SetListing(provider.Location, [], hasParent: false);
         Refresh();
-        if (await ListPluginAsync(focusName: null, opening: true))
+        // The object or queue an address named gets the cursor (#381, #382).
+        if (await ListPluginAsync(focusName: PluginManager.Guard(plugin, () => provider.InitialCursor, null), opening: true))
         {
             return true;
         }

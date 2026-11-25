@@ -21,10 +21,25 @@ public sealed class SqsPlugin : Plugin
 
     public override bool HasConfiguration => true;
 
-    public override Task<IPanelProvider?> OpenAddressAsync(string address, CancellationToken cancellationToken)
+    /// <summary>A queue's URL, "https://sqs.us-east-1.amazonaws.com/123456789012/name" (#382).</summary>
+    public override bool HandlesAddress(string address) => QueueUrl.Parse(address) is not null;
+
+    public override async Task<IPanelProvider?> OpenAddressAsync(string address, CancellationToken cancellationToken)
     {
+        // "cd <queue URL>": the queue's region in the default profile, the cursor on the queue.
+        if (QueueUrl.Parse(address) is { } queue)
+        {
+            var provider = await OpenAsync(null, queue.Region).ConfigureAwait(false);
+            if (provider is SqsPanel panel)
+            {
+                panel.InitialCursor = queue.Name;
+            }
+
+            return provider;
+        }
+
         var (profile, region) = AwsText.ParseProfileAddress(address);
-        return OpenAsync(profile, region);
+        return await OpenAsync(profile, region).ConfigureAwait(false);
     }
 
     public override async Task ConfigureAsync(CancellationToken cancellationToken)
@@ -74,4 +89,17 @@ public sealed class SqsPlugin : Plugin
             return _panels.Select(w => w.TryGetTarget(out var panel) ? panel : null).OfType<SqsPanel>().ToList();
         }
     }
+}
+
+/// <summary>The parts of a queue's URL: https://sqs.REGION.amazonaws.com/ACCOUNT/NAME (#382).</summary>
+internal sealed partial record QueueUrl(string Region, string Account, string Name)
+{
+    public static QueueUrl? Parse(string address)
+    {
+        var match = Pattern().Match(address.Trim());
+        return match.Success ? new QueueUrl(match.Groups["region"].Value, match.Groups["account"].Value, match.Groups["name"].Value) : null;
+    }
+
+    [System.Text.RegularExpressions.GeneratedRegex(@"^https://sqs\.(?<region>[a-z0-9-]+)\.amazonaws\.com(?:\.cn)?/(?<account>\d+)/(?<name>[A-Za-z0-9_-]{1,80}(?:\.fifo)?)/?$", System.Text.RegularExpressions.RegexOptions.CultureInvariant)]
+    private static partial System.Text.RegularExpressions.Regex Pattern();
 }

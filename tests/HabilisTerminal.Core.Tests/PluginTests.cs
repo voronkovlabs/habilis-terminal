@@ -29,7 +29,7 @@ public class PluginTests
     [InlineData("""{ "id": "bad id!", "name": "x", "version": "1", "assembly": "a.dll", "sdk": "1.0" }""", "may contain only")]
     [InlineData("""{ "id": "a", "name": "x", "version": "1", "assembly": "..\\a.dll", "sdk": "1.0" }""", "file name")]
     [InlineData("""{ "id": "a", "name": "x", "version": "1", "assembly": "a.dll", "sdk": "2.0" }""", "needs SDK 2.0")]
-    [InlineData("""{ "id": "a", "name": "x", "version": "1", "assembly": "a.dll", "sdk": "1.9" }""", "needs SDK 1.9")]
+    [InlineData("""{ "id": "a", "name": "x", "version": "1", "assembly": "a.dll", "sdk": "1.10" }""", "needs SDK 1.10")]
     [InlineData("not json", "not valid JSON")]
     public void Manifest_errors_say_what_is_wrong(string json, string expected)
     {

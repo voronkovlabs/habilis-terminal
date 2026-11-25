@@ -54,6 +54,19 @@ public partial class MainWindow
         Workspace.LayoutUpdated += (_, _) => UpdateHintButton();
     }
 
+    /// <summary>Tells the shells whether the active panel shows a plugin: "cd name" then goes to it (#381).</summary>
+    private void UpdatePluginPanelFlag()
+    {
+        var plugin = _active?.IsPlugin == true;
+        foreach (var tab in _tabs)
+        {
+            if (tab.Host.PluginPanel != plugin)
+            {
+                tab.Host.PluginPanel = plugin;
+            }
+        }
+    }
+
     /// <summary>The console's command blocks mode (#266): the shell script reads the flag at each prompt.</summary>
     private void ApplyCommandBlocks(ConsoleTab tab)
     {
@@ -110,6 +123,13 @@ public partial class MainWindow
                 Fire(OnShellCdAsync(path));
             }
         });
+        host.PluginCdEntered += text => Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+        {
+            if (tab == _tab)
+            {
+                Fire(OnPluginCdAsync(text));
+            }
+        });
         host.GotoEntered += text => Avalonia.Threading.Dispatcher.UIThread.Post(() =>
         {
             if (tab == _tab)
@@ -129,6 +149,7 @@ public partial class MainWindow
         Workspace.Children.Insert(0, tab.Terminal);
         _tabs.Add(tab);
         ApplyCommandBlocks(tab);
+        host.PluginPanel = _active?.IsPlugin == true;
         return tab;
     }
 
@@ -150,6 +171,7 @@ public partial class MainWindow
     private void WirePanel(FilePanel panel)
     {
         panel.Navigated += OnPanelNavigated;
+        panel.Navigated += (_, _) => UpdatePluginPanelFlag();
         panel.ExecuteRequested += OnPanelExecuteRequested;
         panel.OpensAsFolder = _plugins.OpensAsFolder;
         panel.FileAsFolderRequested += (p, item, anyFormat) => Fire(OpenFileAsFolderAsync(p, item, anyFormat));
@@ -161,7 +183,11 @@ public partial class MainWindow
             CollapseConsole(stopGrowing: true); // issue #82
             OnPanelGotFocus(panel); // issue #90: the panel gets the keys, the console keeps the Win32 focus
         };
-        panel.PluginLocationChanged += (_, location) => _history.Add(location);
+        panel.PluginLocationChanged += (_, location) =>
+        {
+            _history.Add(location);
+            UpdatePluginPanelFlag();
+        };
         panel.PluginEntryActivated += (p, entry) => Fire(PluginViewAsync(p, entry));
         panel.WaitToasts = () => Toasts;
     }

@@ -52,6 +52,12 @@ internal sealed class SqsPanel : IPanelProvider, IPanelCommands, IViewEntry
 
     public IReadOnlyList<PanelCommand> Commands { get; }
 
+    /// <summary>The queue a URL named, when the panel opened from it (#382).</summary>
+    public string? InitialCursor { get; set; }
+
+    /// <summary>Ctrl+Shift+C copies a queue's URL (#382).</summary>
+    public string? EntryAddress(PanelEntry entry) => entry.Tag as string;
+
     /// <summary>A flat list: no ".." row (issue #77); Ctrl+PgUp still leaves the panel.</summary>
     public bool ShowsParent => false;
 

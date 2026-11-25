@@ -359,6 +359,33 @@ public class ShellHostTests
         Assert.Empty(targets);
     }
 
+    /// <summary>Issues #381, #382: cd to no local place goes to the plugin panel, or to a plugin that opens the URL.</summary>
+    [WindowsFact]
+    public async Task Cd_to_no_local_place_is_reported_for_a_plugin()
+    {
+        using var shell = new TestShell();
+        var targets = new System.Collections.Concurrent.ConcurrentQueue<string>();
+        shell.Host.PluginCdEntered += targets.Enqueue;
+        await shell.WaitIdleAsync();
+
+        shell.Host.Write("cd https://sqs.us-east-1.amazonaws.com/123/q\r");
+        await TestShell.WaitUntilAsync(() => !targets.IsEmpty, "plugin-cd for a URL");
+        Assert.True(targets.TryDequeue(out var url));
+        Assert.Equal("https://sqs.us-east-1.amazonaws.com/123/q", url);
+
+        shell.Host.PluginPanel = true;
+        shell.Host.Write("cd no-such-folder/a.txt\r");
+        await TestShell.WaitUntilAsync(() => !targets.IsEmpty, "plugin-cd for a relative name");
+        Assert.True(targets.TryDequeue(out var relative));
+        Assert.Equal("no-such-folder/a.txt", relative);
+
+        // Without a plugin panel, cd to a missing folder runs in the shell as before.
+        shell.Host.PluginPanel = false;
+        shell.Host.Write("cd no-such-folder; 'AFTER-' + 'CD'\r");
+        await shell.WaitForTextAsync("AFTER-CD");
+        Assert.True(targets.IsEmpty);
+    }
+
     [WindowsFact]
     public async Task Enter_on_a_registered_command_reports_the_address_instead_of_running_it()
     {
