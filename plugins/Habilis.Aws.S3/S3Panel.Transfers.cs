@@ -32,8 +32,42 @@ internal sealed partial class S3Panel
             }
         }
 
+        // S3 may hold a file and a folder of one name; a disk cannot (#383).
+        var renamed = new List<string>();
+        if (plan.FilesNamedLikeFolders() is { Count: > 0 } twins)
+        {
+            var rename = "Save them as “name (file)”";
+            var skip = "Skip these files";
+            var title = twins.Count == 1
+                ? $"{twins[0].Key} has the name of a folder: a disk cannot keep both"
+                : $"{twins.Count} files have the names of folders: a disk cannot keep both";
+            var choice = await _host.Dialogs.ChooseAsync(title, [rename, skip], rename).ConfigureAwait(false);
+            if (choice is null)
+            {
+                return new OperationOutcome(0, plan.Files.Count, 0, "Cancelled.");
+            }
+
+            foreach (var twin in twins)
+            {
+                if (choice == rename)
+                {
+                    renamed.Add($"{twin.Key}: saved as {plan.RenameAside(twin)}, as a folder has its name.");
+                }
+                else
+                {
+                    plan.Files.Remove(twin);
+                    renamed.Add($"{twin.Key}: skipped, as a folder has its name.");
+                }
+            }
+        }
+
         progress.SetTotals(plan.Files.Count, plan.Files.Sum(f => f.Size));
         using var run = new TransferRun(request.AskOverwrite, settings.MaxParallel, progress, cancellationToken);
+        foreach (var note in renamed)
+        {
+            run.Note(note);
+        }
+
         foreach (var clash in plan.Clashes)
         {
             run.Fail(clash);
@@ -512,6 +546,42 @@ internal sealed partial class S3Panel
             else
             {
                 Clashes.Add($"{item.Key}: not downloaded. Its local name {item.LocalPath} differs only in letter case from another object's, and Windows file names ignore case.");
+            }
+        }
+
+        /// <summary>Files whose local path is also a folder's: the folder itself, or one that other files are in (#383).</summary>
+        public List<DownloadItem> FilesNamedLikeFolders()
+        {
+            var folders = new HashSet<string>(Folders, StringComparer.OrdinalIgnoreCase);
+            foreach (var file in Files)
+            {
+                for (var folder = Path.GetDirectoryName(file.LocalPath); !string.IsNullOrEmpty(folder); folder = Path.GetDirectoryName(folder))
+                {
+                    folders.Add(folder);
+                }
+            }
+
+            return [.. Files.Where(f => folders.Contains(f.LocalPath))];
+        }
+
+        /// <summary>The file goes to "name (file).ext" beside the folder, or "name (file 2).ext" when that is taken too.</summary>
+        public string RenameAside(DownloadItem item)
+        {
+            var folder = Path.GetDirectoryName(item.LocalPath) ?? string.Empty;
+            var name = Path.GetFileName(item.LocalPath);
+            var extension = Path.GetExtension(name);
+            var stem = extension.Length > 0 && extension.Length < name.Length ? name[..^extension.Length] : name;
+            extension = stem == name ? string.Empty : extension;
+            for (var n = 1; ; n++)
+            {
+                var candidate = Path.Combine(folder, $"{stem} ({(n == 1 ? "file" : $"file {n}")}){extension}");
+                if (!_paths.Contains(candidate) && !Folders.Contains(candidate, StringComparer.OrdinalIgnoreCase))
+                {
+                    _paths.Remove(item.LocalPath);
+                    _paths.Add(candidate);
+                    Files[Files.IndexOf(item)] = item with { LocalPath = candidate };
+                    return candidate;
+                }
             }
         }
     }

@@ -618,7 +618,7 @@ public sealed class FileListView : Control
         var state = _state!;
         var item = state.ItemAt(index);
         var isCursor = state.Extension is not { CursorVisible: false } && index == state.CursorIndex;
-        var isMarked = !item.IsParent && state.Selection.Contains(item.Name);
+        var isMarked = !item.IsParent && state.Selection.Contains(item.Entry);
 
         if (isCursor && IsActivePanel)
         {

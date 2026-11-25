@@ -778,7 +778,7 @@ public sealed partial class FilePanel : Border
                 // Far: Shift+arrows mark the entry under the cursor, then move.
                 if (!State.Current.IsParent)
                 {
-                    State.Selection.Toggle(State.Current.Name);
+                    State.Selection.Toggle(State.Current.Entry);
                 }
 
                 Move(key == Key.Up ? -1 : 1);
@@ -1228,7 +1228,7 @@ public sealed partial class FilePanel : Border
             // as in the Finder, whose keyboard has no Insert either (#272).
             if (!State.Current.IsParent)
             {
-                State.Selection.Toggle(State.Current.Name);
+                State.Selection.Toggle(State.Current.Entry);
             }
         }
         else if (clickCount == 2)
@@ -1254,7 +1254,7 @@ public sealed partial class FilePanel : Border
             var item = State.Current;
             if (!item.IsParent)
             {
-                names = State.Selection.Contains(item.Name) ? [.. State.Selection.Names] : [item.Name];
+                names = State.Selection.Contains(item.Entry) ? [.. State.Selection.Names] : [item.Name];
             }
         }
 
@@ -1566,6 +1566,12 @@ public sealed partial class FilePanel : Border
 
         var item = State.Current;
         _status.Text = item.Name;
+
+        // S3 may hold a file and a folder of one name (#383): the line says so, so the pair does not look like a mistake.
+        if (!item.IsParent && IsPlugin && State.Entries.Any(e => e.IsDirectory != item.Entry.IsDirectory && string.Equals(e.Name, item.Name, StringComparison.OrdinalIgnoreCase)))
+        {
+            _status.Text += item.Entry.IsDirectory ? "   (a file has this name too)" : "   (a folder has this name too)";
+        }
         _statusRight.Text = item.IsParent ? string.Empty
             : item.Entry.IsDirectory && State.FolderSizeOf(item.Name) is { } size
                 ? (size.IsPartial ? SizeFormat.AtLeast : string.Empty) + FormatTotals(size.Totals.Files, size.Bytes, culture)

@@ -74,7 +74,7 @@ public sealed class PanelState
         var items = files + directories;
         foreach (var entry in _items)
         {
-            if (entry.IsDirectory && Selection.Contains(entry.Name) && FolderSizeOf(entry.Name) is { IsFinal: true } size)
+            if (entry.IsDirectory && Selection.Contains(entry) && FolderSizeOf(entry.Name) is { IsFinal: true } size)
             {
                 files += size.Totals.Files;
                 bytes += size.Bytes;
@@ -86,7 +86,7 @@ public sealed class PanelState
 
     /// <summary>F3 with folders selected counts all of them (Far); otherwise only the current entry.</summary>
     public IReadOnlyList<string> SelectedFolders() =>
-        _items.Where(e => e.IsDirectory && Selection.Contains(e.Name)).Select(e => e.Name).ToArray();
+        _items.Where(e => e.IsDirectory && Selection.Contains(e)).Select(e => e.Name).ToArray();
 
     public SortOptions Sort { get; private set; } = new();
 
@@ -159,6 +159,7 @@ public sealed class PanelState
     {
         var samePath = string.Equals(path, Path, StringComparison.OrdinalIgnoreCase);
         var previousName = Count > 0 ? Current.Name : null;
+        bool? previousIsDirectory = Count > 0 && !Current.IsParent ? Current.Entry.IsDirectory : null;
         var previousIndex = CursorIndex;
 
         if (!samePath)
@@ -181,7 +182,7 @@ public sealed class PanelState
         Rebuild();
 
         if (!(focusName is not null && TrySetCursor(focusName)) &&
-            !(samePath && previousName is not null && TrySetCursor(previousName)))
+            !(samePath && previousName is not null && TrySetCursor(previousName, previousIsDirectory)))
         {
             CursorIndex = samePath ? Math.Clamp(previousIndex, 0, Math.Max(0, Count - 1)) : 0;
         }
@@ -221,7 +222,10 @@ public sealed class PanelState
 
     public void SetCursor(int index) => CursorIndex = Count == 0 ? 0 : Math.Clamp(index, 0, Count - 1);
 
-    public bool TrySetCursor(string name)
+    public bool TrySetCursor(string name) => TrySetCursor(name, null);
+
+    /// <summary>The cursor to a name of one kind: S3 may hold a file and a folder of the same name (issue #383).</summary>
+    public bool TrySetCursor(string name, bool? isDirectory)
     {
         if (HasParent && name == PanelItem.ParentName)
         {
@@ -231,7 +235,7 @@ public sealed class PanelState
 
         for (var i = 0; i < _items.Length; i++)
         {
-            if (string.Equals(_items[i].Name, name, StringComparison.OrdinalIgnoreCase))
+            if (string.Equals(_items[i].Name, name, StringComparison.OrdinalIgnoreCase) && (isDirectory is null || _items[i].IsDirectory == isDirectory))
             {
                 CursorIndex = i + (HasParent ? 1 : 0);
                 return true;
@@ -246,7 +250,7 @@ public sealed class PanelState
     {
         if (!Current.IsParent && Count > 0)
         {
-            Selection.Toggle(Current.Name);
+            Selection.Toggle(Current.Entry);
         }
 
         MoveCursor(1);
@@ -257,7 +261,7 @@ public sealed class PanelState
     {
         if (Selection.Count > 0)
         {
-            return _items.Where(e => Selection.Contains(e.Name)).ToArray();
+            return _items.Where(e => Selection.Contains(e)).ToArray();
         }
 
         return Count > 0 && !Current.IsParent ? [Current.Entry] : [];
@@ -310,8 +314,9 @@ public sealed class PanelState
     private void RebuildKeepingCursor()
     {
         var name = Count > 0 ? Current.Name : null;
+        bool? isDirectory = Count > 0 && !Current.IsParent ? Current.Entry.IsDirectory : null;
         Rebuild();
-        if (name is null || !TrySetCursor(name))
+        if (name is null || !TrySetCursor(name, isDirectory))
         {
             SetCursor(CursorIndex);
         }
@@ -328,7 +333,7 @@ public sealed class PanelState
         if (SelectedFirst && Selection.Count > 0)
         {
             // Stable partition; directories-first is kept inside each part.
-            sorted = [.. sorted.Where(e => Selection.Contains(e.Name)), .. sorted.Where(e => !Selection.Contains(e.Name))];
+            sorted = [.. sorted.Where(e => Selection.Contains(e)), .. sorted.Where(e => !Selection.Contains(e))];
         }
 
         _items = Extension is { } extension ? extension.Order(sorted) : sorted;

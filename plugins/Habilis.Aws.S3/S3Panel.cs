@@ -450,8 +450,9 @@ internal sealed partial class S3Panel : IPanelProvider, IPanelCommands, IGetFile
     }
 
     /// <summary>
-    /// The location was parsed as a folder; if an object has that name, its folder is the place to show. When this
-    /// cannot be asked, the location stays: listing it will show what is wrong.
+    /// The location was parsed as a folder; if only an object has that name, its folder is the place to show, with the
+    /// object under the cursor. A folder of that name wins over a file of the same name, as cd goes to folders (#383).
+    /// When this cannot be asked, the location stays: listing it will show what is wrong.
     /// </summary>
     internal async Task GoToFolderIfFileAsync(CancellationToken cancellationToken)
     {
@@ -463,7 +464,8 @@ internal sealed partial class S3Panel : IPanelProvider, IPanelCommands, IGetFile
         try
         {
             var region = await RegionOfAsync(bucket, cancellationToken).ConfigureAwait(false);
-            if (await Api.HeadObjectAsync(region, bucket, _location.Prefix[..^1], cancellationToken).ConfigureAwait(false) is not null)
+            if (await Api.HeadObjectAsync(region, bucket, _location.Prefix[..^1], cancellationToken).ConfigureAwait(false) is not null
+                && !await HasContentAsync(region, bucket, _location.Prefix, cancellationToken).ConfigureAwait(false))
             {
                 // The file gets the cursor in its folder (#381).
                 var key = _location.Prefix[..^1];
@@ -475,6 +477,13 @@ internal sealed partial class S3Panel : IPanelProvider, IPanelCommands, IGetFile
         {
             // As the comment above says.
         }
+    }
+
+    /// <summary>Whether anything lies under a prefix: then it is a folder.</summary>
+    private async Task<bool> HasContentAsync(string region, string bucket, string prefix, CancellationToken cancellationToken)
+    {
+        await using var pages = Api.ListObjectsAsync(region, bucket, prefix, recursive: false, cancellationToken).GetAsyncEnumerator(cancellationToken);
+        return await pages.MoveNextAsync().ConfigureAwait(false) && (pages.Current.Prefixes.Count > 0 || pages.Current.Objects.Count > 0);
     }
 
     private async Task<bool> CanListAsync(string bucket, string prefix, CancellationToken cancellationToken)

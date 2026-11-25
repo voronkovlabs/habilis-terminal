@@ -48,6 +48,27 @@ public class SelectionTests
         Assert.Equal(["b.txt", "c.log"], selection.Names.Order());
     }
 
+    /// <summary>Issue #383: a file and a folder of one name (S3) are marked apart.</summary>
+    [Fact]
+    public void A_file_and_a_folder_of_one_name_are_marked_apart()
+    {
+        var file = new FileEntry("data", FileAttributes.Normal, 5, Day, Day, Day);
+        var folder = new FileEntry("data", FileAttributes.Directory, 0, Day, Day, Day);
+        var selection = new Selection();
+
+        Assert.True(selection.Toggle(file));
+        Assert.True(selection.Contains(file));
+        Assert.False(selection.Contains(folder));
+
+        Assert.True(selection.Toggle(folder));
+        Assert.False(selection.Toggle(file));
+        Assert.True(selection.Contains(folder));
+        Assert.Equal(1, selection.Count);
+
+        selection.RetainExisting([file]);
+        Assert.Equal(0, selection.Count);
+    }
+
     [Fact]
     public void Summary_and_retain_existing()
     {
