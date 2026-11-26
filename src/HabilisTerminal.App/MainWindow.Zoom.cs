@@ -72,10 +72,19 @@ public partial class MainWindow
     /// <summary>The open page's own zoom (a picture, a PDF page), if it has one.</summary>
     private Viewing.ZoomPanView? ContentZoom => IsPageOpen && PageHost.Content is Viewing.IContentZoom page ? page.ZoomView : null;
 
-    /// <summary>Ctrl+Alt+= / Ctrl+Alt+− / Ctrl+Alt+0, from any focus; the gray keys too. A picture zooms itself.</summary>
-    private bool HandleZoomKey(Key key, KeyModifiers modifiers)
+    /// <summary>
+    /// Ctrl+Alt+= / Ctrl+Alt+− / Ctrl+Alt+0, the gray keys too. A picture zooms itself. In the file panels a key that
+    /// types a character starts the quick filter with it instead (issue #395); <paramref name="always"/> is for the
+    /// Mac's Cmd keys, which never filter.
+    /// </summary>
+    private bool HandleZoomKey(Key key, KeyModifiers modifiers, bool always = false)
     {
         if (modifiers != (KeyModifiers.Control | KeyModifiers.Alt))
+        {
+            return false;
+        }
+
+        if (!always && !IsPageOpen && FocusedPanel() is { HasKeys: true } && Input.KeyText.CharOf(key, shift: false) is { } typed && !char.IsControl(typed))
         {
             return false;
         }

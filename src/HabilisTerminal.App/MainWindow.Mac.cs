@@ -38,7 +38,7 @@ public partial class MainWindow
 
             // As Safari and the Finder zoom: Cmd+= / Cmd+- / Cmd+0 (Ctrl+Alt+= / - / 0 stay).
             case Key.OemPlus or Key.Add or Key.OemMinus or Key.Subtract or Key.D0 or Key.NumPad0 when plain:
-                return HandleZoomKey(key, KeyModifiers.Control | KeyModifiers.Alt);
+                return HandleZoomKey(key, KeyModifiers.Control | KeyModifiers.Alt, always: true);
         }
 
         if (IsPageOpen)
