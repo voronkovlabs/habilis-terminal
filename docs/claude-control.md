@@ -28,7 +28,21 @@ In every mode:
 
 ## Connecting Claude
 
-`habi mcp` is an MCP server over stdio. It talks to the running app: the one in `HABI_PID`, which is set in the app's own consoles, or else the newest `habi` running.
+`habi mcp` is an MCP server over stdio. It talks to one running app:
+
+1. the one chosen with `use_app` in this session;
+2. else the one in `HABI_PID`, set in the app's own consoles: Claude Code started in a Habilis console drives that window;
+3. else the newest one running.
+
+Only a `habi` that serves the API counts, so `habi mcp` itself and helper processes are never taken for the app.
+
+**Several windows:**
+
+- Each has its own pipe and does not disturb the other.
+- `list_apps` shows them all, and `use_app` picks one.
+- The setting is shared: both use the same `settings.json`.
+- The ● Claude mark shows only in the window being driven.
+- `control.log` holds the calls of both, each line with its method.
 
 **Claude Code**, from any folder:
 
@@ -50,6 +64,7 @@ claude mcp add habilis -- "$env:LOCALAPPDATA\HabilisTerminal\current\habi.exe" m
 
 | Tool | What it does |
 |---|---|
+| `list_apps`, `use_app` | The running windows, and which one the other tools drive. |
 | `get_state` | Both panels: location, cursor, marked names, first rows. Also the page over them and the console's folder and state. Start here. |
 | `get_panel` | One panel in detail. |
 | `navigate` | A folder, a file (its folder, the cursor on it) or a plugin address (`s3://bucket/`) in a panel. |

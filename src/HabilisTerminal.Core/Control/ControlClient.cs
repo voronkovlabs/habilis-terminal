@@ -8,12 +8,37 @@ namespace HabilisTerminal.Core.Control;
 
 /// <summary>
 /// The client side of the app's API for <c>habi mcp</c> (issue #387): one connection per call, so a restarted app is
-/// found again. The app is the one in <c>HABI_PID</c> (set in the app's own consoles), else the newest running habi.
+/// found again. Which app: the one chosen with <see cref="Use"/>, else the one in <c>HABI_PID</c> (set in the app's own
+/// consoles), else the newest running one. Only a habi that serves the API counts: <c>habi mcp</c> itself and the
+/// diagnostics helper are habi processes too.
 /// </summary>
 public sealed class ControlClient
 {
     private static readonly UTF8Encoding Utf8 = new(encoderShouldEmitUTF8Identifier: false);
     private int _next;
+    private int? _chosen;
+
+    /// <summary>A running app: its process, when it started, and whether it is the one calls go to.</summary>
+    public sealed record App(int ProcessId, DateTime Started, bool Current);
+
+    /// <summary>The running apps, newest first.</summary>
+    public IReadOnlyList<App> Apps()
+    {
+        var current = FindApp();
+        return [.. Running().Select(a => new App(a.Id, a.Started, a.Id == current))];
+    }
+
+    /// <summary>Sends the calls of this session to one app; false when no such app runs.</summary>
+    public bool Use(int processId)
+    {
+        if (!Running().Any(a => a.Id == processId))
+        {
+            return false;
+        }
+
+        _chosen = processId;
+        return true;
+    }
 
     public async Task<JsonNode?> CallAsync(string method, JsonObject parameters, CancellationToken cancellationToken = default)
     {
@@ -47,32 +72,51 @@ public sealed class ControlClient
         }
     }
 
-    private static int? FindApp()
+    private int? FindApp()
     {
-        if (int.TryParse(Environment.GetEnvironmentVariable("HABI_PID"), out var given) && IsRunning(given))
+        var running = Running();
+        if (_chosen is { } chosen && running.Any(a => a.Id == chosen))
+        {
+            return chosen;
+        }
+
+        if (int.TryParse(Environment.GetEnvironmentVariable("HABI_PID"), out var given) && running.Any(a => a.Id == given))
         {
             return given;
         }
 
-        var self = Environment.ProcessId;
-        return Process.GetProcessesByName("habi")
-            .Where(p => p.Id != self)
-            .Select(p => (p.Id, Started: StartTime(p)))
-            .OrderByDescending(p => p.Started)
-            .Select(p => (int?)p.Id)
-            .FirstOrDefault();
+        return running.Count > 0 ? running[0].Id : null;
     }
 
-    private static bool IsRunning(int pid)
+    /// <summary>habi processes that serve the API, newest first.</summary>
+    private static List<(int Id, DateTime Started)> Running()
+    {
+        var self = Environment.ProcessId;
+        var pipes = Pipes();
+        var list = new List<(int Id, DateTime Started)>();
+        foreach (var process in Process.GetProcessesByName("habi"))
+        {
+            using (process)
+            {
+                if (process.Id != self && pipes.Contains(PluginApiServer.PipeNameFor(process.Id)))
+                {
+                    list.Add((process.Id, StartTime(process)));
+                }
+            }
+        }
+
+        return [.. list.OrderByDescending(a => a.Started)];
+    }
+
+    private static HashSet<string> Pipes()
     {
         try
         {
-            using var process = Process.GetProcessById(pid);
-            return !process.HasExited;
+            return new HashSet<string>(Directory.GetFiles(@"\\.\pipe\").Select(Path.GetFileName).OfType<string>(), StringComparer.OrdinalIgnoreCase);
         }
-        catch (ArgumentException)
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
-            return false;
+            return [];
         }
     }
 

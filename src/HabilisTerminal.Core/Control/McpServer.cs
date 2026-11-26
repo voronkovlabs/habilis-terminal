@@ -17,13 +17,17 @@ public sealed class ControlCallException(string code, string message) : Exceptio
 public sealed class McpServer(Func<string, JsonObject, Task<JsonNode?>> call, string version)
 {
     public const string LatestProtocol = "2025-06-18";
-
-    private static readonly JsonSerializerOptions Compact = new() { WriteIndented = false };
+    // Tool text is read by a model: quotes and non-ASCII letters stay as they are, not escaped.
+    // Tool text is read by a model: quotes and non-ASCII letters stay as they are, not  escapes.
+    private static readonly JsonSerializerOptions Compact = new() { WriteIndented = false, Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping };
 
     private sealed record Tool(string Name, string Description, string Method, JsonObject Schema, Func<JsonObject, JsonObject>? Map = null);
 
     private static readonly Tool[] Tools =
     [
+        new("list_apps", "The running Habilis Terminal windows (process ids, start times) and which one the tools drive now. With more than one, pick with use_app.", "mcp.apps", Schema()),
+        new("use_app", "Sends this session's tools to one Habilis Terminal window, by the process id list_apps gives.", "mcp.use",
+            Schema(["processId"], ("processId", Integer("The process id")))),
         new("get_state", "Both panels (location, cursor, marked names, first rows), the page open over them (viewer, editor, settings) and the console's folder and state. Start here.", "app.state",
             Schema(("rows", Integer("Rows per panel to list, 200 by default")))),
         new("get_panel", "One panel in detail: its location, cursor, marked names and rows.", "panels.get",
