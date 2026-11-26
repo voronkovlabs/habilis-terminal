@@ -254,6 +254,12 @@ public sealed class QuickPick : UserControl
                     onAction(item);
                 }
             }, RoutingStrategies.Tunnel);
+
+            // The tap that follows must not reach the list: it accepted the row, and the drive menu then took the panel
+            // back to the drive being ejected (issue #407).
+            action.AddHandler(TappedEvent, (_, e) => e.Handled = true);
+            action.AddHandler(DoubleTappedEvent, (_, e) => e.Handled = true);
+            action.AddHandler(PointerReleasedEvent, (_, e) => e.Handled = true);
             action.PointerEntered += (_, _) => action.Bind(Border.BackgroundProperty, action.GetResourceObservable("Habi.Hover"));
             action.PointerExited += (_, _) => action.Background = Brushes.Transparent;
             Grid.SetColumn(action, 4);
