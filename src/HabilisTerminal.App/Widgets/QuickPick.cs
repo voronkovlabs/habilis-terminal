@@ -269,6 +269,15 @@ public sealed class QuickPick : UserControl
         }
     }
 
+    /// <summary>The Latin letter or digit printed on a key, whatever the keyboard layout; null for other keys.</summary>
+    internal static char? HotkeyOf(Key key) => key switch
+    {
+        >= Key.A and <= Key.Z => (char)('A' + (key - Key.A)),
+        >= Key.D0 and <= Key.D9 => (char)('0' + (key - Key.D0)),
+        >= Key.NumPad0 and <= Key.NumPad9 => (char)('0' + (key - Key.NumPad0)),
+        _ => null,
+    };
+
     private void OnFilterTextInput(object? sender, TextInputEventArgs e)
     {
         // Drive letters and similar hotkeys accept at once while nothing has been typed.
@@ -290,6 +299,16 @@ public sealed class QuickPick : UserControl
     {
         var count = _list.ItemCount;
         var text = _filter.Text ?? string.Empty;
+
+        // Hotkeys go by the key, not the character, so C picks drive C in a Cyrillic layout too (issue #394).
+        if (text.Length == 0 && e.KeyModifiers is KeyModifiers.None or KeyModifiers.Shift && HotkeyOf(e.Key) is { } pressed &&
+            _items.FirstOrDefault(i => i.Hotkey is { } hotkey && char.ToUpperInvariant(hotkey) == pressed) is { } hotItem)
+        {
+            e.Handled = true;
+            Complete(new QuickPickResult(hotItem, string.Empty));
+            return;
+        }
+
         switch (e.Key)
         {
             case Key.Down when count > 0:
