@@ -34,7 +34,7 @@ public sealed partial class FilePanel : Border
     private int _quickViewVersion;
     private FilePanel? _quickViewSource;
     private readonly TextBlock _title = new();
-    private readonly TextBlock _star = new() { Text = "★", IsVisible = false, Margin = new Thickness(0, 0, 5, 0), VerticalAlignment = VerticalAlignment.Center };
+    private readonly TextBlock _star = new() { Margin = new Thickness(0, 0, 5, 0), VerticalAlignment = VerticalAlignment.Center };
     private readonly TextBlock _path = new();
     private readonly TextBlock _filterClear = new();
     private Border _filterClearTarget = null!;
@@ -120,8 +120,17 @@ public sealed partial class FilePanel : Border
         DockPanel.SetDock(_star, Dock.Left);
         header.Children.Add(_star);
         _star.FontSize = 12;
-        _star.Foreground = PanelPalette.MarkedForeground;
-        Avalonia.Controls.ToolTip.SetTip(_star, "In Favorites: Alt+F1 / Alt+F2 lists it, Ctrl+D removes it");
+        _star.Cursor = new Avalonia.Input.Cursor(Avalonia.Input.StandardCursorType.Hand);
+        _star.Background = Avalonia.Media.Brushes.Transparent; // the whole box takes the click, not only the glyph's ink
+        _star.AddHandler(PointerPressedEvent, (_, e) =>
+        {
+            if (e.GetCurrentPoint(_star).Properties.IsLeftButtonPressed)
+            {
+                e.Handled = true;
+                FavoriteToggled?.Invoke(this);
+            }
+        }, Avalonia.Interactivity.RoutingStrategies.Bubble, handledEventsToo: false);
+        ShowStar();
         DockPanel.SetDock(_title, Dock.Left);
         header.Children.Add(_title);
 
@@ -197,11 +206,29 @@ public sealed partial class FilePanel : Border
     /// <summary>A directory was opened (navigation or refresh to another path).</summary>
     public event Action<FilePanel, string>? Navigated;
 
-    /// <summary>The folder shown is a favorite: a star before the title (issue #385).</summary>
+    /// <summary>
+    /// The folder shown is a favorite: the star before the title is filled; otherwise it is an outline (issues #385, #389).
+    /// A click on it does what Ctrl+D does.
+    /// </summary>
     public bool IsFavorite
     {
-        get => _star.IsVisible;
-        set => _star.IsVisible = value;
+        get => _isFavorite;
+        set
+        {
+            _isFavorite = value;
+            ShowStar();
+        }
+    }
+
+    private bool _isFavorite;
+
+    private void ShowStar()
+    {
+        _star.Text = _isFavorite ? "★" : "☆";
+        _star.Foreground = _isFavorite ? PanelPalette.MarkedForeground : PanelPalette.DescriptionForeground;
+        Avalonia.Controls.ToolTip.SetTip(_star, _isFavorite
+            ? "In Favorites: the Change Drive menu (Alt+F1 / Alt+F2) lists this folder.\nClick or Ctrl+D removes it."
+            : "Favorites: folders listed first in the Change Drive menu (Alt+F1 / Alt+F2).\nClick or Ctrl+D adds this one.");
     }
 
     /// <summary>Ctrl+D: the current folder goes into the favorites, or out of them (issue #385).</summary>
@@ -392,7 +419,7 @@ public sealed partial class FilePanel : Border
     {
         Background = PanelPalette.Background;
         _title.Foreground = PanelPalette.Foreground;
-        _star.Foreground = PanelPalette.MarkedForeground;
+        ShowStar();
         _path.Foreground = PanelPalette.DescriptionForeground;
         _filterClear.Foreground = PanelPalette.Foreground;
         _message.Foreground = PanelPalette.ErrorForeground;
