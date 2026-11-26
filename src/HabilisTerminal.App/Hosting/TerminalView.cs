@@ -35,6 +35,11 @@ public sealed class TerminalView : Control
 
     private readonly TerminalEmulator _emulator;
     private readonly DispatcherTimer _blink;
+    private readonly CursorLayer _cursor;
+    private WindowBase? _window;
+    private readonly bool _blinks = CaretBlink.Interval() is not null;
+    private readonly TimeSpan _blinkTimeout = CaretBlink.Timeout();
+    private long _blinkSince;
     private TerminalPalette _palette = TerminalPalette.Default;
     private Typeface _typeface;
     private Typeface _boldTypeface;
@@ -59,14 +64,24 @@ public sealed class TerminalView : Control
         ClipToBounds = true;
         Cursor = new Cursor(StandardCursorType.Ibeam);
         UpdateCell();
+        _cursor = new CursorLayer(this) { IsHitTestVisible = false };
+        VisualChildren.Add(_cursor);
         emulator.Changed += OnEmulatorChanged;
-        _blink = new DispatcherTimer(TimeSpan.FromMilliseconds(530), DispatcherPriority.Background, (_, _) =>
+        _blink = new DispatcherTimer(CaretBlink.Interval() ?? TimeSpan.FromSeconds(1), DispatcherPriority.Background, (timer, _) =>
         {
-            _cursorOn = !_cursorOn;
-            InvalidateVisual();
+            // After the system's caret timeout the cursor stays lit until the next input or output.
+            var stop = _blinkTimeout != System.Threading.Timeout.InfiniteTimeSpan
+                && Environment.TickCount64 - _blinkSince >= (long)_blinkTimeout.TotalMilliseconds;
+            _cursorOn = stop || !_cursorOn;
+            if (stop)
+            {
+                ((DispatcherTimer)timer!).Stop();
+            }
+
+            _cursor.InvalidateVisual();
         });
         GotFocus += (_, _) => RestartBlink();
-        LostFocus += (_, _) => InvalidateVisual();
+        LostFocus += (_, _) => RestartBlink();
     }
 
     /// <summary>What the view sends to the console: keys, text, replies.</summary>
@@ -103,7 +118,7 @@ public sealed class TerminalView : Control
             ResizeGrid(Bounds.Size);
         }
 
-        InvalidateVisual();
+        Redraw();
     }
 
     public void SendText(string text) => Input?.Invoke(text);
@@ -125,7 +140,7 @@ public sealed class TerminalView : Control
     public void ClearSelection()
     {
         _anchor = null;
-        InvalidateVisual();
+        Redraw();
     }
 
     /// <summary>Back to the live screen (typing does this).</summary>
@@ -134,7 +149,7 @@ public sealed class TerminalView : Control
         if (_scroll != 0)
         {
             _scroll = 0;
-            InvalidateVisual();
+            Redraw();
         }
     }
 
@@ -144,12 +159,22 @@ public sealed class TerminalView : Control
     {
         _cursorOn = true;
         _blink.Stop();
-        if (IsFocused && _emulator.CursorBlinks)
+        WakeBlink();
+        Redraw();
+    }
+
+    /// <summary>
+    /// Input or output: the cursor blinks again for the system's caret timeout. Only where it is looked at, a focused
+    /// console in the active window; each blink redraws only the cursor's cell.
+    /// </summary>
+    private void WakeBlink()
+    {
+        _blinkSince = Environment.TickCount64;
+        if (!_blink.IsEnabled && _blinks && IsFocused && _emulator.CursorBlinks && _window?.IsActive != false)
         {
+            _cursorOn = true;
             _blink.Start();
         }
-
-        InvalidateVisual();
     }
 
     private void OnEmulatorChanged()
@@ -160,7 +185,8 @@ public sealed class TerminalView : Control
             Avalonia.Threading.Dispatcher.UIThread.Post(() =>
             {
                 Interlocked.Exchange(ref _invalidatePosted, 0);
-                InvalidateVisual();
+                WakeBlink();
+                Redraw();
             }, DispatcherPriority.Render);
         }
     }
@@ -249,7 +275,7 @@ public sealed class TerminalView : Control
             if (_commandSeparators != value)
             {
                 _commandSeparators = value;
-                InvalidateVisual();
+                Redraw();
             }
         }
     }
@@ -292,11 +318,6 @@ public sealed class TerminalView : Control
                     var top = (row * _cell.Height) + 0.5;
                     context.DrawLine(pen, new Point(0, top), new Point(Bounds.Width, top));
                 }
-            }
-
-            if (_scroll == 0 && _emulator.CursorVisible && (_cursorOn || !IsFocused))
-            {
-                DrawCursor(context);
             }
         }
     }
@@ -429,10 +450,60 @@ public sealed class TerminalView : Control
         }
     }
 
-    private void DrawCursor(DrawingContext context)
+    /// <summary>Redraws the screen; the cursor may have moved, so its layer is placed again.</summary>
+    private void Redraw()
     {
-        var x = _emulator.CursorX * _cell.Width;
-        var y = _emulator.CursorY * _cell.Height;
+        InvalidateVisual();
+        InvalidateArrange();
+        _cursor.InvalidateVisual();
+    }
+
+    protected override Size MeasureOverride(Size availableSize)
+    {
+        _cursor.Measure(_cell);
+        return default;
+    }
+
+    protected override Size ArrangeOverride(Size finalSize)
+    {
+        int x, y;
+        lock (_emulator.SyncRoot)
+        {
+            (x, y) = (_emulator.CursorX, _emulator.CursorY);
+        }
+
+        _cursor.Arrange(new Rect(x * _cell.Width, y * _cell.Height, _cell.Width, _cell.Height));
+        return finalSize;
+    }
+
+    protected override void OnAttachedToVisualTree(VisualTreeAttachmentEventArgs e)
+    {
+        base.OnAttachedToVisualTree(e);
+        _window = TopLevel.GetTopLevel(this) as WindowBase;
+        if (_window is not null)
+        {
+            _window.Activated += OnWindowActivation;
+            _window.Deactivated += OnWindowActivation;
+        }
+
+        RestartBlink();
+    }
+
+    private void OnWindowActivation(object? sender, EventArgs e) => RestartBlink();
+
+    /// <summary>The cursor in its own cell-sized visual, drawn over the screen.</summary>
+    private void RenderCursor(DrawingContext context)
+    {
+        lock (_emulator.SyncRoot)
+        {
+            if (_scroll != 0 || !_emulator.CursorVisible || (!_cursorOn && IsFocused))
+            {
+                return;
+            }
+        }
+
+        const double x = 0;
+        const double y = 0;
         var brush = Brushes(_palette.Cursor);
         if (!IsFocused)
         {
@@ -489,6 +560,7 @@ public sealed class TerminalView : Control
 
     private void Send(string text)
     {
+        WakeBlink();
         ScrollToBottom();
         if (HasSelection)
         {
@@ -550,7 +622,7 @@ public sealed class TerminalView : Control
                 break;
         }
 
-        InvalidateVisual();
+        Redraw();
         e.Handled = true;
     }
 
@@ -560,7 +632,7 @@ public sealed class TerminalView : Control
         if (_selecting)
         {
             _caret = CellAt(e.GetPosition(this));
-            InvalidateVisual();
+            Redraw();
         }
     }
 
@@ -591,7 +663,7 @@ public sealed class TerminalView : Control
             _scroll = Math.Clamp(_scroll + lines, 0, _emulator.ScrollbackCount);
         }
 
-        InvalidateVisual();
+        Redraw();
         e.Handled = true;
     }
 
@@ -635,6 +707,12 @@ public sealed class TerminalView : Control
     {
         base.OnDetachedFromVisualTree(e);
         _blink.Stop();
+        if (_window is not null)
+        {
+            _window.Activated -= OnWindowActivation;
+            _window.Deactivated -= OnWindowActivation;
+            _window = null;
+        }
     }
 
     protected override void OnGotFocus(FocusChangedEventArgs e)
@@ -653,5 +731,11 @@ public sealed class TerminalView : Control
         {
             Input?.Invoke("\u001b[O");
         }
+    }
+
+    /// <summary>Draws only the cursor, so that a blink repaints one cell instead of the screen.</summary>
+    private sealed class CursorLayer(TerminalView owner) : Control
+    {
+        public override void Render(DrawingContext context) => owner.RenderCursor(context);
     }
 }

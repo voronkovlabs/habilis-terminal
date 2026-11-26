@@ -27,6 +27,15 @@ internal static class PerfDiagnostics
     private const double BusyThreadMs = 250;
     private const string WatchdogName = "Performance watchdog";
     private const uint ThreadQueryLimitedInformation = 0x0800;
+    /// <summary>
+    /// The pause between pings while a window is active, and while none is: a stall nobody looks at matters less, and
+    /// sixteen pings a second cost the watchdog and the UI thread about 0.4% of a core in an idle app.
+    /// </summary>
+    private const int PingPauseMs = 50;
+    private const int BackgroundPingPauseMs = 1000;
+
+    /// <summary>Listing the threads reads every process of the machine, about 13 ms of CPU: in the background only this often.</summary>
+    private const long BackgroundSampleThreadsEveryMs = 30_000;
     private static readonly TimeSpan FlushEvery = TimeSpan.FromSeconds(30);
     private static readonly TimeSpan SampleThreadsEvery = TimeSpan.FromSeconds(5);
     private static readonly TimeSpan RetryAfter = TimeSpan.FromMinutes(30);
@@ -36,6 +45,8 @@ internal static class PerfDiagnostics
     private static Timer? _flush;
     private static Timer? _threadSampling;
     private static Thread? _watchdog;
+    private static volatile bool _foreground = true;
+    private static long _threadsSampledAt;
     private static volatile bool _running;
     private static volatile string? _dispatched;
     private static DateTime _nextAutomaticSend;
@@ -132,7 +143,7 @@ internal static class PerfDiagnostics
         _watchdog = new Thread(() => Watch(dispatcher, uiThread)) { IsBackground = true, Name = WatchdogName };
         _watchdog.Start();
         _flush = new Timer(_ => FlushAndMaybeSend(), null, FlushEvery, FlushEvery);
-        _threadSampling = new Timer(_ => SampleThreads(), null, SampleThreadsEvery, SampleThreadsEvery);
+        _threadSampling = new Timer(_ => SampleThreadsOnTimer(), null, SampleThreadsEvery, SampleThreadsEvery);
         StartTestStall(dispatcher);
     }
 
@@ -248,9 +259,28 @@ internal static class PerfDiagnostics
                 });
             }
 
-            Thread.Sleep(50);
+            var active = _foreground = AppInForeground();
+            Thread.Sleep(active ? PingPauseMs : BackgroundPingPauseMs);
         }
     }
+
+    /// <summary>Whether a window of this process is in the foreground, asked of Windows. Elsewhere always true.</summary>
+    private static bool AppInForeground()
+    {
+        if (!OperatingSystem.IsWindows())
+        {
+            return true;
+        }
+
+        var window = GetForegroundWindow();
+        return window != IntPtr.Zero && GetWindowThreadProcessId(window, out var process) != 0 && process == Environment.ProcessId;
+    }
+
+    [DllImport("user32.dll")]
+    private static extern IntPtr GetForegroundWindow();
+
+    [DllImport("user32.dll")]
+    private static extern uint GetWindowThreadProcessId(IntPtr window, out int processId);
 
     /// <summary>Off the watchdog, so that a slow look cannot hide the end of the stall.</summary>
     private static (string? Chain, string? Stack) LookCloser()
@@ -363,6 +393,15 @@ internal static class PerfDiagnostics
     private static readonly Dictionary<string, double> ThreadCpuPending = new(StringComparer.Ordinal);
     private static Dictionary<int, double> _threadCpuSeen = [];
 
+    /// <summary>Every few seconds while a window is in front, less often behind other windows.</summary>
+    private static void SampleThreadsOnTimer()
+    {
+        if (_foreground || Environment.TickCount64 - _threadsSampledAt >= BackgroundSampleThreadsEveryMs)
+        {
+            SampleThreads();
+        }
+    }
+
     /// <summary>
     /// Adds what each thread used since the last sample, by name. What a thread used after its last sample cannot be asked
     /// for once it has ended, so the report shows that as a difference from the process's total.
@@ -376,6 +415,7 @@ internal static class PerfDiagnostics
             return;
         }
 
+        _threadsSampledAt = Environment.TickCount64;
         (int Id, string Name, double Used)? busiest = null;
         lock (ThreadGate)
         {
