@@ -28,6 +28,13 @@ public static class SettingsCatalog
             SettingKind.Text, "auto", ["auto", "dark_modern", "light_modern", "dark_plus", "light_plus", "dark_vs", "light_vs", "hc_black", "hc_light", "far", "matrix"]),
         new("useAccentColor", Appearance, "Use Accent Color", "Tint focus and selection with the Windows accent color.", SettingKind.Toggle, true),
         new("api.control", Claude, "Claude Control", "Lets Claude drive this app through \"habi mcp\" (an MCP server): see and move the panels, run commands, run console commands, open files, change settings. Ask: console commands and settings changes need your OK. Off by default.", SettingKind.Choice, "off", ["off", "ask", "trusted"]),
+        new("assistant.provider", Claude, "Assistant Provider",
+            "Who answers the assistant (Ctrl+Shift+A): \"claude\" uses Claude Code as it is set up on this computer (your Claude subscription or API key); \"bedrock\" goes through Amazon Bedrock with the AWS profile and region below.",
+            SettingKind.Choice, "claude", ["claude", "bedrock"]),
+        new("assistant.model", Claude, "Assistant Model", "The model, as Claude Code takes it (\"opus\", \"sonnet\", \"haiku\" or a full model id). Empty: Claude Code's own default.", SettingKind.Text, ""),
+        new("assistant.awsProfile", Claude, "Assistant AWS Profile", "For Bedrock: the AWS profile (from ~/.aws/config). Empty: the default credentials.", SettingKind.Text, ""),
+        new("assistant.awsRegion", Claude, "Assistant AWS Region", "For Bedrock: the region with Claude models enabled, such as us-east-1. Empty: the profile's region.", SettingKind.Text, ""),
+        new("assistant.claudePath", Claude, "Claude Code Path", "The claude executable. Empty: found on PATH or in ~/.local/bin.", SettingKind.Text, ""),
         new("iconTheme", Appearance, "File Icon Theme", "Icons in the file panels.", SettingKind.Choice, "material", ["seti", "material"]),
 
         new("panels.fontFamily", Panels, "Font Family", "Font of the file panels.", SettingKind.Text, "Segoe UI"),

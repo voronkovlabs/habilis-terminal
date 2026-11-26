@@ -58,6 +58,13 @@ public sealed class ControlClient
         await using (writer.ConfigureAwait(false))
         {
             var request = new JsonObject { ["id"] = Interlocked.Increment(ref _next), ["method"] = method, ["params"] = parameters };
+
+            // Started by the built-in assistant (issue #197): its calls carry the session's secret.
+            if (Environment.GetEnvironmentVariable("HABI_ASSISTANT_TOKEN") is { Length: > 0 } token)
+            {
+                request["token"] = token;
+            }
+
             await writer.WriteLineAsync(request.ToJsonString()).ConfigureAwait(false);
             var line = await reader.ReadLineAsync(cancellationToken).ConfigureAwait(false)
                 ?? throw new ControlCallException("no_app", "Habilis Terminal closed the connection.");

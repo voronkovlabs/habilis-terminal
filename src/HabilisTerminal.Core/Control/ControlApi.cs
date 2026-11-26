@@ -71,7 +71,8 @@ public interface IControlApiHandler
     Task RunCommandAsync(string id);
 
     /// <summary>Types a command line into the console, runs it and waits for the prompt (or the timeout).</summary>
-    Task<ControlConsoleResult> ConsoleRunAsync(string command, int timeoutMs);
+    /// <param name="ask">Ask the user first (Ask mode; never for the built-in assistant, which asked already).</param>
+    Task<ControlConsoleResult> ConsoleRunAsync(string command, int timeoutMs, bool ask);
 
     /// <summary>The console's last lines, the screen and the scrollback above it.</summary>
     Task<string> ConsoleReadAsync(int lines);
@@ -84,5 +85,5 @@ public interface IControlApiHandler
 
     Task<IReadOnlyList<ControlSetting>> SettingsAsync(string? key);
 
-    Task<ControlSetting> SetSettingAsync(string key, JsonElement value);
+    Task<ControlSetting> SetSettingAsync(string key, JsonElement value, bool ask);
 }

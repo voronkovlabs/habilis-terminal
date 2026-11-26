@@ -256,6 +256,7 @@ public static class CommandCatalog
         // Window
         new("window.commands", Window, "Command line", "Ctrl+Shift+P", _ => false) { Help = "This command line, in the title bar: commands for what is selected, with their keys; a pasted path or address opens that place" },
         new("window.help", Window, "Keyboard help", "F1", Workspace) { Help = "This help" },
+        new("assistant.open", Window, "Assistant", "Ctrl+Shift+A", _ => true) { Help = "The assistant: Claude Code working in this window, asking before it changes anything" },
         new("window.menu", Window, "Menu", "F9", Workspace),
         new("window.exit", Window, "Exit", "F10", Workspace),
         new("window.close", Window, "Close this page", "Esc", c => c.Area is CommandArea.Viewer or CommandArea.Editor or CommandArea.OtherPage) { Help = "Close a viewer, editor, settings or this page" },

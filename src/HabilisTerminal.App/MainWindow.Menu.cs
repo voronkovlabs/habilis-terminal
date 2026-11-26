@@ -77,6 +77,8 @@ public partial class MainWindow
                 MenuCommand.Separator,
                 MenuRow("plugins.menu"),
                 MenuRow("plugins.panelCommands"),
+                MenuCommand.Separator,
+                MenuRow("assistant.open"),
             ]),
             new("Options",
             [

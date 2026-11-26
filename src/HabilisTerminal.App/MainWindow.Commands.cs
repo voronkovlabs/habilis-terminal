@@ -62,6 +62,11 @@ public partial class MainWindow
                 Close();
                 return true;
 
+            // The assistant, from any focus (issue #197).
+            case Key.A when modifiers == (KeyModifiers.Control | KeyModifiers.Shift):
+                ToggleAssistant();
+                return true;
+
             // The command line, from any focus (issue #155).
             case Key.P when modifiers == (KeyModifiers.Control | KeyModifiers.Shift):
                 Fire(ShowCommandLineAsync());

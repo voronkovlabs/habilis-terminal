@@ -63,7 +63,11 @@ public class ControlApiTests
             return Task.CompletedTask;
         }
 
-        public Task<ControlConsoleResult> ConsoleRunAsync(string command, int timeoutMs) => Task.FromResult(new ControlConsoleResult(true, 0, "out"));
+        public Task<ControlConsoleResult> ConsoleRunAsync(string command, int timeoutMs, bool ask)
+        {
+            Calls.Add($"console {command} ask={ask}");
+            return Task.FromResult(new ControlConsoleResult(true, 0, "out"));
+        }
 
         public Task<string> ConsoleReadAsync(int lines) => Task.FromResult("text");
 
@@ -75,16 +79,37 @@ public class ControlApiTests
 
         public Task<IReadOnlyList<ControlSetting>> SettingsAsync(string? key) => Task.FromResult<IReadOnlyList<ControlSetting>>([]);
 
-        public Task<ControlSetting> SetSettingAsync(string key, JsonElement value) =>
+        public Task<ControlSetting> SetSettingAsync(string key, JsonElement value, bool ask) =>
             throw new PluginApiException(PluginApiException.Declined, "The user declined the change.");
     }
 
     private readonly FakeControl _control = new();
 
-    private async Task<JsonElement> Ask(string line)
+    private async Task<JsonElement> Ask(string line, string? assistantToken = null)
     {
-        using var server = new PluginApiServer("unused", new NoPlugins(), new Version(1, 0, 0), _control);
+        using var server = new PluginApiServer("unused", new NoPlugins(), new Version(1, 0, 0), _control) { AssistantToken = assistantToken };
         return JsonDocument.Parse(await server.HandleLineAsync(line)).RootElement;
+    }
+
+    [Fact]
+    public async Task The_assistant_secret_opens_control_without_asking_again()
+    {
+        // #197: the assistant page asked the user already; its calls run with control off, and Ask mode asks nothing.
+        _control.Mode = ControlMode.Off;
+        var run = await Ask("""{ "method": "console.run", "token": "s3cret", "params": { "command": "dir" } }""", "s3cret");
+        Assert.True(run.GetProperty("ok").GetBoolean());
+
+        _control.Mode = ControlMode.Ask;
+        await Ask("""{ "method": "console.run", "token": "s3cret", "params": { "command": "ls" } }""", "s3cret");
+        await Ask("""{ "method": "console.run", "params": { "command": "pwd" } }""", "s3cret");
+
+        _control.Mode = ControlMode.Off;
+        var wrong = await Ask("""{ "method": "console.run", "token": "guess", "params": { "command": "x" } }""", "s3cret");
+        var none = await Ask("""{ "method": "console.run", "token": "s3cret", "params": { "command": "y" } }""");
+
+        Assert.Equal(["console dir ask=False", "console ls ask=False", "console pwd ask=True"], _control.Calls);
+        Assert.Equal(PluginApiException.Disabled, wrong.GetProperty("error").GetProperty("code").GetString());
+        Assert.Equal(PluginApiException.Disabled, none.GetProperty("error").GetProperty("code").GetString());
     }
 
     [Fact]

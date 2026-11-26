@@ -22,6 +22,17 @@ public sealed class AppSettings
     /// <summary>Claude control (issue #387): "off", "ask" or "trusted".</summary>
     public string ApiControl => Get<string>("api.control");
 
+    /// <summary>The built-in assistant (issue #197): "claude" (Claude Code as set up) or "bedrock".</summary>
+    public string AssistantProvider => Get<string>("assistant.provider");
+
+    public string AssistantModel => Get<string>("assistant.model");
+
+    public string AssistantAwsProfile => Get<string>("assistant.awsProfile");
+
+    public string AssistantAwsRegion => Get<string>("assistant.awsRegion");
+
+    public string AssistantClaudePath => Get<string>("assistant.claudePath");
+
     public string PanelsFontFamily => Get<string>("panels.fontFamily");
 
     public int PanelsFontSize => Get<int>("panels.fontSize");

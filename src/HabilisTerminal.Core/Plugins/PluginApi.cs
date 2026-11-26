@@ -72,6 +72,13 @@ public sealed class PluginApiServer(string pipeName, IPluginApiHandler handler, 
     /// <summary>Rows a panel reports unless the request asks for another number.</summary>
     public const int DefaultRows = 200;
 
+    /// <summary>
+    /// The built-in assistant's secret (issue #197): its <c>habi mcp</c> sends it with every call, and such calls run
+    /// whatever the Claude Control setting says, without its Allow prompts: the assistant page asked the user already.
+    /// Null while no assistant session runs.
+    /// </summary>
+    public string? AssistantToken { get; set; }
+
     /// <summary>Called for every control request with its method and parameters, for the journal and the title mark.</summary>
     public Action<string, string>? ControlCalled { get; set; }
 
@@ -183,7 +190,8 @@ public sealed class PluginApiServer(string pipeName, IPluginApiHandler handler, 
 
     private async Task<object?> ControlAsync(string method, JsonElement root)
     {
-        if (control is null || control.Mode == Control.ControlMode.Off)
+        var mode = IsAssistant(root) ? Control.ControlMode.Trusted : control?.Mode ?? Control.ControlMode.Off;
+        if (control is null || mode == Control.ControlMode.Off)
         {
             throw new PluginApiException(PluginApiException.Disabled, "Claude control is off. Turn it on in Settings, Claude Control (api.control).");
         }
@@ -200,17 +208,22 @@ public sealed class PluginApiServer(string pipeName, IPluginApiHandler handler, 
             "panels.cursor" => await control.CursorAsync(Optional(root, "side"), Text(root, "name"), rows).ConfigureAwait(false),
             "panels.select" => await control.SelectAsync(Optional(root, "side"), Names(root), Optional(root, "mode") ?? "set", rows).ConfigureAwait(false),
             "commands.run" => await RunCommandAsync(Text(root, "id")).ConfigureAwait(false),
-            "console.run" => await control.ConsoleRunAsync(Text(root, "command"), Number(root, "timeoutMs") ?? 60_000).ConfigureAwait(false),
+            "console.run" => await control.ConsoleRunAsync(Text(root, "command"), Number(root, "timeoutMs") ?? 60_000, mode == Control.ControlMode.Ask).ConfigureAwait(false),
             "console.read" => new { text = await control.ConsoleReadAsync(Number(root, "lines") ?? 100).ConfigureAwait(false) },
             "files.view" => await control.OpenFileAsync(Text(root, "path"), edit: false).ConfigureAwait(false),
             "files.edit" => await control.OpenFileAsync(Text(root, "path"), edit: true).ConfigureAwait(false),
             "pages.close" => await control.ClosePageAsync().ConfigureAwait(false),
             "window.screenshot" => await control.ScreenshotAsync().ConfigureAwait(false),
             "settings.get" => await control.SettingsAsync(Optional(root, "key")).ConfigureAwait(false),
-            "settings.set" => await control.SetSettingAsync(Text(root, "key"), Value(root)).ConfigureAwait(false),
+            "settings.set" => await control.SetSettingAsync(Text(root, "key"), Value(root), mode == Control.ControlMode.Ask).ConfigureAwait(false),
             _ => throw new PluginApiException(PluginApiException.UnknownMethod, $"There is no method \"{method}\"."),
         };
     }
+
+    private bool IsAssistant(JsonElement root) =>
+        AssistantToken is { Length: > 0 } expected
+        && root.TryGetProperty("token", out var given) && given.ValueKind == JsonValueKind.String
+        && System.Security.Cryptography.CryptographicOperations.FixedTimeEquals(Utf8.GetBytes(given.GetString()!), Utf8.GetBytes(expected));
 
     private async Task<object> RunCommandAsync(string id)
     {

@@ -154,6 +154,7 @@ public partial class MainWindow
         "window.zoomOut" => () => Widgets.UiZoom.Step(-1),
         "window.zoomReset" => () => Widgets.UiZoom.Reset(),
         "window.help" => ShowHelp,
+        "assistant.open" => ToggleAssistant,
         "window.menu" => () => Fire(ShowTopMenuAsync()),
         "window.exit" => Close,
         "go.driveLeft" => () => Fire(ShowDriveMenuAsync(_left)),

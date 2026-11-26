@@ -179,7 +179,7 @@ public partial class MainWindow : IControlApiHandler
         return Task.FromResult(true);
     });
 
-    async Task<ControlConsoleResult> IControlApiHandler.ConsoleRunAsync(string command, int timeoutMs)
+    async Task<ControlConsoleResult> IControlApiHandler.ConsoleRunAsync(string command, int timeoutMs, bool ask)
     {
         var (host, emulator, start) = await OnUiAsync(() =>
         {
@@ -193,7 +193,7 @@ public partial class MainWindow : IControlApiHandler
                 throw new PluginApiException(PluginApiException.Busy, "The console is running a command. Wait for it, or read it with read_console.");
             }
 
-            if (((IControlApiHandler)this).Mode == ControlMode.Ask && !Confirm("Claude wants to run a command", command))
+            if (ask && !Confirm("Claude wants to run a command", command))
             {
                 throw new PluginApiException(PluginApiException.Declined, "The user declined the command.");
             }
@@ -291,7 +291,7 @@ public partial class MainWindow : IControlApiHandler
         return Task.FromResult<IReadOnlyList<ControlSetting>>([.. definitions.Select(DescribeSetting)]);
     });
 
-    Task<ControlSetting> IControlApiHandler.SetSettingAsync(string key, JsonElement value) => OnUiAsync(() =>
+    Task<ControlSetting> IControlApiHandler.SetSettingAsync(string key, JsonElement value, bool ask) => OnUiAsync(() =>
     {
         var definition = SettingsCatalog.Find(key) ?? throw new PluginApiException(PluginApiException.NotFound, $"There is no setting \"{key}\".");
         var (converted, error) = definition.Convert(value);
@@ -306,7 +306,7 @@ public partial class MainWindow : IControlApiHandler
             throw new PluginApiException(PluginApiException.Declined, "Claude Control can only be changed by the user.");
         }
 
-        if (((IControlApiHandler)this).Mode == ControlMode.Ask && !Confirm("Claude wants to change a setting", $"{definition.Title} ({key}): {value.GetRawText()}"))
+        if (ask && !Confirm("Claude wants to change a setting", $"{definition.Title} ({key}): {value.GetRawText()}"))
         {
             throw new PluginApiException(PluginApiException.Declined, "The user declined the change.");
         }
