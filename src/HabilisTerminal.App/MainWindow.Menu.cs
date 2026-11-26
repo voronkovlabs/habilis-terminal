@@ -74,6 +74,7 @@ public partial class MainWindow
                 MenuRow("tabs.next"),
                 MenuRow("panels.inactive"),
                 MenuRow("panel.compare"),
+                MenuRow("drive.eject"),
                 MenuCommand.Separator,
                 MenuRow("plugins.menu"),
                 MenuRow("plugins.panelCommands"),

@@ -163,6 +163,7 @@ public partial class MainWindow
         "tabs.previous" => () => NextTab(-1),
         "tabs.close" => () => CloseCurrentTab(),
         "panel.compare" => CompareFolders,
+        "drive.eject" => () => EjectPanelDrive(_active),
         "console.copy" => () => CopyTerminalSelection(),
         "console.paste" => PasteIntoTerminal,
         "plugins.menu" => () => Fire(ShowPluginMenuAsync()),

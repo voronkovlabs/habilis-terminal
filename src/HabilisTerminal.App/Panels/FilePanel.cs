@@ -35,6 +35,8 @@ public sealed partial class FilePanel : Border
     private FilePanel? _quickViewSource;
     private readonly TextBlock _title = new();
     private readonly TextBlock _star = new() { Margin = new Thickness(0, 0, 5, 0), VerticalAlignment = VerticalAlignment.Center };
+    private readonly TextBlock _eject = new() { Text = "⏏", Margin = new Thickness(8, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center, IsVisible = false };
+    private string? _ejectRoot;
     private readonly TextBlock _path = new();
     private readonly TextBlock _filterClear = new();
     private Border _filterClearTarget = null!;
@@ -131,6 +133,25 @@ public sealed partial class FilePanel : Border
             }
         }, Avalonia.Interactivity.RoutingStrategies.Bubble, handledEventsToo: false);
         ShowStar();
+
+        // Eject (issue #407): only on a removable drive; the drive type is asked off the UI thread.
+        DockPanel.SetDock(_eject, Dock.Right);
+        header.Children.Add(_eject);
+        _eject.FontSize = 13;
+        _eject.Foreground = PanelPalette.DescriptionForeground;
+        _eject.Cursor = new Avalonia.Input.Cursor(Avalonia.Input.StandardCursorType.Hand);
+        _eject.Background = Avalonia.Media.Brushes.Transparent;
+        Avalonia.Controls.ToolTip.SetTip(_eject, "Eject this drive (Ctrl+Shift+E). The panels and consoles on it go home first.");
+        _eject.PointerEntered += (_, _) => _eject.Foreground = PanelPalette.Foreground;
+        _eject.PointerExited += (_, _) => _eject.Foreground = PanelPalette.DescriptionForeground;
+        _eject.AddHandler(PointerPressedEvent, (_, e) =>
+        {
+            if (e.GetCurrentPoint(_eject).Properties.IsLeftButtonPressed)
+            {
+                e.Handled = true;
+                EjectRequested?.Invoke(this);
+            }
+        }, Avalonia.Interactivity.RoutingStrategies.Bubble, handledEventsToo: false);
         DockPanel.SetDock(_title, Dock.Left);
         header.Children.Add(_title);
 
@@ -233,6 +254,39 @@ public sealed partial class FilePanel : Border
 
     /// <summary>Ctrl+D: the current folder goes into the favorites, or out of them (issue #385).</summary>
     public event Action<FilePanel>? FavoriteToggled;
+
+    /// <summary>The header's ⏏ was clicked (issue #407).</summary>
+    public event Action<FilePanel>? EjectRequested;
+
+    /// <summary>Shows the ⏏ when the panel stands on a drive Windows can eject; asked once per drive change.</summary>
+    private async void UpdateEjectButton()
+    {
+        var root = Provider is null && _found is null ? Core.Drives.DriveEject.RootOf(State.Path) : null;
+        if (string.Equals(root, _ejectRoot, StringComparison.OrdinalIgnoreCase))
+        {
+            return;
+        }
+
+        _ejectRoot = root;
+        if (root is null || root.StartsWith(@"\\", StringComparison.Ordinal))
+        {
+            _eject.IsVisible = false;
+            return;
+        }
+
+        try
+        {
+            var type = await Task.Run(() => new System.IO.DriveInfo(root).DriveType);
+            if (string.Equals(root, _ejectRoot, StringComparison.OrdinalIgnoreCase))
+            {
+                _eject.IsVisible = Core.Drives.DriveEject.CanEject(type);
+            }
+        }
+        catch (Exception ex) when (ex is ArgumentException or System.IO.IOException)
+        {
+            _eject.IsVisible = false;
+        }
+    }
 
     /// <summary>Enter on a file: run it through the shell.</summary>
     public event Action<FilePanel, PanelItem>? ExecuteRequested;
@@ -1438,6 +1492,8 @@ public sealed partial class FilePanel : Border
     {
         if (Provider is { } provider)
         {
+            _ejectRoot = null;
+            _eject.IsVisible = false;
             _title.Text = PluginManager.Guard(Plugin!, () => provider.Title, Plugin!.Name).ToUpperInvariant();
             _path.Text = State.Path;
             return;
@@ -1453,6 +1509,7 @@ public sealed partial class FilePanel : Border
         var name = State.Path.Length == 0 ? Side : System.IO.Path.GetFileName(State.Path.TrimEndSeparator());
         _title.Text = (string.IsNullOrEmpty(name) ? State.Path : name).ToUpperInvariant();
         _path.Text = State.Path;
+        UpdateEjectButton();
     }
 
     /// <summary>

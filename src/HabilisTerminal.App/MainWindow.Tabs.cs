@@ -193,6 +193,7 @@ public partial class MainWindow
         panel.Navigated += (_, _) => UpdatePluginPanelFlag();
         panel.Navigated += (_, _) => UpdateFavoriteMarks();
         panel.FavoriteToggled += ToggleFavorite;
+        panel.EjectRequested += EjectPanelDrive;
         panel.ExecuteRequested += OnPanelExecuteRequested;
         panel.OpensAsFolder = _plugins.OpensAsFolder;
         panel.FileAsFolderRequested += (p, item, anyFormat) => Fire(OpenFileAsFolderAsync(p, item, anyFormat));

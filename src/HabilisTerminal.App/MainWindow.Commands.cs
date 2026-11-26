@@ -62,6 +62,11 @@ public partial class MainWindow
                 Close();
                 return true;
 
+            // Eject the active panel's drive, from the panels or the console (issue #407).
+            case Key.E when modifiers == (KeyModifiers.Control | KeyModifiers.Shift) && !IsPageOpen:
+                EjectPanelDrive(_active);
+                return true;
+
             // The command line, from any focus (issue #155).
             case Key.P when modifiers == (KeyModifiers.Control | KeyModifiers.Shift):
                 Fire(ShowCommandLineAsync());
@@ -801,6 +806,8 @@ public partial class MainWindow
                 },
                 Hotkey = drive.Root[0],
                 Tag = drive,
+                Action = DriveEject.CanEject(drive.Type) ? "⏏" : null,
+                ActionTip = $"Eject {drive.Root.TrimEndSeparator()} (Del)",
                 IsCurrent = select is null && string.Equals(drive.Root, currentRoot, StringComparison.OrdinalIgnoreCase) && !_favorites.Contains(panel.CurrentPath),
                 Detail = "…",
             });
@@ -877,11 +884,18 @@ public partial class MainWindow
                     return true;
                 }
 
-                DisconnectOrEject(item);
+                DisconnectOrEject(item, panel);
                 return false;
             },
             FillDown = true,
             CommandKeys = [Key.F4],
+            OnAction = item =>
+            {
+                if (item.Tag is DriveSummary drive)
+                {
+                    Fire(EjectDriveAsync(drive.Root, panel, item));
+                }
+            },
         });
     }
 
@@ -1035,15 +1049,21 @@ public partial class MainWindow
         item.Usage = drive.UsedFraction;
     }
 
-    private void DisconnectOrEject(QuickPickItem item)
+    /// <summary>Del in the drive menu: a network drive disconnects (asked first); a removable one ejects (issue #407).</summary>
+    private void DisconnectOrEject(QuickPickItem item, FilePanel panel)
     {
-        if (item.Tag is not DriveSummary drive || drive.Type is not (DriveType.Network or DriveType.Removable))
+        if (item.Tag is not DriveSummary drive)
         {
             return;
         }
 
-        var action = drive.Type == DriveType.Network ? "Disconnect network drive" : "Eject";
-        if (!ThemedDialog.Show(this, $"{action} {drive.Root.TrimEndSeparator()}?", LabelBlock("The panels on it close."),
+        if (DriveEject.CanEject(drive.Type))
+        {
+            Fire(EjectDriveAsync(drive.Root, panel, item));
+            return;
+        }
+
+        if (drive.Type != DriveType.Network || !ThemedDialog.Show(this, $"Disconnect network drive {drive.Root.TrimEndSeparator()}?", LabelBlock("The panels on it close."),
             [new DialogButton<bool>("_OK", true, IsDefault: true), new DialogButton<bool>("Cancel", false, IsCancel: true)], false))
         {
             return;
@@ -1051,16 +1071,8 @@ public partial class MainWindow
 
         try
         {
-            if (drive.Type == DriveType.Network)
-            {
-                DriveCatalog.DisconnectNetworkDrive(drive.Root);
-            }
-            else
-            {
-                ShellVerbs.Eject(drive.Root);
-            }
-
-            item.Detail = drive.Type == DriveType.Network ? "disconnected" : "ejected";
+            DriveCatalog.DisconnectNetworkDrive(drive.Root);
+            item.Detail = "disconnected";
         }
         catch (Exception ex) when (ex is IOException or System.Runtime.InteropServices.COMException or InvalidOperationException)
         {

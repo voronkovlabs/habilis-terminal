@@ -40,6 +40,9 @@ public sealed record QuickPickOptions
     /// <summary>Del on an item (e.g. disconnect a drive); true takes the item out of the list (a favorite, #385).</summary>
     public Func<QuickPickItem, bool>? OnDelete { get; init; }
 
+    /// <summary>A click on an item's <see cref="QuickPickItem.Action"/> button; the pick stays open.</summary>
+    public Action<QuickPickItem>? OnAction { get; init; }
+
     /// <summary>The list may grow down to the bottom of the window (the drive menu, #385) instead of a fixed height.</summary>
     public bool FillDown { get; init; }
 
@@ -77,7 +80,7 @@ public sealed class QuickPick : UserControl
         _placeholder.SetResourceReference(TextBlock.ForegroundProperty, "Habi.Placeholder");
         _filter.SetResourceReference(TextBox.BorderBrushProperty, "Habi.Accent");
         ScrollViewer.SetHorizontalScrollBarVisibility(_list, ScrollBarVisibility.Disabled);
-        _list.ItemTemplate = new FuncDataTemplate<QuickPickItem>((item, _) => item is null ? new StackPanel() : Row(item));
+        _list.ItemTemplate = new FuncDataTemplate<QuickPickItem>((item, _) => item is null ? new StackPanel() : Row(item, options.OnAction));
         _list.Styles.Add(PickItemStyle());
 
         var filterGrid = new Grid { Margin = new Thickness(0, 0, 0, 6) };
@@ -195,7 +198,7 @@ public sealed class QuickPick : UserControl
         return style;
     }
 
-    private static StackPanel Row(QuickPickItem item)
+    private static StackPanel Row(QuickPickItem item, Action<QuickPickItem>? onAction)
     {
         var group = new TextBlock { Text = item.Group, IsVisible = item.HasGroup, FontSize = 11, Margin = new Thickness(0, 6, 0, 2) };
         group.SetResourceReference(TextBlock.ForegroundProperty, "Habi.Description");
@@ -219,7 +222,7 @@ public sealed class QuickPick : UserControl
         right.Children.Add(detail);
         right.Children.Add(usage);
 
-        var grid = new Grid { ColumnDefinitions = new ColumnDefinitions("24,Auto,*,Auto") };
+        var grid = new Grid { ColumnDefinitions = new ColumnDefinitions("24,Auto,*,Auto,Auto") };
         Grid.SetColumn(label, 1);
         Grid.SetColumn(description, 2);
         Grid.SetColumn(right, 3);
@@ -227,6 +230,35 @@ public sealed class QuickPick : UserControl
         grid.Children.Add(label);
         grid.Children.Add(description);
         grid.Children.Add(right);
+        if (item.Action is { Length: > 0 } glyph && onAction is not null)
+        {
+            // Taken on the press, so the click neither selects nor accepts the row.
+            var action = new Border
+            {
+                Child = new TextBlock { Text = glyph, FontSize = 13, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center },
+                Width = 26,
+                Height = 22,
+                Margin = new Thickness(8, 0, 0, 0),
+                CornerRadius = new CornerRadius(3),
+                Background = Brushes.Transparent,
+                Cursor = new Cursor(StandardCursorType.Hand),
+                VerticalAlignment = VerticalAlignment.Center,
+            };
+            action.Classes.Add("pick-action");
+            ToolTip.SetTip(action, item.ActionTip);
+            action.AddHandler(PointerPressedEvent, (_, e) =>
+            {
+                if (e.GetCurrentPoint(action).Properties.IsLeftButtonPressed)
+                {
+                    e.Handled = true;
+                    onAction(item);
+                }
+            }, RoutingStrategies.Tunnel);
+            action.PointerEntered += (_, _) => action.Bind(Border.BackgroundProperty, action.GetResourceObservable("Habi.Hover"));
+            action.PointerExited += (_, _) => action.Background = Brushes.Transparent;
+            Grid.SetColumn(action, 4);
+            grid.Children.Add(action);
+        }
         var stack = new StackPanel();
         stack.Children.Add(group);
         stack.Children.Add(grid);

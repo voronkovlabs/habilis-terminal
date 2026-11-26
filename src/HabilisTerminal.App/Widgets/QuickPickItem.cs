@@ -20,6 +20,12 @@ public sealed class QuickPickItem : INotifyPropertyChanged
     /// <summary>The icon as geometry for the template.</summary>
     public Avalonia.Media.Geometry? IconGeometry => Theming.Codicon.GeometryOf(Icon);
 
+    /// <summary>A button at the row's right end (⏏ on a removable drive, issue #407); clicking it runs <see cref="QuickPickOptions.OnAction"/>.</summary>
+    public string? Action { get; init; }
+
+    /// <summary>The action button's tooltip.</summary>
+    public string? ActionTip { get; init; }
+
     /// <summary>A key that accepts this item at once while the filter is empty (drive letters).</summary>
     public char? Hotkey { get; init; }
 

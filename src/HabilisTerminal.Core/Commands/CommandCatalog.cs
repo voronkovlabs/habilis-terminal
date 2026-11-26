@@ -216,6 +216,7 @@ public static class CommandCatalog
         new("panel.info", Panels, "Info panel", "Ctrl+L", HasPanel) { Help = "Info panel in the other panel (shows a hidden one; again hides it)" },
         new("panel.quickView", Panels, "Quick view", "Ctrl+Q", HasPanel) { Help = "Quick view in the other panel (shows a hidden one; again hides it); on a PDF the mouse wheel turns pages" },
         new("panel.compare", Panels, "Compare folders", null, c => Local(c) && !c.OtherIsPlugin),
+        new("drive.eject", Panels, "Eject this drive", "Ctrl+Shift+E", Local) { Help = "Eject the USB stick, card or disc the active panel is on; panels and consoles on it go home first. Del or ⏏ in the drive menu ejects any" },
         new("tabs.new", Panels, "New console", "Ctrl+Shift+T", Workspace) { Help = "New console, with the panels of the last one closed; each tab keeps its own panels, a long command goes on in its tab" },
         new("tabs.next", Panels, "Next console", "Ctrl+Tab", c => Workspace(c) && c.ConsoleTabs > 1),
         new("tabs.previous", Panels, "Previous console", "Ctrl+Shift+Tab", c => Workspace(c) && c.ConsoleTabs > 1),
