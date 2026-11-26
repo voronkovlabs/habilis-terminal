@@ -43,6 +43,11 @@ public class ClaudeProtocolTests
         Assert.Equal("r7", asks.RequestId);
         Assert.Equal("Write", asks.Tool);
         Assert.Equal(@"C:\t\a.txt", asks.Summary);
+        Assert.Equal(@"C:\t\a.txt", asks.Detail);
+        var longCommand = string.Join("; ", Enumerable.Range(0, 60).Select(i => $"Remove-Item f{i}.txt"));
+        var input = new JsonObject { ["command"] = longCommand };
+        Assert.True(ClaudeProtocol.Summarize("PowerShell", input).Length < longCommand.Length);
+        Assert.Equal(longCommand, ClaudeProtocol.Detail(input));
 
         var allow = JsonNode.Parse(ClaudeProtocol.Allow(asks))!;
         Assert.Equal("control_response", (string?)allow["type"]);
@@ -75,6 +80,7 @@ public class ClaudeProtocolTests
             var arguments = start.ArgumentList.ToList();
             Assert.Equal(["/d", "/c", @"C:\tools\claude.cmd", "-p"], arguments.Take(4));
             Assert.Equal("host", arguments[arguments.IndexOf("--permission-prompts") + 1]);
+            Assert.Equal("stdio", arguments[arguments.IndexOf("--permission-prompt-tool") + 1]);
             Assert.Equal("stream-json", arguments[arguments.IndexOf("--input-format") + 1]);
             Assert.Equal(config, arguments[arguments.IndexOf("--mcp-config") + 1]);
             Assert.Equal("sonnet", arguments[arguments.IndexOf("--model") + 1]);

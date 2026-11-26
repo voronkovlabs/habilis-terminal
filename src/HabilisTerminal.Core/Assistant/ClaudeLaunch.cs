@@ -124,6 +124,9 @@ public static class ClaudeLaunch
             "--output-format", "stream-json",
             "--verbose",
             "--permission-prompts", "host",
+
+            // Without it the real CLI denies on its own ("you haven't granted it yet") instead of asking the host.
+            "--permission-prompt-tool", "stdio",
             "--mcp-config", mcpConfig,
             "--append-system-prompt", SystemPrompt,
             "--allowedTools", string.Join(",", ReadOnlyTools),

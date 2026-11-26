@@ -280,9 +280,10 @@ public sealed class AssistantPage : DockPanel, IPage
         }
 
         var question = Label($"Claude wants to use {ToolName(asks.Tool)}", 13, FontWeight.SemiBold, "Habi.Foreground");
-        var what = Label(asks.Summary, 12, FontWeight.Normal, "Habi.Foreground");
-        what.FontFamily = new FontFamily(Theming.Fonts.Mono);
-        what.TextWrapping = TextWrapping.Wrap;
+        // The whole command: what is allowed must be readable in full, however long.
+        var whatText = new SelectableTextBlock { Text = asks.Detail, FontSize = 12, TextWrapping = TextWrapping.Wrap, FontFamily = new FontFamily(Theming.Fonts.Mono) };
+        whatText.SetResourceReference(TextBlock.ForegroundProperty, "Habi.Foreground");
+        var what = new ScrollViewer { Content = whatText, MaxHeight = 320, VerticalScrollBarVisibility = ScrollBarVisibility.Auto };
         var allow = new Button { Content = "_Allow" };
         var always = new Button { Content = $"Allow {ToolName(asks.Tool)} for this _conversation" };
         var deny = new Button { Content = "_Deny" };

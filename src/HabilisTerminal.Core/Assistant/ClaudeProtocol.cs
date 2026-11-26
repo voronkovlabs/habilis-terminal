@@ -19,7 +19,11 @@ public sealed record AssistantToolUse(string Id, string Tool, string Summary) : 
 public sealed record AssistantToolResult(string ToolUseId, bool IsError, string Text) : AssistantEvent;
 
 /// <summary>Claude Code asks whether a tool may run. Answer with <see cref="ClaudeProtocol.Allow"/> or <see cref="ClaudeProtocol.Deny"/>.</summary>
-public sealed record AssistantAsks(string RequestId, string Tool, string Summary, JsonObject Input) : AssistantEvent;
+public sealed record AssistantAsks(string RequestId, string Tool, string Summary, JsonObject Input) : AssistantEvent
+{
+    /// <summary>Everything the tool is about to do, unshortened: the whole command, or the whole input.</summary>
+    public string Detail => ClaudeProtocol.Detail(Input);
+}
 
 /// <summary>A turn ended: whether it failed, its text, and what it cost when Claude Code knows.</summary>
 public sealed record AssistantTurnEnded(bool IsError, string? Text, double? CostUsd, long? DurationMs) : AssistantEvent;
@@ -128,6 +132,20 @@ public static class ClaudeProtocol
 
         var json = input.ToJsonString();
         return json == "{}" ? string.Empty : OneLine(json);
+    }
+
+    /// <summary>The whole command (or path, or pattern) when there is one, else the input as indented JSON.</summary>
+    public static string Detail(JsonObject input)
+    {
+        foreach (var key in (string[])["command", "file_path", "path", "pattern", "url"])
+        {
+            if (Text(input, key) is { Length: > 0 } value)
+            {
+                return value.ReplaceLineEndings("\n").TrimEnd();
+            }
+        }
+
+        return input.ToJsonString(new System.Text.Json.JsonSerializerOptions { WriteIndented = true });
     }
 
     private static string Response(string requestId, JsonObject response) => new JsonObject
