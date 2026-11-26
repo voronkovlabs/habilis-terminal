@@ -286,6 +286,15 @@ public sealed class SqsMessageTests : IDisposable
         Assert.Equal("orders", panel.InitialCursor);
     }
 
+    /// <summary>Issue #400: a standard queue rejects FifoQueue by name, so the info asks for all attributes.</summary>
+    [Fact]
+    public void Queue_info_asks_for_all_attributes_not_FIFO_ones_by_name()
+    {
+        var request = SqsApi.InfoRequest(FakeSqs.Url("orders"));
+
+        Assert.Equal(["All"], request.AttributeNames);
+    }
+
     [Theory]
     [InlineData("""{"deadLetterTargetArn":"arn:aws:sqs:eu-west-1:1:orders-dlq","maxReceiveCount":"5"}""", "orders-dlq", 5)]
     [InlineData("""{"deadLetterTargetArn":"arn:aws:sqs:eu-west-1:1:x","maxReceiveCount":3}""", "x", 3)]

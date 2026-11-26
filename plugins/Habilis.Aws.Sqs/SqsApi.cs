@@ -100,11 +100,7 @@ internal sealed class SqsApi(AwsSession session) : ISqsApi
 
     public async Task<QueueInfo> GetInfoAsync(string queueUrl, CancellationToken cancellationToken)
     {
-        var response = await _client.GetQueueAttributesAsync(new GetQueueAttributesRequest
-        {
-            QueueUrl = queueUrl,
-            AttributeNames = [QueueAttributeName.FifoQueue, QueueAttributeName.VisibilityTimeout, QueueAttributeName.RedrivePolicy, QueueAttributeName.ContentBasedDeduplication],
-        }, cancellationToken).ConfigureAwait(false);
+        var response = await _client.GetQueueAttributesAsync(InfoRequest(queueUrl), cancellationToken).ConfigureAwait(false);
         var attributes = response.Attributes ?? [];
         var (deadLetter, maxReceives) = attributes.TryGetValue("RedrivePolicy", out var policy) ? ParseRedrive(policy) : (null, null);
         var fifo = attributes.TryGetValue("FifoQueue", out var f)
@@ -196,6 +192,16 @@ internal sealed class SqsApi(AwsSession session) : ISqsApi
     }
 
     public void Dispose() => _client.Dispose();
+
+    /// <summary>
+    /// All attributes: a standard queue rejects FifoQueue and ContentBasedDeduplication by name
+    /// ("Unknown Attribute FifoQueue", issue #400), and a missing one then means the default.
+    /// </summary>
+    internal static GetQueueAttributesRequest InfoRequest(string queueUrl) => new()
+    {
+        QueueUrl = queueUrl,
+        AttributeNames = [QueueAttributeName.All],
+    };
 
     /// <summary>The dead-letter queue's name and the receive limit from a RedrivePolicy (numbers may come as text).</summary>
     internal static (string? Queue, int? MaxReceiveCount) ParseRedrive(string? policy)
