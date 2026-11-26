@@ -16,8 +16,11 @@ internal static class NativeFile
     public const int ErrorRequestAborted = 1235;
     public const int ErrorNotSameDevice = 17;
 
-    /// <summary>Files from this size are copied without the system cache (SPEC §8).</summary>
-    public const long UnbufferedThreshold = 256L * 1024 * 1024;
+    /// <summary>
+    /// Files from this size are copied without the system cache (SPEC §8): a quarter of the memory, at least 256 MB.
+    /// Below that the cached copy is faster, also counting the time until the data is on the disk (issue #392).
+    /// </summary>
+    public static long UnbufferedThreshold { get; } = Math.Max(256L * 1024 * 1024, GC.GetGCMemoryInfo().TotalAvailableMemoryBytes / 4);
 
     public const uint ReparseTagMountPoint = 0xA0000003;
     public const uint ReparseTagSymlink = 0xA000000C;
@@ -29,8 +32,11 @@ internal static class NativeFile
     /// block (pause) or return false (cancel: the partial target is deleted).
     /// </summary>
     /// <exception cref="System.ComponentModel.Win32Exception">The copy failed; <see cref="System.ComponentModel.Win32Exception.NativeErrorCode"/> tells why.</exception>
-    public static void CopyFile(string source, string target, bool copyLinkItself, bool failIfExists, Func<long, long, bool> progress) =>
-        Native.CopyFile(source, target, copyLinkItself, failIfExists, progress);
+    public static void CopyFile(string source, string target, bool copyLinkItself, bool failIfExists, Func<long, long, bool> progress, long length = -1) =>
+        Native.CopyFile(source, target, copyLinkItself, failIfExists, progress, length);
+
+    /// <summary>A spinning disk (true), an SSD or network share (false), or unknown (null).</summary>
+    public static bool? HasSeekPenalty(string path) => Native.HasSeekPenalty(path);
 
     /// <summary>Renames / moves within one volume (atomic, instant). Case-only renames work.</summary>
     public static void Move(string source, string target) => Native.Move(source, target);

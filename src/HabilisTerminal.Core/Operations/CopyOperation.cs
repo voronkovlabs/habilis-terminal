@@ -13,6 +13,11 @@ public sealed record CopyOptions
 
     /// <summary>Copy what links point to instead of recreating the links (default off).</summary>
     public bool CopyLinkContents { get; init; }
+
+    /// <summary>
+    /// How many files are copied at the same time (issue #392); a spinning disk on either side always gets one.
+    /// </summary>
+    public int Threads { get; init; } = 1;
 }
 
 /// <summary>The operation refuses to start (e.g. copying a directory into itself).</summary>
@@ -22,6 +27,9 @@ public sealed class OperationRefusedException(string message) : InvalidOperation
 /// F5 copy and F6 move / rename (SPEC §8). Same volume moves are renames; everything else is copied with
 /// <c>CopyFileEx</c> and, for moves, the source is deleted per item only after that item was copied.
 /// Links are recreated (junctions as junctions, symlinks as symlinks) and never entered unless asked.
+/// The walk over the tree, folders and questions about existing targets stay on the operation's thread; with
+/// <see cref="CopyOptions.Threads"/> above one the files themselves are copied by <see cref="CopyWorkers"/>, and
+/// folder times are set once all files are in (issue #392).
 /// </summary>
 public sealed class CopyOperation : FileOperation
 {
@@ -30,6 +38,10 @@ public sealed class CopyOperation : FileOperation
     private readonly CopyOptions _options;
     private readonly bool _move;
     private ConflictDecision? _conflictForAll;
+    private CopyWorkers? _workers;
+    private readonly List<Action> _finishLater = [];
+    private readonly List<(long Order, string Path)> _targets = [];
+    private long _order;
 
     public CopyOperation(IReadOnlyList<string> sources, string destination, CopyOptions options, bool move, IOperationHandler handler, OperationControl control)
         : base(handler, control)
@@ -42,6 +54,9 @@ public sealed class CopyOperation : FileOperation
 
     /// <summary>Tests only: take the copy-and-delete path even within one volume.</summary>
     internal bool ForceCrossVolume { get; init; }
+
+    /// <summary>Tests only: use <see cref="CopyOptions.Threads"/> whatever the disks are.</summary>
+    internal bool IgnoreSeekPenalty { get; init; }
 
     /// <summary>
     /// Where each source goes (SPEC §8): into an existing directory or one ending with <c>\</c>; a new name for a
@@ -97,18 +112,86 @@ public sealed class CopyOperation : FileOperation
             }
         }
 
-        foreach (var (source, target) in targets)
+        var threads = anyCopy && targets.Count > 0 ? ThreadsFor(targets[0].Source, Path.GetDirectoryName(targets[0].Target)!) : 1;
+        _workers = threads > 1 ? new CopyWorkers(threads, Control.Token) : null;
+        try
         {
-            Control.Checkpoint();
-            Directory.CreateDirectory(Path.GetDirectoryName(target)!);
-            if (_move && !ForceCrossVolume && NativeFile.SameVolume(source, Path.GetDirectoryName(target)!))
+            foreach (var (source, target) in targets)
             {
-                MoveWithinVolume(source, target);
+                Control.Checkpoint();
+                Directory.CreateDirectory(Path.GetDirectoryName(target)!);
+                if (_move && !ForceCrossVolume && NativeFile.SameVolume(source, Path.GetDirectoryName(target)!))
+                {
+                    MoveWithinVolume(source, target);
+                }
+                else
+                {
+                    CopyItem(source, target);
+                }
             }
-            else
+
+            _workers?.Complete();
+            foreach (var finish in _finishLater)
             {
-                CopyItem(source, target);
+                Control.Checkpoint();
+                finish();
             }
+        }
+        catch
+        {
+            _workers?.Abort();
+            throw;
+        }
+        finally
+        {
+            _workers?.Dispose();
+            _workers = null;
+            lock (_targets)
+            {
+                Result.TargetPaths.AddRange(_targets.OrderBy(t => t.Order).Select(t => t.Path));
+            }
+        }
+    }
+
+    /// <summary>Several files at once, unless a side is a spinning disk or cannot be told (a network share can).</summary>
+    private int ThreadsFor(string source, string targetDirectory)
+    {
+        var wanted = Math.Clamp(_options.Threads, 1, 64);
+        if (wanted == 1)
+        {
+            return 1;
+        }
+
+        if (IgnoreSeekPenalty)
+        {
+            return wanted;
+        }
+
+        var probe = Directory.Exists(targetDirectory) ? targetDirectory : Path.GetPathRoot(targetDirectory)!;
+        return NativeFile.HasSeekPenalty(source) == false && NativeFile.HasSeekPenalty(probe) == false ? wanted : 1;
+    }
+
+    /// <summary>Runs a file's copy into <paramref name="folder"/> here or on a copy thread.</summary>
+    private void Run(string folder, Action work)
+    {
+        if (_workers is { } workers)
+        {
+            workers.Post(folder, work);
+        }
+        else
+        {
+            work();
+        }
+    }
+
+    /// <summary>A place in the order the items were walked, so the last target is the last one walked.</summary>
+    private long NextOrder() => Interlocked.Increment(ref _order);
+
+    private void AddTarget(long order, string path)
+    {
+        lock (_targets)
+        {
+            _targets.Add((order, path));
         }
     }
 
@@ -157,28 +240,41 @@ public sealed class CopyOperation : FileOperation
         }
 
         var size = sourceIsDirectory ? 0 : new FileInfo(source).Length;
+        var order = NextOrder();
         if (Attempt(source, "move", () => NativeFile.Move(source, target)))
         {
-            Result.Succeeded++;
-            Result.Bytes += size;
-            Result.TargetPaths.Add(target);
+            Record(r =>
+            {
+                r.Succeeded++;
+                r.Bytes += size;
+            });
+            AddTarget(order, target);
         }
 
         AddDone(size, 1, source);
     }
 
-    private void CopyItem(string source, string target)
+    /// <param name="info">What the folder read said about the source, so it is not asked again (issue #392).</param>
+    /// <param name="fresh">The target's folder was created by this copy, so nothing is in the way.</param>
+    private void CopyItem(string source, string target, FileSystemInfo? info = null, bool fresh = false)
     {
         Control.Checkpoint();
         FileAttributes attributes;
-        try
+        if (info is not null)
         {
-            attributes = File.GetAttributes(source);
+            attributes = info.Attributes;
         }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        else
         {
-            Attempt(source, "read", () => File.GetAttributes(source));
-            return;
+            try
+            {
+                attributes = File.GetAttributes(source);
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                Attempt(source, "read", () => File.GetAttributes(source));
+                return;
+            }
         }
 
         var isLink = (attributes & FileAttributes.ReparsePoint) != 0;
@@ -189,22 +285,28 @@ public sealed class CopyOperation : FileOperation
                 return;
             }
 
-            CopyDirectory(source, target);
+            CopyDirectory(source, target, info as DirectoryInfo, fresh);
         }
         else
         {
-            CopyFile(source, target, copyLinkItself: isLink && !_options.CopyLinkContents);
+            CopyFile(source, target, copyLinkItself: isLink && !_options.CopyLinkContents, (info as FileInfo)?.Length, fresh);
         }
     }
 
-    private void CopyDirectory(string source, string target)
+    private void CopyDirectory(string source, string target, DirectoryInfo? info, bool fresh)
     {
         Guard(target);
-        if (File.Exists(target))
+        var existed = false;
+        if (!fresh)
         {
-            Attempt(target, "create folder", () => throw new IOException($"A file named '{Path.GetFileName(target)}' already exists."));
-            AddDone(0, 1, source);
-            return;
+            if (File.Exists(target))
+            {
+                Attempt(target, "create folder", () => throw new IOException($"A file named '{Path.GetFileName(target)}' already exists."));
+                AddDone(0, 1, source);
+                return;
+            }
+
+            existed = Directory.Exists(target);
         }
 
         if (!Attempt(target, "create folder", () => Directory.CreateDirectory(target)))
@@ -213,38 +315,60 @@ public sealed class CopyOperation : FileOperation
             return;
         }
 
-        string[] children = [];
-        Attempt(source, "read", () => children = Directory.GetFileSystemEntries(source, "*", new EnumerationOptions { AttributesToSkip = 0 }));
-        foreach (var child in children)
+        // The source's times and attributes as they were before its files were copied (or moved out).
+        if (info is null)
         {
-            CopyItem(child, Path.Combine(target, Path.GetFileName(child)));
+            info = new DirectoryInfo(source);
+            info.Refresh();
         }
 
-        Attempt(target, "set times", () =>
+        FileSystemInfo[] children = [];
+        Attempt(source, "read", () => children = new DirectoryInfo(source).GetFileSystemInfos("*", new EnumerationOptions { AttributesToSkip = 0 }));
+        foreach (var child in children)
         {
-            Directory.SetCreationTimeUtc(target, Directory.GetCreationTimeUtc(source));
-            Directory.SetLastWriteTimeUtc(target, Directory.GetLastWriteTimeUtc(source));
-            File.SetAttributes(target, File.GetAttributes(source) & ~FileAttributes.ReparsePoint);
-        });
+            CopyItem(child.FullName, Path.Combine(target, child.Name), child, fresh: !existed);
+        }
 
-        AddDone(0, 1, source);
-        Result.TargetPaths.Add(target);
-        if (_move && !Directory.EnumerateFileSystemEntries(source).Any())
+        var order = NextOrder();
+        var sourceInfo = info;
+        void Finish()
         {
-            Guard(source);
-            Attempt(source, "remove", () =>
+            Attempt(target, "set times", () =>
             {
-                ClearReadOnly(source);
-                Directory.Delete(source);
+                Directory.SetCreationTimeUtc(target, sourceInfo.CreationTimeUtc);
+                Directory.SetLastWriteTimeUtc(target, sourceInfo.LastWriteTimeUtc);
+                File.SetAttributes(target, sourceInfo.Attributes & ~FileAttributes.ReparsePoint);
             });
+
+            AddDone(0, 1, source);
+            AddTarget(order, target);
+            if (_move && !Directory.EnumerateFileSystemEntries(source).Any())
+            {
+                Guard(source);
+                Attempt(source, "remove", () =>
+                {
+                    ClearReadOnly(source);
+                    Directory.Delete(source);
+                });
+            }
+        }
+
+        // Files still being copied would change the folder's time, and a moved folder is empty only once they are done.
+        if (_workers is null)
+        {
+            Finish();
+        }
+        else
+        {
+            _finishLater.Add(Finish);
         }
     }
 
-    private void CopyFile(string source, string target, bool copyLinkItself)
+    private void CopyFile(string source, string target, bool copyLinkItself, long? length, bool fresh)
     {
         Guard(target);
         var append = false;
-        if (File.Exists(target) || Directory.Exists(target))
+        if (!fresh && (File.Exists(target) || Directory.Exists(target)))
         {
             var resolved = ResolveExistingTarget(source, target);
             if (resolved is null)
@@ -255,7 +379,14 @@ public sealed class CopyOperation : FileOperation
             (target, append) = resolved.Value;
         }
 
-        var size = new FileInfo(source).Length;
+        var size = length ?? new FileInfo(source).Length;
+        var order = NextOrder();
+        var to = target;
+        Run(Path.GetDirectoryName(to)!, () => CopyFileNow(source, to, copyLinkItself, append, size, order));
+    }
+
+    private void CopyFileNow(string source, string target, bool copyLinkItself, bool append, long size, long order)
+    {
         var copied = Attempt(source, "copy", () =>
         {
             if (append)
@@ -266,7 +397,7 @@ public sealed class CopyOperation : FileOperation
 
             try
             {
-                NativeFile.CopyFile(source, target, copyLinkItself, failIfExists: false, (done, _) =>
+                NativeFile.CopyFile(source, target, copyLinkItself, failIfExists: false, length: size, progress: (done, _) =>
                 {
                     ReportPartial(done, source);
                     try
@@ -302,9 +433,12 @@ public sealed class CopyOperation : FileOperation
 
         if (copied)
         {
-            Result.Succeeded++;
-            Result.Bytes += size;
-            Result.TargetPaths.Add(target);
+            Record(r =>
+            {
+                r.Succeeded++;
+                r.Bytes += size;
+            });
+            AddTarget(order, target);
             if (_move)
             {
                 Guard(source);
@@ -331,7 +465,7 @@ public sealed class CopyOperation : FileOperation
             ExistingFilePolicy.Rename => new ConflictDecision(ConflictAction.Rename),
             ExistingFilePolicy.Append => new ConflictDecision(ConflictAction.Append),
             ExistingFilePolicy.OnlyNewer => new ConflictDecision(ConflictAction.OverwriteIfNewer),
-            _ => _conflictForAll ?? Handler.ResolveConflict(new ConflictInfo(source, sourceEntry, target, targetEntry)),
+            _ => _conflictForAll ?? AskConflict(new ConflictInfo(source, sourceEntry, target, targetEntry)),
         };
 
         if (decision.ApplyToAll)
@@ -374,7 +508,7 @@ public sealed class CopyOperation : FileOperation
 
     private void Skip(string source, Core.FileSystem.FileEntry entry)
     {
-        Result.Skipped++;
+        Record(r => r.Skipped++);
         AddDone(entry.IsDirectory ? 0 : entry.Length, 1, source);
     }
 
@@ -415,8 +549,8 @@ public sealed class CopyOperation : FileOperation
             try
             {
                 Directory.CreateSymbolicLink(target, linkTarget);
-                Result.Succeeded++;
-                Result.TargetPaths.Add(target);
+                Record(r => r.Succeeded++);
+                AddTarget(NextOrder(), target);
                 AddDone(0, 1, source);
                 RemoveMovedLink(source);
                 return true;
@@ -428,7 +562,7 @@ public sealed class CopyOperation : FileOperation
                     return false;
                 }
 
-                Result.Skipped++;
+                Record(r => r.Skipped++);
                 AddDone(0, 1, source);
                 return true;
             }
@@ -439,7 +573,7 @@ public sealed class CopyOperation : FileOperation
                     return false;
                 }
 
-                Result.Skipped++;
+                Record(r => r.Skipped++);
                 AddDone(0, 1, source);
                 return true;
             }
@@ -452,8 +586,8 @@ public sealed class CopyOperation : FileOperation
             return true;
         }
 
-        Result.Succeeded++;
-        Result.TargetPaths.Add(target);
+        Record(r => r.Succeeded++);
+        AddTarget(NextOrder(), target);
         AddDone(0, 1, source);
         RemoveMovedLink(source);
         return true;

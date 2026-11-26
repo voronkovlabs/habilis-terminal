@@ -11,7 +11,14 @@ namespace HabilisTerminal.Core.Platform;
 /// </summary>
 public interface IFileSystemNative
 {
-    void CopyFile(string source, string target, bool copyLinkItself, bool failIfExists, Func<long, long, bool> progress);
+    /// <param name="length">The source's size when the caller knows it, else -1.</param>
+    void CopyFile(string source, string target, bool copyLinkItself, bool failIfExists, Func<long, long, bool> progress, long length = -1);
+
+    /// <summary>
+    /// Whether the volume holding <paramref name="path"/> is a spinning disk, where copying several files at once makes
+    /// the heads seek (issue #392); false for SSDs and network shares, null when it cannot be told.
+    /// </summary>
+    bool? HasSeekPenalty(string path);
 
     void Move(string source, string target);
 

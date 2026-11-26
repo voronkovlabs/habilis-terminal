@@ -282,7 +282,11 @@ Common rules:
   the new name; for several items a non-existing path is created as a directory.
 - Far-style masks in the destination name (`*.bak`, `*.*`, `new_*`, `?`). No preview (as in Far).
 - Engine: Win32 `CopyFile2` via P/Invoke: progress callback, mid-file cancellation, copies ADS, attributes and
-  modification time; unbuffered I/O for large files (≈256 MB and more).
+  modification time; unbuffered I/O only for files larger than a quarter of the memory (at least 256 MB), as the
+  cached copy is faster below that (issue #392).
+- Several files are copied at once (setting "Parallel Copies", 4 by default; issue #392), each thread taking files
+  from a folder the others are not writing into. A spinning disk on either side, or a volume whose kind cannot be
+  told (a USB stick), gets one thread. Questions are asked one at a time; folder times are set after all files.
 - Symbolic links are copied **as links** by default (`COPY_FILE_COPY_SYMLINK`); the dialog option copies contents.
   Junctions are **not traversed**; they are recreated as junctions pointing to the same target.
   Creating a symlink without privileges (admin or Developer Mode) is an error with "Copy contents / Skip".

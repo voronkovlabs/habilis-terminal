@@ -47,7 +47,7 @@ public partial class MainWindow
         var sources = names.Select(n => Path.Combine(source.CurrentPath, n)).ToArray();
         var title = $"{(move ? "Moving" : "Copying")} {(names.Length == 1 ? names[0] : $"{names.Length} items")}";
         var result = await RunAsync(title, [.. sources, destination], (handler, control) =>
-            new CopyOperation(sources, destination, chosen.Options, move, handler, control).Run());
+            new CopyOperation(sources, destination, chosen.Options with { Threads = _settings.CopyThreads }, move, handler, control).Run());
         string[] changedPaths = move ? [.. sources, destination] : [destination];
         foreach (var changed in changedPaths)
         {

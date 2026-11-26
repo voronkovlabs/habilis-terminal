@@ -13,7 +13,9 @@ internal sealed class PortableFileSystem : IFileSystemNative
 {
     private const int BufferSize = 1024 * 1024;
 
-    public void CopyFile(string source, string target, bool copyLinkItself, bool failIfExists, Func<long, long, bool> progress)
+    public bool? HasSeekPenalty(string path) => null;
+
+    public void CopyFile(string source, string target, bool copyLinkItself, bool failIfExists, Func<long, long, bool> progress, long length = -1)
     {
         if (failIfExists && (File.Exists(target) || Directory.Exists(target) || new FileInfo(target).LinkTarget is not null))
         {

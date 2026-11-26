@@ -31,7 +31,7 @@ internal sealed class WindowsFileSystem : IFileSystemNative
     /// block (pause) or return false (cancel: the partial target is deleted by the system).
     /// </summary>
     /// <exception cref="Win32Exception">The copy failed; <see cref="Win32Exception.NativeErrorCode"/> tells why.</exception>
-    public void CopyFile(string source, string target, bool copyLinkItself, bool failIfExists, Func<long, long, bool> progress)
+    public void CopyFile(string source, string target, bool copyLinkItself, bool failIfExists, Func<long, long, bool> progress, long length = -1)
     {
         var flags = CopyFileAllowDecryptedDestination;
         if (copyLinkItself)
@@ -46,7 +46,7 @@ internal sealed class WindowsFileSystem : IFileSystemNative
 
         try
         {
-            if (new FileInfo(source).Length >= UnbufferedThreshold)
+            if ((length >= 0 ? length : new FileInfo(source).Length) >= UnbufferedThreshold)
             {
                 flags |= CopyFileNoBuffering;
             }
@@ -82,6 +82,35 @@ internal sealed class WindowsFileSystem : IFileSystemNative
         return GetVolumePathName(LongPath.ToExtended(full), buffer, buffer.Length)
             ? LongPath.ToDisplay(new string(buffer, 0, Array.IndexOf(buffer, '\0') is var end and >= 0 ? end : buffer.Length))
             : Path.GetPathRoot(full) ?? full;
+    }
+
+    public bool? HasSeekPenalty(string path)
+    {
+        var volume = VolumeOf(path);
+        if (volume.StartsWith(@"\\", StringComparison.Ordinal) && !volume.StartsWith(@"\\?\", StringComparison.Ordinal))
+        {
+            return false; // a network share: the server's disks, and parallel requests help
+        }
+
+        var name = new char[64];
+        if (!GetVolumeNameForVolumeMountPoint(volume.EndsWith('\\') ? volume : volume + '\\', name, name.Length))
+        {
+            return null;
+        }
+
+        using var handle = CreateFile(new string(name).TrimEnd('\0').TrimEnd('\\'), 0, FileShareRead | FileShareWrite, IntPtr.Zero, OpenExisting, 0, IntPtr.Zero);
+        if (handle.IsInvalid)
+        {
+            return null;
+        }
+
+        // STORAGE_PROPERTY_QUERY { StorageDeviceSeekPenaltyProperty, PropertyStandardQuery } -> DEVICE_SEEK_PENALTY_DESCRIPTOR.
+        var query = new byte[12];
+        BitConverter.GetBytes(StorageDeviceSeekPenaltyProperty).CopyTo(query, 0);
+        var descriptor = new byte[12];
+        return DeviceIoControl(handle, IoctlStorageQueryProperty, query, query.Length, descriptor, descriptor.Length, out var returned, IntPtr.Zero) && returned >= 9
+            ? descriptor[8] != 0
+            : null;
     }
 
     public long? FreeBytes(string directory) =>
@@ -292,6 +321,12 @@ internal sealed class WindowsFileSystem : IFileSystemNative
     private const uint FileShareDelete = 0x4;
     private const int MaxReparseData = 16 * 1024;
     private const uint FsctlSetCompression = 0x0009C040;
+    private const uint IoctlStorageQueryProperty = 0x002D1400;
+    private const int StorageDeviceSeekPenaltyProperty = 7;
+
+    [DllImport("kernel32.dll", SetLastError = true, CharSet = CharSet.Unicode)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool GetVolumeNameForVolumeMountPoint(string lpszVolumeMountPoint, [Out] char[] lpszVolumeName, int cchBufferLength);
 
     [DllImport("kernel32.dll", SetLastError = true, CharSet = CharSet.Unicode)]
     [return: MarshalAs(UnmanagedType.Bool)]

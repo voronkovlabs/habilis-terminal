@@ -8,7 +8,9 @@ namespace HabilisTerminal.Core.Operations;
 /// <summary>
 /// Shared machinery of file operations (SPEC §8): progress, pause / cancel checkpoints, the error dialog loop
 /// (Retry / Skip / Skip all / Cancel) with the locking process, confirmations with "to all", and the safety guard.
-/// Operations run synchronously on a worker thread; the handler blocks it while the user answers.
+/// Operations run synchronously on a worker thread; the handler blocks it while the user answers. Copying may use
+/// several threads (issue #392): progress, results and the questions to the user are safe to use from any of them,
+/// and only one question is asked at a time.
 /// </summary>
 public abstract class FileOperation
 {
@@ -19,7 +21,9 @@ public abstract class FileOperation
     private int _doneItems;
     private int _totalItems;
     private DateTime _lastReport;
-    private string? _partialFile;
+    private readonly Dictionary<string, long> _partials = new(StringComparer.Ordinal);
+    private readonly object _progressGate = new();
+    private readonly object _questionGate = new();
 
     protected FileOperation(IOperationHandler handler, OperationControl control)
     {
@@ -45,36 +49,75 @@ public abstract class FileOperation
 
     protected void SetTotals(long bytes, int items)
     {
-        _totalBytes = bytes;
-        _totalItems = items;
+        lock (_progressGate)
+        {
+            _totalBytes = bytes;
+            _totalItems = items;
+        }
+
         Report(null, force: true);
     }
 
+    /// <summary>An item is done; its partial progress, if any, is replaced by <paramref name="bytes"/>.</summary>
     protected void AddDone(long bytes, int items, string? current)
     {
-        _doneBytes += bytes;
-        _doneItems += items;
+        lock (_progressGate)
+        {
+            _doneBytes += bytes;
+            _doneItems += items;
+            if (current is not null)
+            {
+                _partials.Remove(current);
+            }
+        }
+
         Report(current);
     }
 
     /// <summary>Progress inside one file: <paramref name="fileBytes"/> copied so far (the first chunk of each file is always reported).</summary>
     protected void ReportPartial(long fileBytes, string current)
     {
-        var first = !string.Equals(_partialFile, current, StringComparison.Ordinal);
-        _partialFile = current;
-        Report(current, force: first, extraBytes: fileBytes);
-    }
-
-    private void Report(string? current, bool force = false, long extraBytes = 0)
-    {
-        var now = DateTime.UtcNow;
-        if (!force && now - _lastReport < TimeSpan.FromMilliseconds(50))
+        bool first;
+        lock (_progressGate)
         {
-            return;
+            first = !_partials.ContainsKey(current);
+            _partials[current] = fileBytes;
         }
 
-        _lastReport = now;
-        Handler.ReportProgress(new OperationProgress(_doneBytes + extraBytes, _totalBytes, _doneItems, _totalItems, current));
+        Report(current, force: first);
+    }
+
+    /// <summary>Changes the result under a lock: copy threads report at the same time.</summary>
+    protected void Record(Action<OperationResult> change)
+    {
+        lock (Result)
+        {
+            change(Result);
+        }
+    }
+
+    private void Report(string? current, bool force = false)
+    {
+        OperationProgress progress;
+        lock (_progressGate)
+        {
+            var now = DateTime.UtcNow;
+            if (!force && now - _lastReport < TimeSpan.FromMilliseconds(50))
+            {
+                return;
+            }
+
+            _lastReport = now;
+            var partial = 0L;
+            foreach (var bytes in _partials.Values)
+            {
+                partial += bytes;
+            }
+
+            progress = new OperationProgress(_doneBytes + partial, _totalBytes, _doneItems, _totalItems, current);
+        }
+
+        Handler.ReportProgress(progress);
     }
 
     /// <summary>
@@ -92,23 +135,30 @@ public abstract class FileOperation
             }
             catch (Exception ex) when (IsFileSystemError(ex))
             {
-                if (_skipAllErrors)
+                ErrorAction answer;
+                lock (_questionGate)
                 {
-                    Result.Failed++;
-                    return false;
+                    if (_skipAllErrors)
+                    {
+                        Record(r => r.Failed++);
+                        return false;
+                    }
+
+                    var lockers = IsSharingViolation(ex) ? RestartManager.LockingProcesses(path) : null;
+                    answer = Handler.ResolveError(new OperationError(path, verb, ex, lockers));
+                    if (answer == ErrorAction.SkipAll)
+                    {
+                        _skipAllErrors = true;
+                    }
                 }
 
-                var lockers = IsSharingViolation(ex) ? RestartManager.LockingProcesses(path) : null;
-                switch (Handler.ResolveError(new OperationError(path, verb, ex, lockers)))
+                switch (answer)
                 {
                     case ErrorAction.Retry:
                         continue;
                     case ErrorAction.SkipAll:
-                        _skipAllErrors = true;
-                        Result.Failed++;
-                        return false;
                     case ErrorAction.Skip:
-                        Result.Failed++;
+                        Record(r => r.Failed++);
                         return false;
                     default:
                         throw new OperationCanceledByUserException();
@@ -120,22 +170,34 @@ public abstract class FileOperation
     /// <summary>Asks a yes/no question, remembering "Yes to all" / "No to all"; Cancel stops the operation.</summary>
     protected bool Confirm(Confirmation confirmation)
     {
-        if (_answerForAll.TryGetValue(confirmation.Kind, out var remembered))
+        lock (_questionGate)
         {
-            return remembered;
-        }
+            if (_answerForAll.TryGetValue(confirmation.Kind, out var remembered))
+            {
+                return remembered;
+            }
 
-        switch (Handler.Confirm(confirmation))
+            switch (Handler.Confirm(confirmation))
+            {
+                case ConfirmationAnswer.Yes:
+                    return true;
+                case ConfirmationAnswer.YesToAll:
+                    _answerForAll[confirmation.Kind] = true;
+                    return true;
+                case ConfirmationAnswer.No:
+                    return false;
+                default:
+                    throw new OperationCanceledByUserException();
+            }
+        }
+    }
+
+    /// <summary>Asks how to handle an existing target; one question at a time.</summary>
+    protected ConflictDecision AskConflict(ConflictInfo conflict)
+    {
+        lock (_questionGate)
         {
-            case ConfirmationAnswer.Yes:
-                return true;
-            case ConfirmationAnswer.YesToAll:
-                _answerForAll[confirmation.Kind] = true;
-                return true;
-            case ConfirmationAnswer.No:
-                return false;
-            default:
-                throw new OperationCanceledByUserException();
+            return Handler.ResolveConflict(conflict);
         }
     }
 
@@ -167,11 +229,9 @@ public abstract class FileOperation
     {
         long bytes = 0;
         var items = 0;
-        var pending = new Stack<string>(paths);
-        while (pending.Count > 0)
+        var directories = new Stack<string>();
+        foreach (var path in paths)
         {
-            Control.Checkpoint();
-            var path = pending.Pop();
             items++;
             FileAttributes attributes;
             try
@@ -195,16 +255,33 @@ public abstract class FileOperation
             }
             else if (followLinks || (attributes & FileAttributes.ReparsePoint) == 0)
             {
-                try
+                directories.Push(path);
+            }
+        }
+
+        // One directory read gives the attributes and sizes of all its children (issue #392).
+        var options = new EnumerationOptions { AttributesToSkip = 0, IgnoreInaccessible = true };
+        while (directories.Count > 0)
+        {
+            Control.Checkpoint();
+            try
+            {
+                foreach (var child in new DirectoryInfo(directories.Pop()).EnumerateFileSystemInfos("*", options))
                 {
-                    foreach (var child in Directory.EnumerateFileSystemEntries(path, "*", new EnumerationOptions { AttributesToSkip = 0, IgnoreInaccessible = true }))
+                    items++;
+                    var attributes = child.Attributes;
+                    if ((attributes & FileAttributes.Directory) == 0)
                     {
-                        pending.Push(child);
+                        bytes += ((FileInfo)child).Length;
+                    }
+                    else if (followLinks || (attributes & FileAttributes.ReparsePoint) == 0)
+                    {
+                        directories.Push(child.FullName);
                     }
                 }
-                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-                {
-                }
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
             }
         }
 

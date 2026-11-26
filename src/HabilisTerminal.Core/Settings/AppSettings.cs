@@ -52,6 +52,8 @@ public sealed class AppSettings
 
     public bool DeleteToRecycleBin => Get<bool>("deleteToRecycleBin");
 
+    public int CopyThreads => Get<int>("copy.threads");
+
     public bool ConfirmExit => Get<bool>("confirmExit");
 
     public bool ConfirmDelete => Get<bool>("confirmDelete");

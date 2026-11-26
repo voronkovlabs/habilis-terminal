@@ -50,6 +50,7 @@ public static class SettingsCatalog
         new("shell.initCommand", Terminal, "Init Command", "PowerShell code run before the integration script, after the profile.", SettingKind.Text, "", RequiresRestart: true),
 
         new("deleteToRecycleBin", FileOperations, "Delete to Recycle Bin", "F8 and Del move items to the Recycle Bin; Shift+Del always deletes permanently.", SettingKind.Toggle, true),
+        new("copy.threads", FileOperations, "Parallel Copies", "How many files F5 and F6 copy at the same time. More is faster for many small files and for network shares; 1 copies one file at a time. A hard disk on either side always gets 1.", SettingKind.Number, 4, Minimum: 1, Maximum: 16),
 
         new("confirmExit", Confirmations, "Exit", "Ask before exiting with F10.", SettingKind.Toggle, true),
         new("confirmDelete", Confirmations, "Delete", "Ask before deleting.", SettingKind.Toggle, true),
