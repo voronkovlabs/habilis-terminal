@@ -122,8 +122,22 @@ internal sealed class PluginDialogs(Window owner, Func<Control> pickTarget) : IP
             switch (field)
             {
                 case TextField text:
-                    var textBox = new TextBox { Text = text.Value };
-                    appliers.Add(() => text.Value = textBox.Text.Trim());
+                    var textBox = new TextBox { Text = text.Value, PlaceholderText = text.Placeholder };
+                    if (text.Lines > 1)
+                    {
+                        // SDK 1.10: a multi-line field keeps the text as typed (a message body).
+                        textBox.AcceptsReturn = true;
+                        textBox.TextWrapping = TextWrapping.Wrap;
+                        textBox.MinHeight = 8 + (text.Lines * 18);
+                        textBox.MaxHeight = 8 + (Math.Max(text.Lines, 16) * 18);
+                        textBox.MinWidth = 560;
+                        appliers.Add(() => text.Value = textBox.Text ?? string.Empty);
+                    }
+                    else
+                    {
+                        appliers.Add(() => text.Value = (textBox.Text ?? string.Empty).Trim());
+                    }
+
                     editor = textBox;
                     break;
                 case NumberField number:

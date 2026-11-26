@@ -62,6 +62,12 @@ public sealed class TextField(string key, string label, string value = "") : For
     public string Value { get; set; } = value;
 
     public string? Placeholder { get; init; }
+
+    /// <summary>
+    /// Visible lines (SDK 1.10). Above 1 the field takes Enter and keeps the text as typed, line breaks and leading
+    /// and trailing spaces included, e.g. a message body.
+    /// </summary>
+    public int Lines { get; init; } = 1;
 }
 
 public sealed class NumberField(string key, string label, int value, int minimum = int.MinValue, int maximum = int.MaxValue) : FormField(key, label)

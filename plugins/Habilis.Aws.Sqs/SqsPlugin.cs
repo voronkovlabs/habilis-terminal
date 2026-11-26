@@ -11,6 +11,9 @@ public sealed class SqsPlugin : Plugin
 {
     private readonly List<WeakReference<SqsPanel>> _panels = [];
 
+    /// <summary>Queues whose dead-letter warning was shown in this run (issue #397).</summary>
+    private readonly HashSet<string> _warned = new(StringComparer.Ordinal);
+
     internal Func<AwsSession, ISqsApi> Connect { get; set; } = session => new SqsApi(session);
 
     public override IEnumerable<PluginMenuItem> MenuItems => [new("SQS queues", token => OpenAsync(null, null))];
@@ -38,8 +41,23 @@ public sealed class SqsPlugin : Plugin
             return provider;
         }
 
+        // "sqs:profile/region/queue", a queue's location (issue #397): the queue list with the cursor on the queue, so
+        // folder history never receives messages by itself.
         var (profile, region) = AwsText.ParseProfileAddress(address);
-        return await OpenAsync(profile, region).ConfigureAwait(false);
+        string? queueName = null;
+        if (region?.IndexOf('/', StringComparison.Ordinal) is int slash and >= 0)
+        {
+            queueName = region[(slash + 1)..].Trim().Trim('/');
+            region = region[..slash].Trim();
+        }
+
+        var opened = await OpenAsync(profile, region).ConfigureAwait(false);
+        if (opened is SqsPanel named && !string.IsNullOrEmpty(queueName))
+        {
+            named.InitialCursor = queueName;
+        }
+
+        return opened;
     }
 
     public override async Task ConfigureAsync(CancellationToken cancellationToken)
@@ -72,7 +90,7 @@ public sealed class SqsPlugin : Plugin
             throw new PluginException($"\"{chosenRegion}\" is not a valid AWS region name, e.g. eu-west-1.");
         }
 
-        var panel = new SqsPanel(Host, settings, settings.Session(chosenProfile, chosenRegion), Connect);
+        var panel = new SqsPanel(Host, settings, settings.Session(chosenProfile, chosenRegion), Connect, _warned);
         lock (_panels)
         {
             _panels.RemoveAll(w => !w.TryGetTarget(out _));

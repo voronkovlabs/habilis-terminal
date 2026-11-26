@@ -42,7 +42,15 @@ internal sealed class FakeHost : IPluginHost, IPluginDialogs, IPluginSettings
         return Task.FromResult(ConfirmAnswers.Count > 0 && ConfirmAnswers.Dequeue());
     }
 
-    public Task<string?> InputAsync(string title, string prompt, string? initialValue = null) => Task.FromResult<string?>(null);
+    public Queue<string?> InputAnswers { get; } = new();
+
+    public List<string> Inputs { get; } = [];
+
+    public Task<string?> InputAsync(string title, string prompt, string? initialValue = null)
+    {
+        Inputs.Add(prompt);
+        return Task.FromResult(InputAnswers.Count > 0 ? InputAnswers.Dequeue() : null);
+    }
 
     public Task<string?> ChooseAsync(string title, IReadOnlyList<string> choices, string? current = null) =>
         Task.FromResult(ChooseAnswers.Count > 0 ? ChooseAnswers.Dequeue() : null);

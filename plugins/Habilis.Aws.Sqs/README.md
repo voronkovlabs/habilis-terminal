@@ -1,8 +1,9 @@
 # SQS Queues plugin
 
 A Habilis Terminal panel with the Amazon SQS queues of one AWS account and region: each queue's approximate number of
-messages available and in flight. From the panel you can purge (remove all messages from) the queues you choose.
-Implements issue #48.
+messages available and in flight. From the panel you can purge (remove all messages from) the queues you choose, and
+open a queue to see, delete, save and send its messages, as the AWS console's "Send and receive messages" page does.
+Implements issues #48 and #397.
 
 ## Install
 
@@ -19,11 +20,15 @@ Habilis Terminal. No administrator rights are needed.
 
 ## Keys
 
+In the queue list:
+
 | Key | Action |
 |---|---|
+| Enter | Open the queue: its messages |
 | F8 | Purge the selected queues (or the one under the cursor) after a confirmation that names them; the outcome is reported per queue |
+| Shift+F4 | Send a message to the queue under the cursor |
 | Shift+F2 | Switch profile and region |
-| F3 / Enter | Queue details: name, URL, counts |
+| F3 / Ctrl+Q | Queue details: name, URL, counts |
 | Ctrl+R | Refresh |
 | Ctrl+F3 / Ctrl+F12 | Sort by name / sort menu (messages available, in flight) |
 | Ctrl+1 / Ctrl+2 | Layouts: with counts / names only |
@@ -31,6 +36,37 @@ Habilis Terminal. No administrator rights are needed.
 | F9 > Commands > Plugin panel commands | All commands, including Settings |
 
 Queues with no messages available are dimmed.
+
+Inside a queue (`..` returns to the list):
+
+| Key | Action |
+|---|---|
+| F3 / Enter | The whole message: sent and first received times, receive count, sender, group and deduplication IDs (FIFO), receipt handle, message attributes, and the body, indented when it is JSON |
+| Ctrl+Q | The body in the other panel |
+| F8 | Delete the selected messages after a confirmation |
+| F5 | Save the bodies into the other panel's folder: `<message ID>.json` when the body is JSON, else `.txt`, exactly as sent |
+| F6 | Save, then delete the messages saved |
+| F5 from a folder | Send each file (files in folders too) as one message; a FIFO queue asks for the message group ID once |
+| Shift+F4 | Send a message: body (several lines), message group ID, deduplication ID (FIFO), delivery delay (standard queues), attributes |
+| Ctrl+R | Keep the messages already received and receive new ones |
+| Ctrl+Shift+C | Copy the message ID |
+
+Columns: size, sent, receive count, the body on one line; Ctrl+2 shows the message group instead of the size. Messages
+received more than once are coloured. Message attributes are typed one per line: `Name=value` (a String),
+`Name:Number=42`, `Name:Binary=<Base64>`, or a custom type such as `Name:String.id=value`.
+
+### What opening a queue does
+
+Amazon SQS has no "peek": seeing a message means receiving it, as the AWS console does.
+
+- Enter receives up to **Messages to receive** messages, 10 per request. The first request waits up to **Wait for
+  messages** seconds for one to arrive.
+- Each receive adds 1 to a message's receive count. When the queue has a dead-letter queue, the first time you open it
+  in a session the panel names that queue and the receive limit, and asks before receiving.
+- Received messages stay hidden from consumers for **Hide received messages** seconds (30 by default). Leaving the
+  queue (`..`, closing the panel) makes the ones still hidden visible again at once. Ctrl+R keeps the hidden ones and
+  receives only new messages; once the time is over they are received again.
+- With 0 seconds nothing is hidden, but every refresh receives the messages again and raises their receive counts.
 
 ## Settings
 
@@ -43,6 +79,8 @@ plugin settings (`plugin-settings\aws.sqs.json`); never credentials.
 - **Regions offered when switching**.
 - **Request timeout**.
 - **AWS credentials file**: blank uses the standard `%USERPROFILE%\.aws\credentials` and `config`.
+- **Messages to receive when a queue opens** (100, up to 1000), **Wait for messages** (2 s, up to 20), **Hide received
+  messages from consumers** (30 s; 0 hides nothing).
 
 Changes apply to open panels at once.
 
@@ -57,6 +95,10 @@ Required IAM permissions:
 - `sqs:ListQueues`
 - `sqs:GetQueueAttributes`
 - `sqs:PurgeQueue` (only for purging)
+- `sqs:ReceiveMessage` and `sqs:ChangeMessageVisibility` (opening a queue)
+- `sqs:DeleteMessage` (F8 and F6 inside a queue)
+- `sqs:SendMessage` (Shift+F4, F5 into a queue)
+- `kms:Decrypt` and `kms:GenerateDataKey` for queues encrypted with a customer managed KMS key
 
 A missing permission is reported by name, e.g. "Permission missing: sqs:PurgeQueue".
 
@@ -64,7 +106,9 @@ A missing permission is reported by name, e.g. "Permission missing: sqs:PurgeQue
 
 - Counts are approximate, as Amazon SQS reports them, and may lag by up to a minute.
 - Amazon SQS allows one purge per queue every 60 seconds; a second purge in that time is reported as not purged.
-- Out of scope: reading, sending or deleting individual messages; creating, deleting or configuring queues.
+- Sending in batches, moving messages back from a dead-letter queue (redrive) and per-message delays on FIFO queues
+  are not offered.
+- Out of scope: creating, deleting or configuring queues.
 
 ## Third-party components
 
@@ -86,4 +130,17 @@ Use a test account or a prefix only test queues match.
 8. Shift+F2 to another region: the title and location change; Alt+F12 lists both locations.
 9. Use a profile without `sqs:PurgeQueue`: purge reports the missing permission; listing still works.
 10. Expire the credentials (or use a wrong key): a plain message suggests refreshing them; Habilis Terminal stays responsive.
-11. Delete the test queues.
+11. Messages (issue #397), with `habi-test-a` holding 3 messages, one of them JSON:
+    - Enter on `habi-test-a`: 3 messages with size, sent time and receive count 1. In the AWS console the queue shows
+      them in flight. F3 on the JSON one: the body is indented. Ctrl+Q shows the body.
+    - Ctrl+R: still 3 messages, receive counts unchanged. `..`: in the AWS console they are available again at once.
+    - Shift+F4 inside the queue: send a two-line body with `kind=test` and `n:Number=5`; it appears in the list, and F3
+      shows the lines and both attributes.
+    - F5 to a local folder: one `.json` and the others `.txt`, the same bytes as sent. F5 of those files back into the
+      queue: as many new messages with the same bodies.
+    - F8 on one message: it is gone from the queue (the AWS console count drops by one). F6 on another: saved and gone.
+    - Make `habi-test-b` a dead-letter queue of `habi-test-a` (max receives 5), open `habi-test-a`: the panel asks once,
+      naming `habi-test-b` and 5.
+    - A FIFO queue `habi-test-c.fifo`: Shift+F4 without a group ID is refused; with one it is sent. F5 of two identical
+      files sends two messages.
+12. Delete the test queues.

@@ -10,8 +10,6 @@ namespace Habilis.Aws.Tests;
 
 public class SqsTests
 {
-    private const string Base = "https://sqs.eu-west-1.amazonaws.com/123456789012/";
-
     [Fact]
     public async Task Lists_queues_by_prefix_with_counts_and_hides_excluded_ones()
     {
@@ -46,7 +44,7 @@ public class SqsTests
         Assert.EndsWith("/eu-west-1", panel.Location, StringComparison.Ordinal);
 
         var entries = await Listing.AllAsync(panel);
-        Assert.Equal(Base + "payments", ((IPanelProvider)panel).EntryAddress(entries.Single(e => e.Name == "payments")));
+        Assert.Equal(FakeSqs.Base + "payments", ((IPanelProvider)panel).EntryAddress(entries.Single(e => e.Name == "payments")));
     }
 
     [Fact]
@@ -78,7 +76,7 @@ public class SqsTests
 
         var confirmation = Assert.Single(host.Confirmations);
         Assert.Equal(["a", "b"], confirmation.Items);
-        Assert.Equal([Base + "a", Base + "b"], api.PurgeAttempts);
+        Assert.Equal([FakeSqs.Base + "a", FakeSqs.Base + "b"], api.PurgeAttempts);
         var report = Assert.Single(host.Messages);
         Assert.Contains("a: purged", report.Message, StringComparison.Ordinal);
         Assert.Contains("b: not purged, a purge already ran", report.Message, StringComparison.Ordinal);
@@ -148,58 +146,10 @@ public class SqsTests
 
     private static PanelCommand Purge(IPanelCommands panel) => panel.Commands.Single(c => c.Key == "F8");
 
-    private static async Task<SqsPanel> OpenAsync(FakeHost host, FakeSqs api, string address)
+    internal static async Task<SqsPanel> OpenAsync(FakeHost host, FakeSqs api, string address)
     {
         var plugin = new SqsPlugin { Connect = _ => api };
         plugin.Initialize(host);
         return (SqsPanel)(await plugin.OpenAddressAsync(address, CancellationToken.None))!;
-    }
-
-    private sealed class FakeSqs(IReadOnlyList<string> names) : ISqsApi
-    {
-        public int PageSize { get; init; } = 1000;
-
-        public string? FailPurge { get; init; }
-
-        public Exception? ListError { get; init; }
-
-        public string? LastPrefix { get; private set; }
-
-        public List<string> PurgeAttempts { get; } = [];
-
-        public async IAsyncEnumerable<IReadOnlyList<string>> ListQueueUrlsAsync(string prefix, [EnumeratorCancellation] CancellationToken cancellationToken)
-        {
-            LastPrefix = prefix;
-            await Task.Yield();
-            if (ListError is not null)
-            {
-                throw ListError;
-            }
-
-            var matching = names.Where(n => n.StartsWith(prefix, StringComparison.Ordinal)).Select(n => Base + n).ToList();
-            for (var i = 0; i < matching.Count; i += PageSize)
-            {
-                yield return matching.Skip(i).Take(PageSize).ToList();
-            }
-        }
-
-        public Task<QueueCounts> GetCountsAsync(string queueUrl, CancellationToken cancellationToken) =>
-            Task.FromResult(new QueueCounts(SqsPanel.NameOf(queueUrl).Length + 1, 1));
-
-        public Task PurgeAsync(string queueUrl, CancellationToken cancellationToken)
-        {
-            lock (PurgeAttempts)
-            {
-                PurgeAttempts.Add(queueUrl);
-            }
-
-            return SqsPanel.NameOf(queueUrl) == FailPurge
-                ? Task.FromException(new PurgeQueueInProgressException("Only one PurgeQueue operation is allowed every 60 seconds."))
-                : Task.CompletedTask;
-        }
-
-        public void Dispose()
-        {
-        }
     }
 }

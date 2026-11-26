@@ -199,7 +199,7 @@ public interface IPluginHost
 ```
 Dialogs: `ShowMessageAsync`, `ConfirmAsync(title, message, items, destructive)` (lists the items affected),
 `InputAsync`, `InputSecretAsync` (SDK 1.5, a password), `ChooseAsync` (a list picker, e.g. profile or region), `EditAsync(PluginForm)` for forms with text,
-number, toggle, choice and multi-line list fields. Forms return the edited values; the host draws them like its own
+number, toggle, choice and multi-line list fields; a `TextField` with `Lines` above 1 (SDK 1.10) takes several lines, such as a message body. Forms return the edited values; the host draws them like its own
 dialogs.
 
 ### Panels

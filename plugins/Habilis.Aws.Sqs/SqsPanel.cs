@@ -9,9 +9,10 @@ namespace Habilis.Aws.Sqs;
 
 /// <summary>
 /// The queues of one account and region (issue #48): name, messages available and in flight; purge selected queues
-/// after a confirmation naming them; switch profile and region; a summary in the info panel.
+/// after a confirmation naming them; switch profile and region; a summary in the info panel. Enter on a queue lists
+/// its messages (issue #397, SqsPanel.Messages.cs).
 /// </summary>
-internal sealed class SqsPanel : IPanelProvider, IPanelCommands, IViewEntry
+internal sealed partial class SqsPanel : IPanelProvider, IPanelCommands, IViewEntry, IQuickViewEntry, IDeleteEntries, IGetFiles, IPutFiles
 {
     public const string AvailableKey = "available";
     public const string InFlightKey = "inflight";
@@ -22,49 +23,67 @@ internal sealed class SqsPanel : IPanelProvider, IPanelCommands, IViewEntry
     private SqsSettings _settings;
     private AwsSession _session;
     private ISqsApi? _api;
+    private readonly ISet<string> _warned;
+    private readonly IReadOnlyList<PanelCommand> _queueCommands;
+    private readonly IReadOnlyList<PanelCommand> _messageCommands;
     private Summary? _summary;
 
-    public SqsPanel(IPluginHost host, SqsSettings settings, AwsSession session, Func<AwsSession, ISqsApi> connect)
+    /// <param name="warned">Queues whose dead-letter warning was shown, shared by the plugin's panels.</param>
+    public SqsPanel(IPluginHost host, SqsSettings settings, AwsSession session, Func<AwsSession, ISqsApi> connect, ISet<string>? warned = null)
     {
         _host = host;
         _settings = settings;
         _session = session;
         _connect = connect;
-        Commands =
+        _warned = warned ?? new HashSet<string>(StringComparer.Ordinal);
+        _queueCommands =
         [
             new PanelCommand("Purge queues (remove all messages)", "F8", PurgeAsync),
+            new PanelCommand("Send a message", "Shift+F4", SendAsync) { AppliesTo = (current, _) => current is not null },
             new PanelCommand("Switch profile and region", "Shift+F2", SwitchAsync),
+            new PanelCommand("Settings", null, ConfigureAsync),
+        ];
+        _messageCommands =
+        [
+            new PanelCommand("Send a message", "Shift+F4", SendAsync),
             new PanelCommand("Settings", null, ConfigureAsync),
         ];
     }
 
-    public string Title => $"SQS · {_session.Profile} · {_session.Region}";
+    public string Title => _queue is { } queue ? $"SQS · {_session.Profile} · {_session.Region} · {queue.Name}" : $"SQS · {_session.Profile} · {_session.Region}";
 
-    public string Location => $"sqs:{_session.Profile}/{_session.Region}";
+    /// <summary>"sqs:profile/region", with "/queue" inside a queue: opening it puts the cursor on the queue.</summary>
+    public string Location => _queue is { } queue ? $"sqs:{_session.Profile}/{_session.Region}/{queue.Name}" : $"sqs:{_session.Profile}/{_session.Region}";
 
-    public IReadOnlyList<PanelLayout> Layouts { get; } =
+    public IReadOnlyList<PanelLayout> Layouts => _queue is null ? QueueLayouts : MessageLayouts;
+
+    public IReadOnlyList<PanelSortKey> SortKeys => _queue is null ? QueueSortKeys : MessageSortKeys;
+
+    public IReadOnlyList<PanelCommand> Commands => _queue is null ? _queueCommands : _messageCommands;
+
+    private static readonly PanelLayout[] QueueLayouts =
     [
         new("Queues", [new PanelColumn(AvailableKey, "Available", 96, AlignRight: true), new PanelColumn(InFlightKey, "In flight", 96, AlignRight: true)]),
         new("Names", []),
     ];
 
-    public IReadOnlyList<PanelSortKey> SortKeys { get; } = [new(AvailableKey, "Messages available"), new(InFlightKey, "Messages in flight")];
-
-    public IReadOnlyList<PanelCommand> Commands { get; }
+    private static readonly PanelSortKey[] QueueSortKeys = [new(AvailableKey, "Messages available"), new(InFlightKey, "Messages in flight")];
 
     /// <summary>The queue a URL named, when the panel opened from it (#382).</summary>
     public string? InitialCursor { get; set; }
 
-    /// <summary>Ctrl+Shift+C copies a queue's URL (#382).</summary>
-    public string? EntryAddress(PanelEntry entry) => entry.Tag as string;
-
-    /// <summary>A flat list: no ".." row (issue #77); Ctrl+PgUp still leaves the panel.</summary>
-    public bool ShowsParent => false;
+    /// <summary>The queue list is flat: no ".." row (issue #77); Ctrl+PgUp still leaves the panel. A queue has "..".</summary>
+    public bool ShowsParent => _queue is not null;
 
     public IReadOnlyList<InfoLine> Info
     {
         get
         {
+            if (_queue is { } queue)
+            {
+                return MessageInfo(queue);
+            }
+
             var lines = new List<InfoLine>
             {
                 new("Profile", _session.Profile),
@@ -90,7 +109,10 @@ internal sealed class SqsPanel : IPanelProvider, IPanelCommands, IViewEntry
 
     private ISqsApi Api => _api ??= _connect(_session);
 
-    public async IAsyncEnumerable<IReadOnlyList<PanelEntry>> ListAsync([EnumeratorCancellation] CancellationToken cancellationToken)
+    public IAsyncEnumerable<IReadOnlyList<PanelEntry>> ListAsync(CancellationToken cancellationToken) =>
+        _queue is { } queue ? ListMessagesAsync(queue, cancellationToken) : ListQueuesAsync(cancellationToken);
+
+    private async IAsyncEnumerable<IReadOnlyList<PanelEntry>> ListQueuesAsync([EnumeratorCancellation] CancellationToken cancellationToken)
     {
         _summary = null;
         var shown = 0;
@@ -135,14 +157,17 @@ internal sealed class SqsPanel : IPanelProvider, IPanelCommands, IViewEntry
         _summary = new Summary(shown, hidden, DateTime.UtcNow);
     }
 
-    public Task<bool> EnterAsync(PanelEntry entry, CancellationToken cancellationToken) => Task.FromResult(false);
+    /// <summary>F3: a queue's name, URL and counts, or a whole message.</summary>
+    public Task<(string Title, string Text)?> ViewAsync(PanelEntry entry, CancellationToken cancellationToken) =>
+        Task.FromResult<(string, string)?>(entry.Tag is SqsMessage message ? (message.Id, MessageText(message)) : (entry.Name, QueueText(entry)));
 
-    public Task<bool> GoUpAsync(CancellationToken cancellationToken) => Task.FromResult(false);
+    /// <summary>Ctrl+Q: a message's body, or a queue's details.</summary>
+    public Task<string?> QuickViewAsync(PanelEntry entry, CancellationToken cancellationToken) =>
+        Task.FromResult<string?>(entry.Tag is SqsMessage message ? QuickBody(message) : QueueText(entry));
 
-    /// <summary>F3 / Enter: the queue's name, URL and counts.</summary>
-    public Task<(string Title, string Text)?> ViewAsync(PanelEntry entry, CancellationToken cancellationToken)
+    private string QueueText(PanelEntry entry)
     {
-        var text = new StringBuilder()
+        return new StringBuilder()
             .AppendLine(CultureInfo.InvariantCulture, $"Queue:              {entry.Name}")
             .AppendLine(CultureInfo.InvariantCulture, $"URL:                {entry.Tag}")
             .AppendLine(CultureInfo.InvariantCulture, $"Messages available: {Cell(entry, AvailableKey)}")
@@ -150,14 +175,13 @@ internal sealed class SqsPanel : IPanelProvider, IPanelCommands, IViewEntry
             .AppendLine()
             .AppendLine(CultureInfo.InvariantCulture, $"Profile {_session.Profile}, region {_session.Region}. Counts are approximate, as Amazon SQS reports them.")
             .ToString();
-        return Task.FromResult<(string, string)?>((entry.Name, text));
     }
 
-    public ValueTask DisposeAsync()
+    public async ValueTask DisposeAsync()
     {
+        await ReleaseAsync().ConfigureAwait(false);
         _api?.Dispose();
         _api = null;
-        return ValueTask.CompletedTask;
     }
 
     /// <summary>Called by the plugin after the settings changed: the next listing uses them.</summary>

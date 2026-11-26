@@ -23,6 +23,19 @@ internal sealed record SqsSettings
 
     public int TimeoutSeconds { get; init; } = 30;
 
+    /// <summary>The most messages Enter on a queue receives (issue #397).</summary>
+    public int ReceiveLimit { get; init; } = 100;
+
+    /// <summary>Long polling: how long the first receive waits for messages to arrive.</summary>
+    public int WaitSeconds { get; init; } = 2;
+
+    /// <summary>How long received messages stay hidden from consumers while the queue is open; 0 hides nothing.</summary>
+    public int VisibilitySeconds { get; init; } = 30;
+
+    public const int MaxReceiveLimit = 1000;
+
+    public const int MaxVisibilitySeconds = 43200;
+
     public static SqsSettings Load(IPluginSettings store)
     {
         var json = store.Load();
@@ -36,6 +49,9 @@ internal sealed record SqsSettings
             NamePrefix = AwsText.Text(json, "namePrefix", defaults.NamePrefix),
             Exclusions = AwsText.List(json, "exclusions", defaults.Exclusions),
             TimeoutSeconds = AwsText.Number(json, "timeoutSeconds", defaults.TimeoutSeconds),
+            ReceiveLimit = Math.Clamp(AwsText.Number(json, "receiveLimit", defaults.ReceiveLimit), 1, MaxReceiveLimit),
+            WaitSeconds = Math.Clamp(AwsText.Number(json, "waitSeconds", defaults.WaitSeconds), 0, 20),
+            VisibilitySeconds = Math.Clamp(AwsText.Number(json, "visibilitySeconds", defaults.VisibilitySeconds), 0, MaxVisibilitySeconds),
         };
     }
 
@@ -48,6 +64,9 @@ internal sealed record SqsSettings
         ["namePrefix"] = NamePrefix,
         ["exclusions"] = AwsText.ToJson(Exclusions),
         ["timeoutSeconds"] = TimeoutSeconds,
+        ["receiveLimit"] = ReceiveLimit,
+        ["waitSeconds"] = WaitSeconds,
+        ["visibilitySeconds"] = VisibilitySeconds,
     });
 
     public AwsSession Session(string? profile = null, string? region = null) =>
@@ -61,6 +80,9 @@ internal sealed record SqsSettings
         new TextField("namePrefix", "Queue name prefix", current.NamePrefix) { Description = "Only queues whose names start with this are listed. Blank: all queues." },
         new ListField("exclusions", "Hide queues matching", current.Exclusions) { Description = "One wildcard pattern per line, e.g. *-dlq or test-*." },
         new ListField("regions", "Regions offered when switching", current.Regions),
+        new NumberField("receiveLimit", "Messages to receive when a queue opens", current.ReceiveLimit, 1, MaxReceiveLimit) { Description = "Enter on a queue receives up to this many messages, 10 per request." },
+        new NumberField("waitSeconds", "Wait for messages, seconds", current.WaitSeconds, 0, 20) { Description = "Long polling: the first request waits this long for a message to arrive (0 to 20)." },
+        new NumberField("visibilitySeconds", "Hide received messages from consumers, seconds", current.VisibilitySeconds, 0, MaxVisibilitySeconds) { Description = "While the queue is open; they are released when you leave it. 0 hides nothing, but then every refresh receives the messages again and raises their receive count." },
         new NumberField("timeoutSeconds", "Request timeout, seconds", current.TimeoutSeconds, 5, 300),
         new TextField("credentialsFile", "AWS credentials file", current.CredentialsFile) { Description = "Blank: the standard %USERPROFILE%\\.aws\\credentials and config." },
     ])
@@ -76,6 +98,9 @@ internal sealed record SqsSettings
         Exclusions = form.Field<ListField>("exclusions").Values,
         Regions = form.Field<ListField>("regions").Values is { Count: > 0 } regions ? regions : new SqsSettings().Regions,
         TimeoutSeconds = form.Field<NumberField>("timeoutSeconds").Value,
+        ReceiveLimit = form.Field<NumberField>("receiveLimit").Value,
+        WaitSeconds = form.Field<NumberField>("waitSeconds").Value,
+        VisibilitySeconds = form.Field<NumberField>("visibilitySeconds").Value,
         CredentialsFile = form.Field<TextField>("credentialsFile").Value,
     };
 }
