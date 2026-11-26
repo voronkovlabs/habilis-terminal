@@ -44,6 +44,8 @@ public sealed partial class FilePanel : Border
     /// <summary>The box below the list is the quick filter (Ctrl+Alt+letter), not the quick search (Alt+letter).</summary>
     private bool _quickFilter;
     private readonly TextBlock _message = new();
+    private string _messageText = string.Empty;
+    private int _messageCopies;
     private readonly TextBlock _status = new();
     private readonly TextBlock _statusRight = new();
     private readonly Border _quickSearch = new();
@@ -114,6 +116,19 @@ public sealed partial class FilePanel : Border
         _message.TextWrapping = TextWrapping.Wrap;
         _message.Margin = new Thickness(10, 0, 10, 4);
         _message.IsVisible = false;
+
+        // A click copies the message, to paste into a search or a report (issue #411); the line says so for a moment.
+        _message.Cursor = new Avalonia.Input.Cursor(Avalonia.Input.StandardCursorType.Hand);
+        _message.Background = Avalonia.Media.Brushes.Transparent;
+        Avalonia.Controls.ToolTip.SetTip(_message, "Click to copy this message");
+        _message.AddHandler(PointerPressedEvent, (_, e) =>
+        {
+            if (e.GetCurrentPoint(_message).Properties.IsLeftButtonPressed && _messageText.Length > 0)
+            {
+                e.Handled = true;
+                CopyMessage();
+            }
+        }, Avalonia.Interactivity.RoutingStrategies.Bubble, handledEventsToo: false);
         _status.FontSize = _statusRight.FontSize = 12;
         _status.Foreground = _statusRight.Foreground = PanelPalette.DescriptionForeground;
         _status.TextTrimming = TextTrimming.CharacterEllipsis;
@@ -452,18 +467,49 @@ public sealed partial class FilePanel : Border
 
     public string? Message
     {
-        get => _message.IsVisible ? _message.Text : null;
+        get => _message.IsVisible ? _messageText : null;
         set
         {
             // Each new message goes to the panel error log too (issue #292); "Loading…" is no message to keep.
-            if (!string.IsNullOrEmpty(value) && value != _message.Text && value != "Loading…")
+            if (!string.IsNullOrEmpty(value) && value != _messageText && value != "Loading…")
             {
                 Core.Reporting.PanelErrors.Record(Side, value);
             }
 
-            _message.Text = value ?? string.Empty;
+            _messageCopies++;
+            _messageText = value ?? string.Empty;
+            _message.Text = _messageText;
+            _message.Foreground = PanelPalette.ErrorForeground;
             _message.IsVisible = !(string.IsNullOrEmpty(value));
         }
+    }
+
+    /// <summary>The message to the clipboard; for a moment the line says it was copied, then shows the message again.</summary>
+    private void CopyMessage()
+    {
+        var text = _messageText;
+        string note;
+        try
+        {
+            Widgets.Clipboard.SetText(text);
+            note = "Copied to the clipboard.";
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or System.ComponentModel.Win32Exception or System.Runtime.InteropServices.ExternalException)
+        {
+            note = $"Not copied: {ex.Message}";
+        }
+
+        var copy = ++_messageCopies;
+        _message.Text = note;
+        _message.Foreground = PanelPalette.DescriptionForeground;
+        Avalonia.Threading.DispatcherTimer.RunOnce(() =>
+        {
+            if (copy == _messageCopies)
+            {
+                _message.Text = text;
+                _message.Foreground = PanelPalette.ErrorForeground;
+            }
+        }, TimeSpan.FromSeconds(1.5));
     }
 
     public void RefreshInfo() => _info.InvalidateVisual();
