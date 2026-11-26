@@ -37,6 +37,18 @@ public class PerfTests
     public void Cpu_share_tells_computing_from_waiting(double cpu, double wall, string kind) => Assert.Equal(kind, PerfReport.Kind(cpu, wall));
 
     [Fact]
+    public void Drive_kind_is_asked_once_per_drive()
+    {
+        // #404: GetDriveType ran on the UI thread with every folder opened.
+        var temp = Path.GetTempPath();
+        var kind = Perf.DriveKind(temp);
+        Assert.Equal(kind, Perf.DriveKind(Path.Combine(temp, "elsewhere")));
+        Assert.Equal(kind, Perf.DriveKind(temp.ToLowerInvariant()));
+        Assert.Equal("network", Perf.DriveKind(@"\\server\share"));
+        Assert.Equal("other", Perf.DriveKind("relative"));
+    }
+
+    [Fact]
     public void Percentile_is_the_bucket_holding_it()
     {
         var operation = Operation("x", 100, 500, 100, 900, (1, 94), (5, 5), (10, 1));

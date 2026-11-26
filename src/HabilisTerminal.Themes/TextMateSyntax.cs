@@ -26,6 +26,9 @@ public static class TextMateSyntax
     private static (IReadOnlyList<JsonElement> Tokens, ThemeColor Foreground, ThemeColor Background)? s_themeKey;
     private static bool s_broken;
 
+    /// <summary>The registry and grammars are used from the UI thread and warmed up on a worker (#404).</summary>
+    private static readonly object Gate = new();
+
     /// <summary>Bumped on every theme change; a colorizer seeing a new value drops its tokens.</summary>
     public static int Version { get; private set; }
 
@@ -34,6 +37,26 @@ public static class TextMateSyntax
 
     /// <summary>The grammar for a file extension, else for a VS Code language id (<c>csharp</c>, <c>xml</c>); null when none.</summary>
     public static IGrammar? GrammarFor(string extension, string? languageId = null)
+    {
+        lock (Gate)
+        {
+            return GrammarForLocked(extension, languageId);
+        }
+    }
+
+    /// <summary>
+    /// Loads the registry and the grammars of these extensions now, off the UI thread: the first Markdown quick view
+    /// otherwise waited 747 ms for them (report #391).
+    /// </summary>
+    public static Task WarmUpAsync(params string[] extensions) => Task.Run(() =>
+    {
+        foreach (var extension in extensions)
+        {
+            _ = GrammarFor(extension);
+        }
+    });
+
+    private static IGrammar? GrammarForLocked(string extension, string? languageId)
     {
         if (s_broken)
         {
@@ -71,6 +94,14 @@ public static class TextMateSyntax
 
     /// <summary>Uses the theme's <c>tokenColors</c> from now on; does nothing when they have not changed.</summary>
     public static void SetTheme(ColorTheme theme)
+    {
+        lock (Gate)
+        {
+            SetThemeLocked(theme);
+        }
+    }
+
+    private static void SetThemeLocked(ColorTheme theme)
     {
         var foreground = theme.GetOpaque("editor.foreground");
         var background = theme.GetOpaque("editor.background");

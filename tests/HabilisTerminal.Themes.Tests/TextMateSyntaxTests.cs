@@ -17,6 +17,19 @@ public sealed class TextMateSyntaxTests
     ];
 
     [Fact]
+    public async Task Grammars_warm_up_on_a_worker_while_the_ui_asks_for_them()
+    {
+        // #404: the first Markdown quick view waited 747 ms on the UI thread; warming up now runs beside it.
+        var warm = TextMateSyntax.WarmUpAsync(".md", ".json", ".ps1");
+        var asked = await Task.WhenAll(Enumerable.Range(0, 8).Select(_ => Task.Run(() => TextMateSyntax.GrammarFor(".md"))));
+        await warm;
+
+        Assert.All(asked, grammar => Assert.Same(asked[0], grammar));
+        Assert.NotNull(asked[0]);
+        Assert.NotNull(TextMateSyntax.GrammarFor(".json"));
+    }
+
+    [Fact]
     public void Dark_modern_colours_csharp_as_vs_code_does()
     {
         // Theme state is shared; the tests in this class run one after another.

@@ -150,6 +150,9 @@ public partial class MainWindow : Window
             Reporting.PerfDiagnostics.RecordStartupMilestone("startup.first-render");
             UpdateTitleBar();
 
+            // Syntax colours for the quick view and the editor, loaded on a worker once the window is up (#404).
+            _ = Task.Delay(TimeSpan.FromSeconds(3)).ContinueWith(_ => Themes.TextMateSyntax.WarmUpAsync(".md", ".json"), TaskScheduler.Default);
+
             // Windows mode, high contrast and accent changes repaint everything live (SPEC §10); elsewhere Avalonia tells.
             if (OperatingSystem.IsWindows())
             {

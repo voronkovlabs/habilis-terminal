@@ -116,15 +116,28 @@ public static class Perf
             return "network";
         }
 
-        try
-        {
-            return new DriveInfo(path).DriveType.ToString().ToLowerInvariant();
-        }
-        catch (ArgumentException)
+        // Asked on the UI thread as a folder opens: GetDriveType opens the volume and once took 449 ms (report #391), so
+        // each drive is asked once.
+        var root = Path.GetPathRoot(path);
+        if (string.IsNullOrEmpty(root))
         {
             return "other";
         }
+
+        return DriveKinds.GetOrAdd(root.ToUpperInvariant(), static root =>
+        {
+            try
+            {
+                return new DriveInfo(root).DriveType.ToString().ToLowerInvariant();
+            }
+            catch (ArgumentException)
+            {
+                return "other";
+            }
+        });
     }
+
+    private static readonly ConcurrentDictionary<string, string> DriveKinds = new(StringComparer.Ordinal);
 
     /// <summary>A number as a range, so that a report shows the scale and not the exact content of a folder.</summary>
     public static string CountRange(int count) => count switch
