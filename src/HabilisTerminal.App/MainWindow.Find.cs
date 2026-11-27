@@ -196,8 +196,13 @@ public partial class MainWindow
         var isFile = !item.IsFolder && row.Kind != Core.Search.FindRowKind.Folder;
         if (!isFile || (request == FindRequest.Open && row.Line is null))
         {
-            // A file or folder goes to its panel: the console comes back with the panel at it.
-            LeaveSearchFor(GoToFoundAsync(panel, item));
+            // A file or folder goes to its panel, which takes the keys; the results stay in front (issue #417).
+            if (!IsShown(panel))
+            {
+                SetPanelVisibility(panel == _left || Workspace.LeftVisible, panel == _right || Workspace.RightVisible);
+            }
+
+            Fire(GoToFoundAsync(panel, item));
             return;
         }
 
