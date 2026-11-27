@@ -99,6 +99,39 @@ public sealed class ViewerPage : DockPanel, IDisposable, IPage
 
     public string FilePath { get; }
 
+    private (int Line, int Column, int Length)? _target;
+
+    /// <summary>
+    /// Opens at a line found by Alt+F7 (issue #415): the paged view scrolls there at once, and the text mode, when it
+    /// takes over, selects the match.
+    /// </summary>
+    public void ShowLine(int line, int column, int length)
+    {
+        _target = (line, column, length);
+        if (ShowingText)
+        {
+            SelectTarget(_text!);
+        }
+        else if (_document is not null)
+        {
+            _ = RevealLineAsync(line);
+        }
+    }
+
+    private void SelectTarget(TextEditor text)
+    {
+        if (_target is not { } target || text.Document.LineCount == 0)
+        {
+            return;
+        }
+
+        var line = text.Document.GetLineByNumber(Math.Clamp(target.Line, 1, text.Document.LineCount));
+        var start = line.Offset + Math.Clamp(target.Column - 1, 0, line.Length);
+        text.Select(start, Math.Clamp(target.Length, 0, line.EndOffset - start));
+        text.TextArea.Caret.Offset = start;
+        text.ScrollTo(line.LineNumber, target.Column);
+    }
+
     /// <summary>The read-only editor is showing (not hex, not the paged view).</summary>
     private bool ShowingText => _text is not null && _text.Parent == this;
 
@@ -402,7 +435,11 @@ public sealed class ViewerPage : DockPanel, IDisposable, IPage
         var hadFocus = IsKeyboardFocusWithin;
         Children.Remove(_view);
         Children.Add(_text);
-        if (share > 0)
+        if (_target is not null)
+        {
+            SelectTarget(_text);
+        }
+        else if (share > 0)
         {
             var line = Math.Clamp((int)Math.Round(share * _text.LineCount), 1, _text.LineCount);
             _text.TextArea.Caret.Line = line;

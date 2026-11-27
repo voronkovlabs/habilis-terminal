@@ -20,7 +20,7 @@ internal enum ConsoleTabMark
 /// while the tab is not in front, and what belongs to that shell alone. A tab not in front is hidden, not collapsed, and
 /// keeps its size until it is shown again.
 /// </summary>
-internal sealed class ConsoleTab : IDisposable
+internal sealed class ConsoleTab : IDisposable, Widgets.IStripTab
 {
     public ConsoleTab(ShellHost host)
     {
@@ -72,6 +72,8 @@ internal sealed class ConsoleTab : IDisposable
 
     /// <summary>The tab's colour in the strip and on the panel frame (issue #120).</summary>
     public int ColorIndex { get; set; }
+
+    public string CloseTip => "Close console (Ctrl+Shift+W)";
 
     /// <summary>The command's output has gone past the console, as of the last report (issue #82).</summary>
     public TerminalOverflow Overflow { get; } = new();

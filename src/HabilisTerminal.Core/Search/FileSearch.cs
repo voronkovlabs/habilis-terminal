@@ -31,6 +31,9 @@ public sealed record FoundItem(string Path, bool IsFolder)
 
     /// <summary>The path inside <see cref="Container"/>, with backslashes.</summary>
     public string? InnerPath { get; init; }
+
+    /// <summary>The lines that hold the text, for a text search of a text file (issue #415); null otherwise.</summary>
+    public IReadOnlyList<FoundLine>? Lines { get; init; }
 }
 
 /// <summary>An entry inside a file a plugin opens as a folder, as the plugin gives it to the search (issue #210).</summary>

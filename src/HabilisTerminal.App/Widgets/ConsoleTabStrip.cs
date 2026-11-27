@@ -87,9 +87,9 @@ internal sealed class ConsoleTabStrip : Border
         _clock.Tick += (_, _) => RefreshTexts();
     }
 
-    public event Action<ConsoleTab>? TabChosen;
+    public event Action<IStripTab>? TabChosen;
 
-    public event Action<ConsoleTab>? TabClosing;
+    public event Action<IStripTab>? TabClosing;
 
     public event Action? NewTabRequested;
 
@@ -108,7 +108,7 @@ internal sealed class ConsoleTabStrip : Border
         return brush;
     }
 
-    public void Update(IReadOnlyList<ConsoleTab> tabs, ConsoleTab? current)
+    public void Update(IReadOnlyList<IStripTab> tabs, IStripTab? current)
     {
         _row.Children.Clear();
         _views.Clear();
@@ -190,7 +190,7 @@ internal sealed class ConsoleTabStrip : Border
 
     private void ScrollBy(double delta) => _scroll.Offset = _scroll.Offset.WithX(Math.Max(0, _scroll.Offset.X + delta));
 
-    private TabView TabItem(ConsoleTab tab, bool current)
+    private TabView TabItem(IStripTab tab, bool current)
     {
         var color = ColorOf(tab.ColorIndex);
         IBrush? text = current ? PanelPalette.ReadableOn(color) : null;
@@ -223,7 +223,7 @@ internal sealed class ConsoleTabStrip : Border
             close.SetResourceReference(TextBlock.ForegroundProperty, "Habi.Foreground");
         }
 
-        var closeButton = new Border { Child = close, Padding = new Thickness(5, 0, 5, 0), Margin = new Thickness(2, 0, 0, 0), Background = Brushes.Transparent, Focusable = false, ToolTip = Tip("Close console (Ctrl+Shift+W)") };
+        var closeButton = new Border { Child = close, Padding = new Thickness(5, 0, 5, 0), Margin = new Thickness(2, 0, 0, 0), Background = Brushes.Transparent, Focusable = false, ToolTip = Tip(tab.CloseTip) };
         OnClick(closeButton, () => TabClosing?.Invoke(tab));
 
         var content = new DockPanel { Margin = new Thickness(9, 0, 3, 0), LastChildFill = true };
@@ -351,9 +351,9 @@ internal sealed class ConsoleTabStrip : Border
         };
     }
 
-    private sealed class TabView(ConsoleTab tab, Border item, ToolTip tip, Run title, Run detail, Border close, bool current)
+    private sealed class TabView(IStripTab tab, Border item, ToolTip tip, Run title, Run detail, Border close, bool current)
     {
-        public ConsoleTab Tab { get; } = tab;
+        public IStripTab Tab { get; } = tab;
 
         public Border Item { get; } = item;
 

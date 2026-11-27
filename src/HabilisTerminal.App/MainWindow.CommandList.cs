@@ -185,7 +185,11 @@ public partial class MainWindow
 
     private void CloseCurrentTab()
     {
-        if (_tab is { } tab)
+        if (_search is { } search)
+        {
+            CloseSearch(search);
+        }
+        else if (_tab is { } tab)
         {
             CloseTab(tab);
         }

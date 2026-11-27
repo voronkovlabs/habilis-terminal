@@ -6,14 +6,24 @@ using HabilisTerminal.Core.FileSystem;
 
 namespace HabilisTerminal.App;
 
-/// <summary>Alt+F7, as in Far (issue #198): the dialog, the results, and the temporary panel.</summary>
+/// <summary>
+/// Alt+F7, as in Far (issue #198): the dialog, and the results as a tab beside the consoles, as Visual Studio's Find
+/// Results (issue #415). Each search has its tab; the panels under it are those of the console tab last in front.
+/// </summary>
 public partial class MainWindow
 {
-    private FindOptions _lastFind = FindOptions.Default;
-    private FindSession? _find;
+    /// <summary>Rows of the area a results tab gets at least: more than the console's usual few.</summary>
+    private const int SearchRows = 18;
 
-    /// <summary>Set while a viewer or editor opened from the results is up: closing it brings the results back.</summary>
-    private bool _returnToFind;
+    private readonly List<SearchTab> _searches = [];
+    private FindOptions _lastFind = FindOptions.Default;
+
+    /// <summary>The results tab in front, or null when a console is.</summary>
+    private SearchTab? _search;
+
+    /// <summary>The console's rows while a results tab is in front; the results' own rows while a console is.</summary>
+    private int _consoleRows = -1;
+    private int _searchRows = -1;
 
     private void FindFiles()
     {
@@ -25,82 +35,230 @@ public partial class MainWindow
         }
 
         var selected = panel.State.SelectedFolders();
-        var canSearchArchives = _plugins.Loaded.Any(p => Plugins.PluginManager.Guard(p, () => p.Instance!.FileExtensions.Any(), false));
+        var canSearchArchives = CanSearchArchives();
         if (FindDialog.Ask(this, _lastFind, selected.Count > 0, canSearchArchives) is not { } options)
         {
-            FocusActivePanel();
+            RefocusAfterFind();
             return;
         }
 
         _lastFind = options;
-        _find?.Dispose();
-        var roots = FileSearch.RootsFor(options.Scope, panel.CurrentPath, [.. selected.Select(name => Path.Combine(panel.CurrentPath, name))]);
-        var containers = options.Archives && canSearchArchives ? new PluginContainerSearch(_plugins) : null;
-        _find = new FindSession(options, roots, App.Paths?.SearchCacheDirectory, containers);
-        ShowFindResults();
+        OpenSearchTab(StartSearch(options, panel, selected, canSearchArchives));
     }
 
-    private void ShowFindResults()
+    private bool CanSearchArchives() =>
+        _plugins.Loaded.Any(p => Plugins.PluginManager.Guard(p, () => p.Instance!.FileExtensions.Any(), false));
+
+    private FindSession StartSearch(FindOptions options, FilePanel panel, IReadOnlyList<string> selected, bool canSearchArchives)
     {
-        if (_find is not { } session)
+        var roots = FileSearch.RootsFor(options.Scope, panel.CurrentPath, [.. selected.Select(name => Path.Combine(panel.CurrentPath, name))]);
+        var containers = options.Archives && canSearchArchives ? new PluginContainerSearch(_plugins) : null;
+        return new FindSession(options, roots, App.Paths?.SearchCacheDirectory, containers);
+    }
+
+    private void RefocusAfterFind()
+    {
+        if (_search is { } search)
+        {
+            search.View.FocusList();
+        }
+        else
+        {
+            FocusActivePanel();
+        }
+    }
+
+    private void OpenSearchTab(FindSession session)
+    {
+        var tab = new SearchTab(session);
+        Layout.WorkspaceLayout.SetRole(tab.View, Layout.WorkspaceRole.Terminal);
+        tab.View.IsVisible = false;
+        Workspace.Children.Add(tab.View);
+        tab.View.Requested += (row, request) => OnSearchRequest(tab, row, request);
+        tab.View.LeaveRequested += LeaveSearch;
+        tab.View.ModifyRequested += () => ModifySearch(tab);
+        tab.View.PanelRequested += () => SearchToPanel(tab);
+        var wasRunning = true;
+        tab.View.Updated += () =>
+        {
+            // The strip refreshes running tabs' texts itself; the end of the search changes the mark once.
+            if (wasRunning && tab.Session.IsDone)
+            {
+                wasRunning = false;
+                UpdateTabStrip();
+            }
+        };
+        _searches.Add(tab);
+        ShowSearch(tab);
+    }
+
+    /// <summary>A results tab to the front: it takes the console's place, the panels stay.</summary>
+    private void ShowSearch(SearchTab tab)
+    {
+        if (_search is null)
+        {
+            _consoleRows = Workspace.TerminalRows;
+            Workspace.TerminalRows = _searchRows > 0 ? _searchRows : Math.Max(_consoleRows, SearchRows);
+        }
+
+        _search = tab;
+        _tab?.Terminal.IsVisible = false;
+        foreach (var search in _searches)
+        {
+            search.View.IsVisible = search == tab;
+        }
+
+        Workspace.InvalidateMeasure();
+        UpdateTabStrip();
+        UpdateHintButton();
+        Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+        {
+            if (_search == tab && !IsPageOpen)
+            {
+                tab.View.FocusList();
+            }
+        }, Avalonia.Threading.DispatcherPriority.Input);
+    }
+
+    /// <summary>Results out of the front, before a console comes back: the console gets its own height again.</summary>
+    private void HideSearch()
+    {
+        if (_search is null)
         {
             return;
         }
 
-        var (action, item) = FindResultsWindow.Show(this, session);
-        var panel = _active;
-        switch (action)
+        _searchRows = Workspace.TerminalRows;
+        if (_consoleRows > 0)
         {
-            case FindAction.GoTo when item is not null:
-                session.Stop();
-                Fire(GoToFoundAsync(panel, item));
-                break;
-            case FindAction.View or FindAction.Edit when item is { IsFolder: false, Container: not null }:
-                // An entry inside an archive: a copy to look at, as it cannot be saved back.
-                Fire(ViewArchiveEntryAsync(panel, item));
-                break;
-            case FindAction.View when item is { IsFolder: false }:
-                _returnToFind = true;
-                OpenViewer(item.Path, panel);
-                break;
-            case FindAction.Edit when item is { IsFolder: false }:
-                _returnToFind = true;
-                Edit(item.Path, panel);
-
-                // A binary file goes to the system editor, and a large one may be refused: no page, nothing to return from.
-                if (!IsPageOpen)
-                {
-                    _returnToFind = false;
-                    ShowFindResults();
-                }
-
-                break;
-            case FindAction.View or FindAction.Edit when item is not null:
-                session.Stop();
-                Fire(GoToFoundAsync(panel, item));
-                break;
-            case FindAction.Panel:
-                session.Stop();
-                Fire(ShowFoundInPanelAsync(panel, session));
-                break;
-            case FindAction.NewSearch:
-                session.Stop();
-                FindFiles();
-                break;
-            default:
-                session.Stop();
-                FocusActivePanel();
-                break;
+            Workspace.TerminalRows = _consoleRows;
         }
+
+        _search = null;
+        foreach (var search in _searches)
+        {
+            search.View.IsVisible = false;
+        }
+    }
+
+    /// <summary>Esc in the results: the console and its panels; the results tab stays.</summary>
+    private void LeaveSearch()
+    {
+        if (_tab is { } tab)
+        {
+            ShowTab(tab);
+        }
+
+        FocusActivePanel();
+    }
+
+    private void CloseSearch(SearchTab tab)
+    {
+        var index = _searches.IndexOf(tab);
+        if (index < 0)
+        {
+            return;
+        }
+
+        var inFront = tab == _search;
+        if (inFront)
+        {
+            HideSearch();
+        }
+
+        _searches.Remove(tab);
+        Workspace.Children.Remove(tab.View);
+        tab.Dispose();
+        UpdateHintButton();
+        if (inFront)
+        {
+            if (_searches.Count > 0)
+            {
+                ShowSearch(_searches[Math.Min(index, _searches.Count - 1)]);
+            }
+            else if (_tab is { } console)
+            {
+                ShowTab(console);
+            }
+        }
+
+        UpdateTabStrip();
+    }
+
+    private void OnSearchRequest(SearchTab tab, Core.Search.FindRow row, FindRequest request)
+    {
+        if (row.Item is not { } item)
+        {
+            return;
+        }
+
+        var panel = _active;
+        var isFile = !item.IsFolder && row.Kind != Core.Search.FindRowKind.Folder;
+        if (!isFile || (request == FindRequest.Open && row.Line is null))
+        {
+            // A file or folder goes to its panel: the console comes back with the panel at it.
+            LeaveSearchFor(GoToFoundAsync(panel, item));
+            return;
+        }
+
+        if (item.Container is not null)
+        {
+            // An entry inside an archive: a copy to look at, as it cannot be saved back.
+            Fire(ViewArchiveEntryAsync(panel, item));
+            return;
+        }
+
+        if (request == FindRequest.Edit)
+        {
+            Edit(item.Path, panel, followFile: false, at: row.Line);
+        }
+        else
+        {
+            OpenPlainViewer(item.Path, panel, row.Line);
+        }
+    }
+
+    private void LeaveSearchFor(Task work)
+    {
+        if (_tab is { } console)
+        {
+            ShowTab(console);
+        }
+
+        Fire(work);
+    }
+
+    /// <summary>Modify find: the dialog with this tab's options; the new search replaces the results in the tab.</summary>
+    private void ModifySearch(SearchTab tab)
+    {
+        var panel = _active;
+        var selected = panel.State.SelectedFolders();
+        var canSearchArchives = CanSearchArchives();
+        if (FindDialog.Ask(this, tab.Options, selected.Count > 0, canSearchArchives) is not { } options)
+        {
+            tab.View.FocusList();
+            return;
+        }
+
+        _lastFind = options;
+        tab.Replace(StartSearch(options, panel, selected, canSearchArchives));
+        UpdateTabStrip();
+        tab.View.FocusList();
+    }
+
+    /// <summary>Panel: the files found as a temporary panel, the search stopped where it is.</summary>
+    private void SearchToPanel(SearchTab tab)
+    {
+        tab.Session.Stop();
+        LeaveSearchFor(ShowFoundInPanelAsync(_active, tab.Session));
     }
 
     /// <summary>Called when a page closes: a viewer or editor opened from the results returns to them.</summary>
     private void ReturnToFindResults()
     {
-        if (_returnToFind)
+        if (_search is { } search)
         {
-            _returnToFind = false;
-            Avalonia.Threading.Dispatcher.UIThread.Post(ShowFindResults, Avalonia.Threading.DispatcherPriority.Background);
+            Avalonia.Threading.Dispatcher.UIThread.Post(search.View.FocusList, Avalonia.Threading.DispatcherPriority.Input);
         }
     }
 
@@ -173,11 +331,9 @@ public partial class MainWindow
         if (copy is null)
         {
             panel.Message ??= $"'{item.InnerPath}' is no longer in the archive.";
-            ShowFindResults();
             return;
         }
 
-        _returnToFind = true;
         OpenViewer(copy, panel);
     }
 

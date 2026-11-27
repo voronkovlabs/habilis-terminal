@@ -181,9 +181,14 @@ public partial class MainWindow
         ShowPage(pages);
     }
 
-    private void OpenPlainViewer(string path, FilePanel returnTo)
+    private void OpenPlainViewer(string path, FilePanel returnTo, Core.Search.FoundLine? at = null)
     {
         var page = new ViewerPage(path, _settings, _themes.Current);
+        if (at is not null)
+        {
+            page.ShowLine(at.Number, at.Column, at.MatchLength);
+        }
+
         RememberFile(path, edited: false);
         page.CloseRequested += () =>
         {
@@ -304,7 +309,7 @@ public partial class MainWindow
     /// very large text files ask first (SPEC §9).
     /// </summary>
     /// <param name="followFile">Esc puts the panel cursor on the file (moving the panel to its folder); off for settings.json.</param>
-    private void Edit(string path, FilePanel returnTo, bool followFile = true)
+    private void Edit(string path, FilePanel returnTo, bool followFile = true, Core.Search.FoundLine? at = null)
     {
         try
         {
@@ -345,7 +350,7 @@ public partial class MainWindow
                 }
             }
 
-            OpenEditor(Core.Editing.TextFile.Load(path), returnTo, followFile);
+            OpenEditor(Core.Editing.TextFile.Load(path), returnTo, followFile, at);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
@@ -353,7 +358,7 @@ public partial class MainWindow
         }
     }
 
-    private void OpenEditor(Core.Editing.TextFile file, FilePanel returnTo, bool followFile)
+    private void OpenEditor(Core.Editing.TextFile file, FilePanel returnTo, bool followFile, Core.Search.FoundLine? at = null)
     {
         var path = file.Path;
         if (File.Exists(path))
@@ -362,6 +367,10 @@ public partial class MainWindow
         }
 
         var page = new Editing.EditorPage(this, file, _themes.Current, _settings);
+        if (at is not null)
+        {
+            page.ShowLine(at.Number, at.Column, at.MatchLength);
+        }
         page.CloseRequested += () =>
         {
             // A new file that was never saved has nothing to follow, and its folder may not exist.

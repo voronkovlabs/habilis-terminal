@@ -303,11 +303,33 @@ public partial class MainWindow : Window
             return;
         }
 
-        if (OnGlobalKey(e.Key, e.KeyModifiers & (KeyModifiers.Alt | KeyModifiers.Control | KeyModifiers.Shift)))
+        var modifiers = e.KeyModifiers & (KeyModifiers.Alt | KeyModifiers.Control | KeyModifiers.Shift);
+
+        // A results tab in front whose list lost the focus to the console hidden behind it (issue #415): window keys
+        // first, then the list takes the key back, so nothing goes to the shell unseen.
+        if (_search is { } search && !IsPageOpen && !search.View.IsKeyboardFocusWithin && TabHasHiddenFocus())
+        {
+            if (OnGlobalKey(e.Key, modifiers) || search.View.TakeKey(e.Key, modifiers))
+            {
+                e.Handled = true;
+            }
+            else
+            {
+                search.View.FocusList();
+                e.Handled = true;
+            }
+
+            return;
+        }
+
+        if (OnGlobalKey(e.Key, modifiers))
         {
             e.Handled = true;
         }
     }
+
+    /// <summary>The keyboard focus is in a console behind a results tab, where nothing can be seen.</summary>
+    private bool TabHasHiddenFocus() => _tabs.Any(t => t.Terminal.IsKeyboardFocusWithin) || FocusManager?.GetFocusedElement() is null;
 
     /// <summary>Printable characters typed in a panel go to the command line, or to quick search while it is open (SPEC §4).</summary>
     private void OnWindowTextInput(object? sender, TextInputEventArgs e)
@@ -466,6 +488,13 @@ public partial class MainWindow : Window
     /// </summary>
     private void PutFocusInTerminal()
     {
+        // A results tab in front holds the keys in its list; the console is hidden behind it (issue #415).
+        if (_search is { } search)
+        {
+            search.View.FocusList();
+            return;
+        }
+
         if (_tab is { } tab)
         {
             tab.Terminal.Focus();

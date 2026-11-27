@@ -50,6 +50,15 @@ public partial class MainWindow
             case Key.Tab when modifiers == (KeyModifiers.Control | KeyModifiers.Shift) && !IsPageOpen:
                 return NextTab(-1);
 
+            // A new search from the results opens another tab (issue #415).
+            case Key.F7 when modifiers == KeyModifiers.Alt && !IsPageOpen && _search is not null:
+                FindFiles();
+                return true;
+
+            case Key.W when modifiers == (KeyModifiers.Control | KeyModifiers.Shift) && !IsPageOpen && _search is { } search:
+                CloseSearch(search);
+                return true;
+
             case Key.W when modifiers == (KeyModifiers.Control | KeyModifiers.Shift) && !IsPageOpen && _tabs.Count > 1 && _tab is not null:
                 CloseTab(_tab);
                 return true;

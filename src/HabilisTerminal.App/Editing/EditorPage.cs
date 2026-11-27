@@ -31,6 +31,22 @@ public sealed class EditorPage : DockPanel, IPage
     private TextFile _file;
     private string _lastSearch = string.Empty;
 
+    /// <summary>Selects a match found by Alt+F7 and scrolls to it (issue #415).</summary>
+    public void ShowLine(int line, int column, int length)
+    {
+        var document = _editor.Document;
+        if (document.LineCount == 0)
+        {
+            return;
+        }
+
+        var row = document.GetLineByNumber(Math.Clamp(line, 1, document.LineCount));
+        var start = row.Offset + Math.Clamp(column - 1, 0, row.Length);
+        _editor.Select(start, Math.Clamp(length, 0, row.EndOffset - start));
+        _editor.TextArea.Caret.Offset = start;
+        _editor.ScrollTo(row.LineNumber, column);
+    }
+
     public EditorPage(Window owner, TextFile file, ColorTheme theme, AppSettings settings)
     {
         _owner = owner;

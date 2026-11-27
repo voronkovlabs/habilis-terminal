@@ -124,8 +124,35 @@ internal sealed class FindSession : IDisposable
         _cancel.Dispose();
     }
 
+    /// <summary>Lines kept for the whole search: past them files are listed without their lines (issue #415).</summary>
+    public const int MaxLines = 50_000;
+
+    private int _lines;
+
+    /// <summary>The lines were not all kept: too many matched.</summary>
+    public bool LinesCut { get; private set; }
+
+    /// <summary>On the search's thread: a file found by its text is read once more for the lines that hold it.</summary>
     private void Add(FoundItem item)
     {
+        if (!string.IsNullOrEmpty(Options.Text) && item is { IsFolder: false, Container: null })
+        {
+            if (_lines < MaxLines)
+            {
+                var lines = FoundLines.Read(item.Path, Options.Text, Options.MatchCase, Options.WholeWords, Options.Regex, _cancel.Token);
+                if (lines is not null)
+                {
+                    _lines += lines.Count;
+                    LinesCut |= lines.Count >= FoundLines.MaxPerFile;
+                    item = item with { Lines = lines };
+                }
+            }
+            else
+            {
+                LinesCut = true;
+            }
+        }
+
         lock (_gate)
         {
             _found.Add(item);

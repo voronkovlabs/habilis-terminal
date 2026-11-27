@@ -42,8 +42,28 @@ public partial class MainWindow
     {
         WorkspaceLayout.SetRole(_tabStrip, WorkspaceRole.ConsoleTabs);
         Workspace.Children.Add(_tabStrip);
-        _tabStrip.TabChosen += ShowTab;
-        _tabStrip.TabClosing += tab => CloseTab(tab);
+        _tabStrip.TabChosen += tab =>
+        {
+            if (tab is ConsoleTab console)
+            {
+                ShowTab(console);
+            }
+            else if (tab is Search.SearchTab search)
+            {
+                ShowSearch(search);
+            }
+        };
+        _tabStrip.TabClosing += tab =>
+        {
+            if (tab is ConsoleTab console)
+            {
+                CloseTab(console);
+            }
+            else if (tab is Search.SearchTab search)
+            {
+                CloseSearch(search);
+            }
+        };
         _tabStrip.NewTabRequested += NewTab;
         _hintButton = new ConsoleHintButton(this, Workspace, NewTab);
 
@@ -335,19 +355,34 @@ public partial class MainWindow
     /// <summary>Ctrl+Tab and Ctrl+Shift+Tab; false with a single console, so that the key goes on to it.</summary>
     private bool NextTab(int direction)
     {
-        if (_tabs.Count < 2 || _tab is null)
+        var all = StripTabs();
+        IStripTab? current = _search is not null ? _search : _tab;
+        if (all.Count < 2 || current is null)
         {
             return false;
         }
 
-        ShowTab(_tabs[Core.Panels.ConsoleTabRules.Next(_tabs.IndexOf(_tab), _tabs.Count, direction)]);
+        // Results tabs after the consoles, as the strip shows them (issue #415).
+        switch (all[Core.Panels.ConsoleTabRules.Next(all.IndexOf(current), all.Count, direction)])
+        {
+            case ConsoleTab console:
+                ShowTab(console);
+                break;
+            case Search.SearchTab search:
+                ShowSearch(search);
+                break;
+        }
+
         return true;
     }
+
+    private List<IStripTab> StripTabs() => [.. _tabs, .. _searches];
 
     /// <summary>Brings a tab to the front, with its own panels and layout (issue #125).</summary>
     private void ShowTab(ConsoleTab tab)
     {
         using var measure = Perf.Measure("tab.show");
+        HideSearch();
         var previous = _tab;
         ReleaseFrame();
         if (tab != previous && previous is not null)
@@ -483,7 +518,7 @@ public partial class MainWindow
     /// <summary>Only with a single console: then the strip is not there to show that more are possible. Not over a full-screen program.</summary>
     private void UpdateHintButton()
     {
-        if (_tabs.Count != 1 || _tab is not { } tab || IsPageOpen || !IsLoaded || tab.OverflowPosted.Alternate || tab.Terminal.Bounds.Width <= 0)
+        if (_tabs.Count != 1 || _searches.Count > 0 || _tab is not { } tab || IsPageOpen || !IsLoaded || tab.OverflowPosted.Alternate || tab.Terminal.Bounds.Width <= 0)
         {
             _hintButton?.Update(null);
             return;
@@ -495,10 +530,11 @@ public partial class MainWindow
 
     private void UpdateTabStrip()
     {
-        Workspace.ShowsTabStrip = _tabs.Count > 1;
-        if (_tabs.Count > 1)
+        var all = StripTabs();
+        Workspace.ShowsTabStrip = all.Count > 1;
+        if (all.Count > 1)
         {
-            _tabStrip.Update(_tabs, _tab);
+            _tabStrip.Update(all, _search is not null ? _search : _tab);
         }
         else
         {
