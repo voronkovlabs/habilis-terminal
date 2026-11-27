@@ -13,7 +13,7 @@ public class DriveEjectTests
     [InlineData(DriveType.Ram, false)]
     public void Removable_drives_and_discs_eject(DriveType type, bool ejects) => Assert.Equal(ejects, DriveEject.CanEject(type));
 
-    [Fact]
+    [WindowsFact]
     public void A_path_is_on_its_drive_whatever_the_case_or_depth()
     {
         Assert.True(DriveEject.IsOn(@"E:\Music\Album", @"E:\"));

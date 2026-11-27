@@ -46,7 +46,7 @@ dotnet test -c Release --no-build
   - App: `Platform/IDesktop` with `WindowsDesktop` (`#if WINDOWS`) and `PortableDesktop`.
 - **Paths:** use `FileSystem/PathText` (`TrimEndSeparator`, `WithEndSeparator`, `IsSameOrInside`), not `TrimEnd('\\')`. Fonts: `Theming/Fonts.Mono` has the macOS and Linux fallbacks.
 - **Tests of Windows behaviour** (drive roots, junctions, cmd.exe, ACLs, NTFS attributes) are `[WindowsFact]` / `[WindowsTheory]` (`tests/HabilisTerminal.Core.Tests/WindowsOnly.cs`) and skip elsewhere.
-- **macOS in CI:** `.github/workflows/macos-screens.yml` builds the app and the tests on `macos-latest`, runs them, starts habi and a probe window, and uploads screenshots (artifact `macos-screens`). It runs on pushes to experiment/avalonia that touch `src`, `tests` or the workflow. Download: `gh run download <id> -n macos-screens`.
+- **macOS in CI:** `.github/workflows/macos-screens.yml` builds the app and the tests on `macos-latest`, runs them, starts habi and a probe window, and uploads screenshots (artifact `macos-screens`). Since the Mac pause (#322) it runs only when started by hand: `gh workflow run macos-screens.yml --ref main`. Download: `gh run download <id> -n macos-screens`.
 
 ## UI checks
 - **Make a test copy:** `tools/ui/New-TestCopy.ps1 -Name v0.1.1-devN`.

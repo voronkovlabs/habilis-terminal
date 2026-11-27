@@ -107,24 +107,37 @@ F1 in the app shows the whole map, and Ctrl+Shift+P finds any command. The essen
 
 ## macOS: help wanted
 
-Habilis Terminal is Windows-first, but a Mac version is within reach.
+Habilis Terminal is Windows-first, but **it already runs on macOS**: the same code base builds there, the panels, the console, the viewer and the editor work, and a CI job on `macos-latest` builds it, runs the tests and drives the app through its UI. What it lacks is polish from people who use a Mac every day.
 
-**What already exists**
-- The UI is [Avalonia](https://avaloniaui.net), which runs on macOS.
-- The terminal emulator is the app's own, not a Windows control.
-- Windows calls sit behind platform interfaces, with a portable implementation for other systems (#259).
-- A macOS port got as far as:
-  - an app bundle for Apple Silicon and Intel (#276);
+![Habilis Terminal on macOS: the Files menu in the Mac menu bar, zsh in the console, cd moving the panel to /usr/bin](docs/screenshots/mac-main.png)
+
+**What works on a Mac today**
+- **The app itself.** The UI is [Avalonia](https://avaloniaui.net) and the terminal emulator is the app's own, so both panels, the console, F3 / F4, dialogs, the command line (Ctrl+Shift+P) and the themes are the same code as on Windows. Windows calls sit behind platform interfaces with portable implementations (#259).
+- **The console** is zsh with the same integration as pwsh on Windows: `cd` moves the panel, an empty line hands keys to the panel, the console grows over the panels while a command prints, Esc moves the keys between the two (#268, #312, #313).
+- **The Mac way of doing things:**
   - Cmd keys as Mac users expect (#272);
-  - files and drives as the Finder shows them (#274);
-  - a CI job that builds and screenshots the app on `macos-latest`.
+  - the menu bar at the top of the screen, with the app menu and the Left / Files / Commands / Options / Right menus (#273);
+  - files and drives as the Finder shows them: volumes, Places, Get Info (#274);
+  - the window and the trackpad (#275);
+  - F8 to the Trash through Finder (#315).
+- **File operations** (copy, move, rename, make folder, delete, viewer, editor) are tested through the UI on every Mac CI run (#316).
+- **Plugins:** archives on libarchive, reading and writing (#281, #285); GitHub with its token in the Keychain (#280).
+- **Packaging:** an app bundle and a disk image for Apple Silicon and Intel, ad-hoc signed so a downloaded copy opens (#276, #305).
+
+<p>
+  <img src="docs/screenshots/mac-drives.png" width="49%" alt="The drive menu on macOS: Macintosh HD and the Places">
+  <img src="docs/screenshots/mac-copy.png" width="49%" alt="The copy dialog on macOS">
+</p>
+
+These screenshots come from the macOS CI runner, with the current build.
 
 **What is open**
-- The Mac direction is paused for now (#322) because nobody here uses a Mac every day. The Mac release job is switched off, and nothing Mac-specific has been tested since.
+- The Mac direction is paused for now (#322) because nobody here uses a Mac every day. The Mac release job is switched off, so there is no Mac download yet; the CI job runs by hand.
 - What a Mac version still needs:
-  - a Mac user's eye on keys and looks;
-  - signing and notarization;
-  - testing on real machines.
+  - a Mac user's eye on keys and looks: what feels wrong next to Finder and Terminal;
+  - daily use on real machines (the CI runner is all it has seen), including Retina and several displays;
+  - signing with a Developer ID and notarization, then a release job;
+  - the plugins that are Windows-only today (Task Manager, GPU Monitor).
 
 **Contributions from Mac users are very welcome:** bug reports, fixes, or taking the port on. Open an issue or a pull request. [docs/development.md](docs/development.md) describes the build and the macOS CI workflow.
 
