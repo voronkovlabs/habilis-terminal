@@ -85,14 +85,8 @@ internal sealed class SearchResultsView : DockPanel
         {
             if (e.Source is Control { DataContext: FindRow row })
             {
-                if (row.Kind == FindRowKind.Folder && row.CanExpand)
-                {
-                    Toggle(row);
-                }
-                else
-                {
-                    Requested?.Invoke(row, FindRequest.Open);
-                }
+                // A folder opens in the panel, as a file does; Left / Right fold it (#421).
+                Requested?.Invoke(row, FindRequest.Open);
             }
         };
         Children.Add(_list);
@@ -323,14 +317,8 @@ internal sealed class SearchResultsView : DockPanel
                 Move(_rows.Count);
                 break;
             case Key.Enter when plain && row is not null:
-                if (row.Kind == FindRowKind.Folder && row.CanExpand)
-                {
-                    Toggle(row);
-                }
-                else
-                {
-                    Requested?.Invoke(row, FindRequest.Open);
-                }
+                // A folder opens in the panel, as a file does; Left / Right fold it (#421).
+                Requested?.Invoke(row, FindRequest.Open);
 
                 break;
             case Key.F3 when plain && row is not null:

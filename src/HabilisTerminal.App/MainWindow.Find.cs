@@ -187,6 +187,13 @@ public partial class MainWindow
 
     private void OnSearchRequest(SearchTab tab, Core.Search.FindRow row, FindRequest request)
     {
+        // A folder row opens that folder in the panel; the results stay in front (#421).
+        if (row.Kind == Core.Search.FindRowKind.Folder && request == FindRequest.Open)
+        {
+            Fire(OpenFoundFolderAsync(_active, row.Key));
+            return;
+        }
+
         if (row.Item is not { } item)
         {
             return;
@@ -264,6 +271,24 @@ public partial class MainWindow
         if (_search is { } search)
         {
             Avalonia.Threading.Dispatcher.UIThread.Post(search.View.FocusList, Avalonia.Threading.DispatcherPriority.Input);
+        }
+    }
+
+    /// <summary>A folder of the results tree: on disk, or inside an archive through its plugin.</summary>
+    private async Task OpenFoundFolderAsync(FilePanel panel, string folder)
+    {
+        if (!IsShown(panel))
+        {
+            SetPanelVisibility(panel == _left || Workspace.LeftVisible, panel == _right || Workspace.RightVisible);
+        }
+
+        if (await Task.Run(() => Directory.Exists(folder)))
+        {
+            await panel.NavigateAsync(folder);
+        }
+        else
+        {
+            await OpenLocationInFileAsync(panel, folder);
         }
     }
 
