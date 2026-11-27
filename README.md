@@ -2,6 +2,8 @@
 
 A two-panel file manager for Windows with a real PowerShell 7 console underneath: Far Manager's keys, VS Code's looks.
 
+![Two panels with a project and an album, the PowerShell console below](docs/screenshots/main.png)
+
 ## What it does
 
 **Panels**
@@ -57,6 +59,20 @@ A two-panel file manager for Windows with a real PowerShell 7 console underneath
 - Ctrl + mouse wheel zooms the whole interface.
 - `settings.json` has a schema and reloads live. There is also a VS Code-style Settings page (F9 → Options → Settings).
 - The command line (Ctrl+Shift+P) lists every command with its key. A pasted path or plugin address opens that place.
+
+## Screenshots
+
+**Find file (Alt+F7).** The results open as a tab, with the folders, the files and the matching lines.
+
+![Find results: a tree of folders, files and matching lines with File, Line and Col](docs/screenshots/find.png)
+
+**The editor (F4)** has syntax colours from the VS Code theme.
+
+![A C# file in the editor](docs/screenshots/editor.png)
+
+**Light Modern.** The theme follows Windows. In the right panel, Gray+ → Music has selected the songs.
+
+![The light theme, with the songs of an album selected by type](docs/screenshots/light.png)
 
 ## Install
 
