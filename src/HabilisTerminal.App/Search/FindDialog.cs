@@ -64,8 +64,25 @@ internal static class FindDialog
             }).ToArray();
 
             var body = new StackPanel();
-            body.Children.Add(Label("File masks, separated by ; or , (exclusions after |, /expression/ for a regular expression):"));
+            body.Children.Add(Label("File masks, separated by ; or , (exclusions after |, /expression/ for a regular expression, <music> and the like for a type):"));
             body.Children.Add(masks);
+
+            // Types (issue #413): a click puts the group into the mask field.
+            var types = new WrapPanel { Margin = new Thickness(0, 6, 0, 0) };
+            foreach (var group in FileMaskGroups.All)
+            {
+                var button = new Button { Content = group.Title, Padding = new Thickness(8, 2), Margin = new Thickness(0, 0, 6, 4), Focusable = false };
+                ToolTip.SetTip(button, $"{group.Token}: {group.Masks.Replace(";", " ", StringComparison.Ordinal)}");
+                button.Click += (_, _) =>
+                {
+                    masks.Text = FileMaskGroups.AddTo(masks.Text, group);
+                    masks.CaretIndex = masks.Text.Length;
+                    masks.Focus();
+                };
+                types.Children.Add(button);
+            }
+
+            body.Children.Add(types);
             body.Children.Add(Label("Containing text (empty: names only):", top: 10));
             body.Children.Add(text);
             var options = new WrapPanel();

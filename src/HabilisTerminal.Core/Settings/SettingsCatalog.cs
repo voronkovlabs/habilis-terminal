@@ -18,8 +18,9 @@ public static class SettingsCatalog
     public const string Editor = "Editor";
     public const string Diagnostics = "Diagnostics";
     public const string Claude = "Claude";
+    public const string MaskGroups = "Mask groups";
 
-    public static IReadOnlyList<string> Categories { get; } = [Appearance, Panels, Terminal, FileOperations, Confirmations, Viewer, Editor, Claude, Diagnostics];
+    public static IReadOnlyList<string> Categories { get; } = [Appearance, Panels, Terminal, FileOperations, Confirmations, Viewer, Editor, MaskGroups, Claude, Diagnostics];
 
     public static IReadOnlyList<SettingDefinition> All { get; } =
     [
@@ -66,6 +67,12 @@ public static class SettingsCatalog
         new("editor.fontSize", Editor, "Font Size", "Font size of the editor, in pixels.", SettingKind.Number, 13, Minimum: 6, Maximum: 48),
         new("editor.tabSize", Editor, "Tab Size", "Width of a tab in spaces.", SettingKind.Number, 4, Minimum: 1, Maximum: 16),
         new("editor.insertSpaces", Editor, "Insert Spaces", "Tab inserts spaces instead of a tab character.", SettingKind.Toggle, false),
+
+        // Mask groups (issue #413): <pictures>, <music>... wherever a mask is taken.
+        .. FileSystem.FileMaskGroups.Defaults.Select(g => new SettingDefinition(
+            $"masks.{g.Name}", MaskGroups, g.Title,
+            $"The masks {g.Token} stands for, in Find file (Alt+F7), selection (Gray+ / Gray-) and every other mask field. Separated by ; as in a mask; empty restores the default.",
+            SettingKind.Text, g.Masks)),
     ];
 
     private static readonly Dictionary<string, SettingDefinition> ByKey = All.ToDictionary(d => d.Key, StringComparer.Ordinal);

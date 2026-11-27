@@ -627,25 +627,41 @@ public partial class MainWindow
         }
     }
 
+    private static readonly System.Buffers.SearchValues<char> MaskCharacters = System.Buffers.SearchValues.Create("*?.;,|/<[\"");
+
     private static async Task SelectByMaskAsync(FilePanel panel, bool select)
     {
-        var result = await QuickPick.ShowAsync(panel, [], new QuickPickOptions
+        // All files first, so Enter at once does what it did before; then the types (issue #413).
+        List<QuickPickItem> items =
+        [
+            new() { Label = "All files", Description = "*.*", Tag = "*.*", IsCurrent = true },
+            .. FileMaskGroups.All.Select(g => new QuickPickItem { Label = g.Title, Description = g.Token, Tag = g.Token }),
+        ];
+        var result = await QuickPick.ShowAsync(panel, items, new QuickPickOptions
         {
             Title = select ? "Select files" : "Deselect files",
-            Placeholder = "Mask, e.g. *.cs,*.xaml|*.g.cs",
-            InitialText = "*.*",
+            Placeholder = "Mask, e.g. *.cs,*.xaml|*.g.cs or <music>, or a type below",
             AllowFreeText = true,
+
+            // A typed mask is taken as it is, never as the type whose list happens to contain it.
+            IsFreeText = text => text.AsSpan().IndexOfAny(MaskCharacters) >= 0,
         });
 
         panel.Focus();
-        if (result is null || string.IsNullOrWhiteSpace(result.Text))
+        var text = result?.Item?.Tag as string ?? result?.Text;
+        if (string.IsNullOrWhiteSpace(text))
         {
             return;
         }
 
-        if (!FileMask.TryParse(result.Text, out var mask) || mask is null)
+        FileMask mask;
+        try
         {
-            panel.Message = $"Invalid mask: {result.Text}";
+            mask = FileMask.Parse(text);
+        }
+        catch (FormatException ex)
+        {
+            panel.Message = $"Invalid mask {text}: {ex.Message}";
             return;
         }
 

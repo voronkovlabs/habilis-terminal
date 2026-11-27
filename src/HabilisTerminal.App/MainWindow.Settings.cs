@@ -42,6 +42,7 @@ public partial class MainWindow
         var previous = _appliedSettings;
         _settings = settings;
         _appliedSettings = settings;
+        Core.FileSystem.FileMaskGroups.Apply(name => settings.Get<string>($"masks.{name}"));
         if (App.Paths is { } paths)
         {
             PerfDiagnostics.Apply(settings.DiagnosticsPerformance, Dispatcher, paths.DiagnosticsDirectory);

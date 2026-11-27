@@ -6,7 +6,7 @@ namespace HabilisTerminal.Core.FileSystem;
 /// <summary>
 /// Far Manager file masks: <c>*</c>, <c>?</c>, <c>[a-z]</c> sets, several masks separated by <c>,</c> or <c>;</c>,
 /// quoted masks with separators inside, exclusions after <c>|</c> (<c>*.cs|*.g.cs</c>), and regular expressions
-/// <c>/pattern/flags</c>. Matching is case-insensitive. <c>*.*</c> matches every name; <c>*.</c> matches names
+/// <c>/pattern/flags</c>, and mask groups such as <c>&lt;music&gt;</c> (<see cref="FileMaskGroups"/>). Matching is case-insensitive. <c>*.*</c> matches every name; <c>*.</c> matches names
 /// without an extension.
 /// </summary>
 public sealed class FileMask
@@ -32,14 +32,14 @@ public sealed class FileMask
         var includeText = bar < 0 ? text : text[..bar];
         var excludeText = bar < 0 ? string.Empty : text[(bar + 1)..];
 
-        var include = SplitMasks(includeText).Select(Compile).ToArray();
+        var include = Expand(SplitMasks(includeText), 0).Select(Compile).ToArray();
         if (include.Length == 0)
         {
             // "|*.tmp" means "everything except *.tmp".
             include = bar >= 0 ? [Compile("*")] : throw new FormatException("The mask is empty.");
         }
 
-        var exclude = SplitMasks(excludeText).Select(Compile).ToArray();
+        var exclude = Expand(SplitMasks(excludeText), 0).Select(Compile).ToArray();
         return new FileMask(text, include, exclude);
     }
 
@@ -59,6 +59,30 @@ public sealed class FileMask
 
     public bool IsMatch(string name) =>
         _include.Any(r => r.IsMatch(name)) && !_exclude.Any(r => r.IsMatch(name));
+
+    /// <summary>Group tokens become the group's masks; a group may name another, but not in a circle.</summary>
+    private static IEnumerable<string> Expand(IEnumerable<string> masks, int depth)
+    {
+        foreach (var mask in masks)
+        {
+            if (FileMaskGroups.Resolve(mask) is { } group)
+            {
+                if (depth >= 4)
+                {
+                    throw new FormatException($"The mask group {group.Token} refers to itself.");
+                }
+
+                foreach (var inner in Expand(SplitMasks(group.Masks.Split('|')[0]), depth + 1))
+                {
+                    yield return inner;
+                }
+            }
+            else
+            {
+                yield return mask;
+            }
+        }
+    }
 
     private static int IndexOutsideQuotes(string text, char target)
     {
