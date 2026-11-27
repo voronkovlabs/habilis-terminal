@@ -263,31 +263,44 @@ internal sealed class SearchResultsView : DockPanel
     public bool TakeKey(Key key, KeyModifiers modifiers)
     {
         FocusList();
-        var plain = modifiers == KeyModifiers.None;
-        var count = _rows.Count;
-        var index = Math.Max(0, _list.SelectedIndex);
-        var page = Math.Max(1, (int)(_list.Bounds.Height / 20) - 1);
-        int? target = key switch
+        if (modifiers == KeyModifiers.None && key is Key.Down or Key.Up && Move(key == Key.Down ? 1 : -1))
         {
-            Key.Down when plain => Math.Min(count - 1, index + 1),
-            Key.Up when plain => Math.Max(0, index - 1),
-            Key.PageDown when plain => Math.Min(count - 1, index + page),
-            Key.PageUp when plain => Math.Max(0, index - page),
-            Key.Home when plain => 0,
-            Key.End when plain => count - 1,
-            _ => null,
-        };
-        if (target is { } to && count > 0)
-        {
-            _list.SelectedIndex = to;
-            _list.ScrollIntoView(to);
-
-            // The list moves from its focused row: the next key must start from this one.
-            _list.ContainerFromIndex(to)?.Focus();
             return true;
         }
 
         return HandleKey(key, modifiers);
+    }
+
+    /// <summary>Moves the selection by rows, the list following it; the focused row moves too, so the next key starts there.</summary>
+    private bool Move(int rows)
+    {
+        if (_rows.Count == 0)
+        {
+            return false;
+        }
+
+        var to = Math.Clamp(Math.Max(0, _list.SelectedIndex) + rows, 0, _rows.Count - 1);
+        _list.SelectedIndex = to;
+        _list.ScrollIntoView(to);
+
+        // A page away the row may only get its container in the next layout pass.
+        if (_list.ContainerFromIndex(to) is { } container)
+        {
+            container.Focus();
+        }
+        else
+        {
+            Dispatcher.UIThread.Post(() => _list.ContainerFromIndex(to)?.Focus(), DispatcherPriority.Loaded);
+        }
+
+        return true;
+    }
+
+    /// <summary>Rows that fit in the list, less one, as a page.</summary>
+    private int PageRows()
+    {
+        var height = _list.ContainerFromIndex(Math.Max(0, _list.SelectedIndex))?.Bounds.Height is > 4 and var h ? h : 20;
+        return Math.Max(1, (int)(_list.Bounds.Height / height) - 1);
     }
 
     private bool HandleKey(Key key, KeyModifiers modifiers)
@@ -296,6 +309,19 @@ internal sealed class SearchResultsView : DockPanel
         var plain = modifiers == KeyModifiers.None;
         switch (key)
         {
+            // The list's own PgUp / PgDn only scrolled: the selection stayed behind and the next arrow jumped back (#419).
+            case Key.PageDown when plain:
+                Move(PageRows());
+                break;
+            case Key.PageUp when plain:
+                Move(-PageRows());
+                break;
+            case Key.Home when plain:
+                Move(-_rows.Count);
+                break;
+            case Key.End when plain:
+                Move(_rows.Count);
+                break;
             case Key.Enter when plain && row is not null:
                 if (row.Kind == FindRowKind.Folder && row.CanExpand)
                 {
