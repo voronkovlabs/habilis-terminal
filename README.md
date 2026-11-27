@@ -89,6 +89,29 @@ F1 in the app shows the whole map, and Ctrl+Shift+P finds any command. The essen
 | Ctrl+Shift+C, Ctrl+Shift+V | Copy from, paste into the console |
 | F9, F11, F10 | Menu, plugins, exit |
 
+## macOS: help wanted
+
+Habilis Terminal is Windows-first, but a Mac version is within reach.
+
+**What already exists**
+- The UI is [Avalonia](https://avaloniaui.net), which runs on macOS.
+- The terminal emulator is the app's own, not a Windows control.
+- Windows calls sit behind platform interfaces, with a portable implementation for other systems (#259).
+- A macOS port got as far as:
+  - an app bundle for Apple Silicon and Intel (#276);
+  - Cmd keys as Mac users expect (#272);
+  - files and drives as the Finder shows them (#274);
+  - a CI job that builds and screenshots the app on `macos-latest`.
+
+**What is open**
+- The Mac direction is paused for now (#322) because nobody here uses a Mac every day. The Mac release job is switched off, and nothing Mac-specific has been tested since.
+- What a Mac version still needs:
+  - a Mac user's eye on keys and looks;
+  - signing and notarization;
+  - testing on real machines.
+
+**Contributions from Mac users are very welcome:** bug reports, fixes, or taking the port on. Open an issue or a pull request. [docs/development.md](docs/development.md) describes the build and the macOS CI workflow.
+
 ## Build
 
 Requires the .NET 10 SDK and PowerShell 7.
