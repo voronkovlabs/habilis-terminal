@@ -491,7 +491,15 @@ public partial class MainWindow : Window
         // A results tab in front holds the keys in its list; the console is hidden behind it (issue #415).
         if (_search is { } search)
         {
-            search.View.FocusList();
+            if (_panelKeysUnderSearch && IsShown(_active))
+            {
+                _active.Focus();
+            }
+            else
+            {
+                search.View.FocusList();
+            }
+
             return;
         }
 

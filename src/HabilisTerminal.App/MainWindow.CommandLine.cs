@@ -203,9 +203,15 @@ public partial class MainWindow
 
         Avalonia.Threading.Dispatcher.UIThread.Post(() =>
         {
-            if (FocusManager?.GetFocusedElement() == panel && !IsPageOpen)
+            // With a results tab in front the console is hidden: the panel keeps the focus and takes the keys itself,
+            // instead of the focus going back to the results list (issue #423).
+            if (FocusManager?.GetFocusedElement() == panel && !IsPageOpen && _search is null)
             {
                 PutFocusInTerminal();
+            }
+            else if (_search is not null && FocusManager?.GetFocusedElement() == panel)
+            {
+                _panelKeysUnderSearch = true;
             }
 
             UpdatePanelKeys();

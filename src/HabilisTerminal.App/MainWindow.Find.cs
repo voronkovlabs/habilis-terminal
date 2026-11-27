@@ -23,6 +23,9 @@ public partial class MainWindow
 
     /// <summary>The console's rows while a results tab is in front; the results' own rows while a console is.</summary>
     private int _consoleRows = -1;
+
+    /// <summary>A panel took the keys while a results tab is in front (#423): a closing page gives them back to it.</summary>
+    private bool _panelKeysUnderSearch;
     private int _searchRows = -1;
 
     private void FindFiles()
@@ -75,6 +78,7 @@ public partial class MainWindow
         tab.View.IsVisible = false;
         Workspace.Children.Add(tab.View);
         tab.View.Requested += (row, request) => OnSearchRequest(tab, row, request);
+        tab.View.GotFocus += (_, _) => _panelKeysUnderSearch = false;
         tab.View.LeaveRequested += LeaveSearch;
         tab.View.ModifyRequested += () => ModifySearch(tab);
         tab.View.PanelRequested += () => SearchToPanel(tab);
@@ -102,6 +106,7 @@ public partial class MainWindow
         }
 
         _search = tab;
+        _panelKeysUnderSearch = false;
         _tab?.Terminal.IsVisible = false;
         foreach (var search in _searches)
         {
@@ -270,7 +275,14 @@ public partial class MainWindow
     {
         if (_search is { } search)
         {
-            Avalonia.Threading.Dispatcher.UIThread.Post(search.View.FocusList, Avalonia.Threading.DispatcherPriority.Input);
+            // To the list, or to the panel that had the keys (#423).
+            Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+            {
+                if (_search == search)
+                {
+                    PutFocusInTerminal();
+                }
+            }, Avalonia.Threading.DispatcherPriority.Input);
         }
     }
 
